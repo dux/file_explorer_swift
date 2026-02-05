@@ -1,0 +1,8 @@
+build/bin
+node_modules
+frontend/dist
+/.build
+/tmp
+.ds_store
+.watch_timestamp
+

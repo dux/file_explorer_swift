@@ -1,0 +1,551 @@
+import SwiftUI
+import AppKit
+
+enum MainPaneType {
+    case browser
+    case selection
+    case search
+    case iphone
+}
+
+enum BrowserViewMode: String, CaseIterable {
+    case files = "Files"
+    case gallery = "Gallery"
+    case search = "Search"
+    case selected = "Selected"
+}
+
+enum SortMode: String, CaseIterable {
+    case name = "Name"
+    case modified = "Modified"
+}
+
+struct CachedFileInfo: Identifiable, Equatable {
+    let url: URL
+    let isDirectory: Bool
+    let size: Int64
+    let modDate: Date?
+    let isHidden: Bool
+
+    var id: String { url.absoluteString }
+    var name: String { url.lastPathComponent }
+}
+
+@MainActor
+class FileExplorerManager: ObservableObject {
+    @Published var currentPath: URL
+    @Published var directories: [CachedFileInfo] = []
+    @Published var files: [CachedFileInfo] = []
+    @Published var selectedItem: URL?
+    @Published var selectedIndex: Int = -1
+    @Published var showHidden: Bool = false
+    @Published var searchText: String = ""
+    @Published var renamingItem: URL? = nil
+    @Published var renameText: String = ""
+    @Published var currentPane: MainPaneType = .browser
+
+    // Remember selected item per folder
+    private var selectionMemory: [String: URL] = [:]
+    @Published var browserViewMode: BrowserViewMode = .files {
+        didSet {
+            AppSettings.shared.browserViewMode = browserViewMode.rawValue.lowercased()
+        }
+    }
+    @Published var sortMode: SortMode = .name {
+        didSet {
+            loadContents()
+        }
+    }
+
+    let fzfSearch = FZFSearch()
+
+    // Use unified SelectionManager
+    var selection: SelectionManager { SelectionManager.shared }
+
+    private var history: [URL] = []
+    private var historyIndex: Int = -1
+
+    let fileManager = FileManager.default
+
+    var allItems: [CachedFileInfo] {
+        directories + files
+    }
+
+    var filteredItems: [CachedFileInfo] {
+        guard !searchText.isEmpty else {
+            return allItems
+        }
+
+        let searchTerm = searchText.lowercased()
+        return allItems.filter { item in
+            item.name.lowercased().contains(searchTerm)
+        }
+    }
+
+    init() {
+        // Use initial path from command line argument if provided
+        if let initialPath = FileExplorerApp.initialPath {
+            self.currentPath = initialPath
+        } else {
+            self.currentPath = fileManager.homeDirectoryForCurrentUser
+        }
+        // Restore browser view mode from settings
+        let savedMode = AppSettings.shared.browserViewMode.lowercased()
+        if let mode = BrowserViewMode.allCases.first(where: { $0.rawValue.lowercased() == savedMode }) {
+            self.browserViewMode = mode
+        }
+        loadContents()
+        history.append(currentPath)
+        historyIndex = 0
+    }
+
+    func loadContents() {
+        do {
+            let resourceKeys: Set<URLResourceKey> = [.isDirectoryKey, .contentModificationDateKey, .fileSizeKey]
+
+            // For Trash folder, show all files including hidden
+            let isTrash = currentPath.lastPathComponent == ".Trash"
+            let showAll = showHidden || isTrash
+
+            let contents = try fileManager.contentsOfDirectory(at: currentPath, includingPropertiesForKeys: Array(resourceKeys), options: [])
+
+            var dirs: [CachedFileInfo] = []
+            var fils: [CachedFileInfo] = []
+
+            for url in contents {
+                let hidden = url.lastPathComponent.hasPrefix(".")
+                if !showAll && hidden { continue }
+
+                let values = try? url.resourceValues(forKeys: resourceKeys)
+                let isDir = values?.isDirectory ?? false
+                let size = Int64(values?.fileSize ?? 0)
+                let modDate = values?.contentModificationDate
+
+                let info = CachedFileInfo(url: url, isDirectory: isDir, size: size, modDate: modDate, isHidden: hidden)
+
+                if isDir {
+                    dirs.append(info)
+                } else {
+                    fils.append(info)
+                }
+            }
+
+            directories = sortItems(dirs)
+            files = sortItems(fils)
+
+            selectedIndex = -1
+            selectedItem = nil
+
+        } catch {
+            print("Error loading directory \(currentPath.path): \(error)")
+            directories = []
+            files = []
+        }
+    }
+
+    private func sortItems(_ items: [CachedFileInfo]) -> [CachedFileInfo] {
+        switch sortMode {
+        case .name:
+            return items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        case .modified:
+            return items.sorted { a, b in
+                let d1 = a.modDate ?? Date.distantPast
+                let d2 = b.modDate ?? Date.distantPast
+                return d1 > d2
+            }
+        }
+    }
+
+    private func defaultSortMode(for path: URL) -> SortMode {
+        let home = fileManager.homeDirectoryForCurrentUser
+        let downloads = home.appendingPathComponent("Downloads")
+        let desktop = home.appendingPathComponent("Desktop")
+
+        if path.path == downloads.path || path.path == desktop.path {
+            return .modified
+        }
+        return .name
+    }
+
+    func createNewFolder(named name: String? = nil) {
+        var folderName = name ?? "New Folder"
+        var counter = 1
+        var newFolderURL = currentPath.appendingPathComponent(folderName)
+
+        // Find unique name if exists
+        while fileManager.fileExists(atPath: newFolderURL.path) {
+            folderName = "\(name ?? "New Folder") \(counter)"
+            newFolderURL = currentPath.appendingPathComponent(folderName)
+            counter += 1
+        }
+
+        do {
+            try fileManager.createDirectory(at: newFolderURL, withIntermediateDirectories: false)
+            loadContents()
+            // Select the new folder
+            selectedItem = newFolderURL
+            if let index = allItems.firstIndex(where: { $0.url == newFolderURL }) {
+                selectedIndex = index
+            }
+        } catch {
+            print("Error creating folder: \(error)")
+        }
+    }
+
+    func createNewFile() {
+        var fileName = "untitled.txt"
+        var counter = 1
+        var newFileURL = currentPath.appendingPathComponent(fileName)
+
+        // Find unique name
+        while fileManager.fileExists(atPath: newFileURL.path) {
+            fileName = "untitled \(counter).txt"
+            newFileURL = currentPath.appendingPathComponent(fileName)
+            counter += 1
+        }
+
+        do {
+            try "".write(to: newFileURL, atomically: true, encoding: .utf8)
+            loadContents()
+            // Select and start rename after UI updates
+            selectedItem = newFileURL
+            if let index = allItems.firstIndex(where: { $0.url == newFileURL }) {
+                selectedIndex = index
+            }
+            // Delay rename to ensure UI has updated
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [self] in
+                startRename()
+            }
+        } catch {
+            print("Error creating file: \(error)")
+        }
+    }
+
+    func duplicateFile(_ url: URL) {
+        let baseName = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension
+        var newName = ext.isEmpty ? "\(baseName) copy" : "\(baseName) copy.\(ext)"
+        var counter = 2
+        var newURL = url.deletingLastPathComponent().appendingPathComponent(newName)
+
+        // Find unique name
+        while fileManager.fileExists(atPath: newURL.path) {
+            newName = ext.isEmpty ? "\(baseName) copy \(counter)" : "\(baseName) copy \(counter).\(ext)"
+            newURL = url.deletingLastPathComponent().appendingPathComponent(newName)
+            counter += 1
+        }
+
+        do {
+            try fileManager.copyItem(at: url, to: newURL)
+            loadContents()
+            // Select the duplicate
+            selectedItem = newURL
+            if let index = allItems.firstIndex(where: { $0.url == newURL }) {
+                selectedIndex = index
+            }
+        } catch {
+            print("Error duplicating file: \(error)")
+        }
+    }
+
+    func addToZip(_ url: URL) {
+        let baseName = url.deletingPathExtension().lastPathComponent
+        var zipName = "\(baseName).zip"
+        var counter = 1
+        var zipURL = url.deletingLastPathComponent().appendingPathComponent(zipName)
+
+        // Find unique name
+        while fileManager.fileExists(atPath: zipURL.path) {
+            zipName = "\(baseName) \(counter).zip"
+            zipURL = url.deletingLastPathComponent().appendingPathComponent(zipName)
+            counter += 1
+        }
+
+        let finalZipName = zipName
+        let finalZipURL = zipURL
+        let srcPath = url.path
+
+        ToastManager.shared.show("Creating zip...")
+
+        Task.detached {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+            process.arguments = ["-c", "-k", "--sequesterRsrc", "--keepParent", srcPath, finalZipURL.path]
+
+            do {
+                try process.run()
+                process.waitUntilExit()
+
+                let status = process.terminationStatus
+                await MainActor.run {
+                    if status == 0 {
+                        self.loadContents()
+                        self.selectedItem = finalZipURL
+                        if let index = self.allItems.firstIndex(where: { $0.url == finalZipURL }) {
+                            self.selectedIndex = index
+                        }
+                        ToastManager.shared.show("Created \(finalZipName)")
+                    } else {
+                        ToastManager.shared.show("Error creating zip")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    ToastManager.shared.show("Error creating zip: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    func moveToTrash(_ url: URL) {
+        do {
+            try fileManager.trashItem(at: url, resultingItemURL: nil)
+            // Remove from selection if it was selected
+            SelectionManager.shared.removeByPath(url.path)
+            loadContents()
+            ToastManager.shared.show("Moved to Trash")
+        } catch {
+            print("Error moving to trash: \(error)")
+        }
+    }
+
+    func refresh() {
+        loadContents()
+    }
+
+    func startRename() {
+        guard let item = selectedItem else { return }
+        renamingItem = item
+        renameText = item.lastPathComponent
+    }
+
+    func cancelRename() {
+        renamingItem = nil
+        renameText = ""
+    }
+
+    func confirmRename() {
+        guard let item = renamingItem, !renameText.isEmpty else {
+            cancelRename()
+            return
+        }
+
+        let newURL = item.deletingLastPathComponent().appendingPathComponent(renameText)
+
+        // Don't rename if name hasn't changed
+        if newURL.path == item.path {
+            cancelRename()
+            return
+        }
+
+        do {
+            try fileManager.moveItem(at: item, to: newURL)
+            // Update path in selection if it was selected
+            SelectionManager.shared.updateLocalPath(from: item.path, to: newURL.path)
+            cancelRename()
+            loadContents()
+            // Select the renamed item
+            selectedItem = newURL
+            if let index = allItems.firstIndex(where: { $0.url == newURL }) {
+                selectedIndex = index
+            }
+        } catch {
+            print("Error renaming: \(error)")
+            cancelRename()
+        }
+    }
+
+    private func saveSelection() {
+        if let item = selectedItem {
+            selectionMemory[currentPath.path] = item
+        }
+    }
+
+    private func restoreSelection() {
+        if let remembered = selectionMemory[currentPath.path],
+           let index = allItems.firstIndex(where: { $0.url == remembered }) {
+            selectedIndex = index
+            selectedItem = remembered
+        } else if let first = allItems.first {
+            selectedIndex = 0
+            selectedItem = first.url
+        }
+    }
+
+    func navigateTo(_ url: URL) {
+        let targetURL = url.standardizedFileURL
+        var isDirectory: ObjCBool = false
+
+        guard fileManager.fileExists(atPath: targetURL.path, isDirectory: &isDirectory) else {
+            print("Path does not exist: \(targetURL.path)")
+            return
+        }
+
+        if isDirectory.boolValue {
+            saveSelection()
+
+            // Add to history only if different from current
+            if currentPath.path != targetURL.path {
+                if historyIndex < history.count - 1 {
+                    history.removeLast(history.count - historyIndex - 1)
+                }
+                history.append(targetURL)
+                historyIndex = history.count - 1
+            }
+
+            currentPath = targetURL
+            searchText = ""
+            sortMode = defaultSortMode(for: targetURL)
+            loadContents()
+            restoreSelection()
+        } else {
+            selectedItem = targetURL
+            if let index = allItems.firstIndex(where: { $0.url == targetURL }) {
+                selectedIndex = index
+            }
+        }
+    }
+
+    func navigateUp() {
+        guard currentPath.path != "/" else { return }
+        let child = currentPath
+        let parent = currentPath.deletingLastPathComponent()
+        // Remember the folder we came from so it gets selected in the parent
+        selectionMemory[parent.path] = child
+        navigateTo(parent)
+    }
+
+    func goBack() {
+        guard historyIndex > 0 else { return }
+        saveSelection()
+        historyIndex -= 1
+        currentPath = history[historyIndex]
+        loadContents()
+        restoreSelection()
+    }
+
+    func goForward() {
+        guard historyIndex < history.count - 1 else { return }
+        saveSelection()
+        historyIndex += 1
+        currentPath = history[historyIndex]
+        loadContents()
+        restoreSelection()
+    }
+
+    var canGoBack: Bool {
+        historyIndex > 0
+    }
+
+    var canGoForward: Bool {
+        historyIndex < history.count - 1
+    }
+
+    // MARK: - Selection (Single item only)
+
+    func selectItem(at index: Int, url: URL) {
+        // Clear any previous selection and set new one
+        selectedIndex = index
+        selectedItem = url
+        // Show preview pane when selecting a file
+        AppSettings.shared.showPreviewPane = true
+    }
+
+    // MARK: - Keyboard Navigation
+
+    func selectNext() {
+        guard !allItems.isEmpty else { return }
+        if selectedIndex < allItems.count - 1 {
+            selectedIndex += 1
+        } else {
+            selectedIndex = 0
+        }
+        selectedItem = allItems[selectedIndex].url
+    }
+
+    func selectPrevious() {
+        guard !allItems.isEmpty else { return }
+        if selectedIndex > 0 {
+            selectedIndex -= 1
+        } else {
+            selectedIndex = allItems.count - 1
+        }
+        selectedItem = allItems[selectedIndex].url
+    }
+
+    func openSelected() {
+        guard let item = selectedItem else { return }
+        openItem(item)
+    }
+
+    func openItem(_ item: URL) {
+        var isDirectory: ObjCBool = false
+        fileManager.fileExists(atPath: item.path, isDirectory: &isDirectory)
+
+        if isDirectory.boolValue {
+            navigateTo(item)
+        } else {
+            NSWorkspace.shared.open(item)
+        }
+    }
+
+    func selectFirst() {
+        guard !allItems.isEmpty else { return }
+        selectedIndex = 0
+        selectedItem = allItems[0].url
+    }
+
+    func selectLast() {
+        guard !allItems.isEmpty else { return }
+        selectedIndex = allItems.count - 1
+        selectedItem = allItems[selectedIndex].url
+    }
+
+    func toggleShowHidden() {
+        showHidden.toggle()
+        loadContents()
+    }
+
+    // Add a file to global selection
+    func addFileToSelection(_ url: URL) {
+        selection.addLocal(url)
+    }
+
+    // Select all files in current folder
+    func selectAllFiles() {
+        for file in files {
+            selection.addLocal(file.url)
+        }
+    }
+
+    // Add current selection to global selection
+    func addToGlobalSelection() {
+        if let item = selectedItem {
+            addFileToSelection(item)
+        }
+    }
+
+    // Remove from global selection
+    func removeFromGlobalSelection(_ url: URL) {
+        if let item = FileItem.fromLocal(url) {
+            selection.remove(item)
+        }
+    }
+
+    // Toggle current selection in global selection
+    func toggleGlobalSelection() {
+        if let item = selectedItem, let fileItem = FileItem.fromLocal(item) {
+            selection.toggle(fileItem)
+        }
+    }
+
+    // Clear global selection
+    func clearGlobalSelection() {
+        selection.clear()
+    }
+
+    // Check if URL is in selection
+    func isInSelection(_ url: URL) -> Bool {
+        selection.containsLocal(url)
+    }
+}
