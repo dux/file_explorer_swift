@@ -8,7 +8,7 @@ struct VideoPreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PreviewHeader(title: url.lastPathComponent, icon: "film.fill", color: .orange)
+            PreviewHeader(title: "Video preview", icon: "film.fill", color: .orange)
             Divider()
 
             ZStack {

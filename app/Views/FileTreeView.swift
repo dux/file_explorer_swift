@@ -168,8 +168,9 @@ struct AncestorRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+            Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: true))
                 .resizable()
+                .interpolation(.high)
                 .frame(width: 20, height: 20)
 
             Text(name)
@@ -283,8 +284,9 @@ struct FileTreeRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+            Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: isDirectory, selected: isSelected))
                 .resizable()
+                .interpolation(.high)
                 .frame(width: 22, height: 22)
 
             if isRenaming {

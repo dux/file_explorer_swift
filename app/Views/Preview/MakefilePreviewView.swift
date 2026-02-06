@@ -9,7 +9,7 @@ struct MakefilePreviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                PreviewHeader(title: url.lastPathComponent, icon: "hammer.fill", color: .orange)
+                PreviewHeader(title: "Makefile preview", icon: "hammer.fill", color: .orange)
 
                 Spacer()
 

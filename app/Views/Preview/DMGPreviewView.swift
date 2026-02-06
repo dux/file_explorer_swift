@@ -54,7 +54,7 @@ struct DMGPreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PreviewHeader(title: url.lastPathComponent, icon: "externaldrive.fill", color: .purple)
+            PreviewHeader(title: "Disk image preview", icon: "externaldrive.fill", color: .purple)
             Divider()
 
             if isLoading {

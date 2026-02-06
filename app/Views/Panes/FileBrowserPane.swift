@@ -134,8 +134,9 @@ struct SearchResultRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path))
+            Image(nsImage: IconProvider.shared.icon(for: item.url, isDirectory: item.isDirectory))
                 .resizable()
+                .interpolation(.high)
                 .frame(width: 22, height: 22)
 
             VStack(alignment: .leading, spacing: 1) {

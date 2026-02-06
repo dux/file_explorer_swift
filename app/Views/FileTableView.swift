@@ -118,8 +118,9 @@ struct FileTableRow: View {
     var body: some View {
         HStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: isDirectory, selected: isSelected))
                     .resizable()
+                    .interpolation(.high)
                     .frame(width: 24, height: 24)
 
                 if isRenaming {

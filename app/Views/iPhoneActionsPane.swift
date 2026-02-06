@@ -159,7 +159,6 @@ struct iPhoneActionsPane: View {
 
             Spacer()
         }
-        .background(Color(NSColor.controlBackgroundColor))
     }
 
     private func addSelectedToSelection() {

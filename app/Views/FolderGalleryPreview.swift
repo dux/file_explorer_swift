@@ -14,13 +14,11 @@ struct FolderGalleryPreview: View {
             Divider()
 
             GeometryReader { geometry in
-                let spacing: CGFloat = 4
-                let boxSize = (geometry.size.width - spacing) / 2
+                let spacing: CGFloat = 3
+                let columns = 3
+                let boxSize = (geometry.size.width - spacing * CGFloat(columns - 1)) / CGFloat(columns)
                 ScrollView {
-                    LazyVGrid(columns: [
-                        GridItem(.fixed(boxSize), spacing: spacing),
-                        GridItem(.fixed(boxSize), spacing: spacing)
-                    ], spacing: spacing) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.fixed(boxSize), spacing: spacing), count: columns), spacing: spacing) {
                         ForEach(imageURLs, id: \.self) { url in
                             FolderGalleryThumbnail(url: url, size: boxSize, isSelected: false)
                         }
@@ -35,7 +33,7 @@ struct FolderGalleryPreview: View {
                 guard let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else { return ([URL](), 0) }
                 let images = contents.filter { Self.imageExtensions.contains($0.pathExtension.lowercased()) }
                     .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
-                return (Array(images.prefix(10)), images.count)
+                return (Array(images.prefix(9)), images.count)
             }.value
             imageURLs = result.0
             totalCount = result.1

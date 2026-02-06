@@ -25,7 +25,10 @@ let package = Package(
             name: "FileExplorer",
             dependencies: ["CiMobileDevice"],
             path: "app",
-            exclude: ["Info.plist"]
+            exclude: ["Info.plist"],
+            resources: [
+                .copy("Resources/Icons")
+            ]
         )
     ]
 )

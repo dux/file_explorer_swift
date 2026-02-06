@@ -8,7 +8,7 @@ struct AudioPreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PreviewHeader(title: url.lastPathComponent, icon: "music.note", color: .pink)
+            PreviewHeader(title: "Audio preview", icon: "music.note", color: .pink)
             Divider()
 
             VStack(spacing: 12) {

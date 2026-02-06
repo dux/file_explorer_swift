@@ -8,7 +8,7 @@ struct MarkdownPreviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                PreviewHeader(title: url.lastPathComponent, icon: "doc.richtext.fill", color: .purple)
+                PreviewHeader(title: "Markdown preview", icon: "doc.richtext.fill", color: .purple)
 
                 Spacer()
 

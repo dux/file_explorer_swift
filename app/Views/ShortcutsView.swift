@@ -119,8 +119,9 @@ struct ShortcutRow: View {
                     .foregroundColor(.accentColor)
                     .frame(width: 26, height: 26)
             } else {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path))
+                Image(nsImage: IconProvider.shared.icon(for: item.url, isDirectory: true))
                     .resizable()
+                    .interpolation(.high)
                     .frame(width: 26, height: 26)
             }
 

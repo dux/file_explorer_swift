@@ -173,7 +173,7 @@ struct NoPreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PreviewHeader(title: url.lastPathComponent, icon: "doc.fill", color: .secondary)
+            PreviewHeader(title: "No preview", icon: "doc.fill", color: .secondary)
             Divider()
 
             VStack(spacing: 12) {
@@ -208,6 +208,5 @@ struct PreviewHeader: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Color(NSColor.controlBackgroundColor))
     }
 }

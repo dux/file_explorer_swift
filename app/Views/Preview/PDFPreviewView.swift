@@ -6,7 +6,7 @@ struct PDFPreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PreviewHeader(title: url.lastPathComponent, icon: "doc.richtext.fill", color: .red)
+            PreviewHeader(title: "PDF preview", icon: "doc.richtext.fill", color: .red)
             Divider()
 
             PDFKitView(url: url)

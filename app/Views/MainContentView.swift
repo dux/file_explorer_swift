@@ -112,10 +112,12 @@ struct MainContentView: View {
                             Divider()
                             FolderGalleryPreview(folderURL: selected)
                                 .frame(maxHeight: .infinity)
+                                .background(Color.white)
                         } else if PreviewType.detect(for: selected) != .none {
                             Divider()
                             PreviewPane(url: selected, manager: manager)
                                 .frame(maxHeight: .infinity)
+                                .background(Color.white)
                         } else {
                             Spacer()
                         }
@@ -123,11 +125,13 @@ struct MainContentView: View {
                         Divider()
                         FolderGalleryPreview(folderURL: manager.currentPath)
                             .frame(maxHeight: .infinity)
+                            .background(Color.white)
                     } else {
                         Spacer()
                     }
                 }
                 .frame(width: settings.rightPaneWidth)
+                .background(Color(red: 0.98, green: 0.976, blue: 0.96))
         }
         .background(Color(NSColor.windowBackgroundColor))
         .background(KeyEventHandlingView(manager: manager))
@@ -211,9 +215,9 @@ class KeyCaptureView: NSView {
             }
         case 49: // Space - quick look / toggle selection
             manager.toggleGlobalSelection()
-        case 36: // Return/Enter - rename (Finder behavior)
+        case 36: // Return/Enter - open item dialog
             if manager.selectedItem != nil {
-                manager.startRename()
+                manager.showItemDialog = true
             }
         case 51: // Delete/Backspace - go back
             if event.modifierFlags.contains(.command) {

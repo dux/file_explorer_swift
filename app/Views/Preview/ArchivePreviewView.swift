@@ -25,7 +25,7 @@ struct ArchivePreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PreviewHeader(title: url.lastPathComponent, icon: "doc.zipper", color: .brown)
+            PreviewHeader(title: "Archive preview", icon: "doc.zipper", color: .brown)
             Divider()
 
             if isLoading {

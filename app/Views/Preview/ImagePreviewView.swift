@@ -6,7 +6,7 @@ struct ImagePreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PreviewHeader(title: url.lastPathComponent, icon: "photo.fill", color: .purple)
+            PreviewHeader(title: "Image preview", icon: "photo.fill", color: .purple)
             Divider()
 
             ScrollView {

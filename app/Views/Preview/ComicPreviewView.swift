@@ -10,7 +10,7 @@ struct ComicPreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PreviewHeader(title: url.lastPathComponent, icon: "book.fill", color: .purple)
+            PreviewHeader(title: "Comic preview", icon: "book.fill", color: .purple)
             Divider()
 
             if isLoading {

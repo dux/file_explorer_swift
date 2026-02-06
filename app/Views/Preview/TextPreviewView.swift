@@ -16,7 +16,7 @@ struct TextPreviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                PreviewHeader(title: url.lastPathComponent, icon: "doc.text.fill", color: .blue)
+                PreviewHeader(title: "Text preview", icon: "doc.text.fill", color: .blue)
 
                 Spacer()
 

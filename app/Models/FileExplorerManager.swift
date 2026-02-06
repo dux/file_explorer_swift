@@ -41,6 +41,7 @@ class FileExplorerManager: ObservableObject {
     @Published var currentPane: MainPaneType = .browser
     @Published var hiddenCount: Int = 0
     @Published var hasImages: Bool = false
+    @Published var showItemDialog: Bool = false
 
     // Search state
     @Published var isSearching: Bool = false

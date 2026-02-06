@@ -9,7 +9,7 @@ struct EpubPreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PreviewHeader(title: url.lastPathComponent, icon: "book.fill", color: .orange)
+            PreviewHeader(title: "EPUB preview", icon: "book.fill", color: .orange)
             Divider()
 
             if isLoading {
