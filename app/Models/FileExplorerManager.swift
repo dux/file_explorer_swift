@@ -4,14 +4,11 @@ import AppKit
 enum MainPaneType {
     case browser
     case selection
-    case search
     case iphone
 }
 
 enum BrowserViewMode: String, CaseIterable {
     case files = "Files"
-    case gallery = "Gallery"
-    case search = "Search"
     case selected = "Selected"
 }
 
@@ -39,10 +36,11 @@ class FileExplorerManager: ObservableObject {
     @Published var selectedItem: URL?
     @Published var selectedIndex: Int = -1
     @Published var showHidden: Bool = false
-    @Published var searchText: String = ""
     @Published var renamingItem: URL? = nil
     @Published var renameText: String = ""
     @Published var currentPane: MainPaneType = .browser
+    @Published var hiddenCount: Int = 0
+    @Published var hasImages: Bool = false
 
     // Remember selected item per folder
     private var selectionMemory: [String: URL] = [:]
@@ -57,7 +55,7 @@ class FileExplorerManager: ObservableObject {
         }
     }
 
-    let fzfSearch = FZFSearch()
+    private static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif", "tiff", "tif", "svg", "avif"]
 
     // Use unified SelectionManager
     var selection: SelectionManager { SelectionManager.shared }
@@ -72,14 +70,7 @@ class FileExplorerManager: ObservableObject {
     }
 
     var filteredItems: [CachedFileInfo] {
-        guard !searchText.isEmpty else {
-            return allItems
-        }
-
-        let searchTerm = searchText.lowercased()
-        return allItems.filter { item in
-            item.name.lowercased().contains(searchTerm)
-        }
+        return allItems
     }
 
     init() {
@@ -107,14 +98,23 @@ class FileExplorerManager: ObservableObject {
             let isTrash = currentPath.lastPathComponent == ".Trash"
             let showAll = showHidden || isTrash
 
-            let contents = try fileManager.contentsOfDirectory(at: currentPath, includingPropertiesForKeys: Array(resourceKeys), options: [])
+            var contents = try fileManager.contentsOfDirectory(at: currentPath, includingPropertiesForKeys: Array(resourceKeys), options: [])
+
+            // Fallback for Trash: TCC may silently return empty, use /bin/ls
+            if isTrash && contents.isEmpty {
+                contents = listViaProcess(currentPath)
+            }
 
             var dirs: [CachedFileInfo] = []
             var fils: [CachedFileInfo] = []
+            var hiddenSkipped = 0
 
             for url in contents {
                 let hidden = url.lastPathComponent.hasPrefix(".")
-                if !showAll && hidden { continue }
+                if !showAll && hidden {
+                    hiddenSkipped += 1
+                    continue
+                }
 
                 let values = try? url.resourceValues(forKeys: resourceKeys)
                 let isDir = values?.isDirectory ?? false
@@ -132,6 +132,8 @@ class FileExplorerManager: ObservableObject {
 
             directories = sortItems(dirs)
             files = sortItems(fils)
+            hiddenCount = hiddenSkipped
+            hasImages = fils.contains { FileExplorerManager.imageExtensions.contains($0.url.pathExtension.lowercased()) }
 
             selectedIndex = -1
             selectedItem = nil
@@ -140,6 +142,31 @@ class FileExplorerManager: ObservableObject {
             print("Error loading directory \(currentPath.path): \(error)")
             directories = []
             files = []
+        }
+    }
+
+    /// Fallback directory listing using /bin/ls for TCC-protected folders
+    nonisolated private func listViaProcess(_ dir: URL) -> [URL] {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/ls")
+        process.arguments = ["-1A", dir.path]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0,
+                  let output = String(data: data, encoding: .utf8) else { return [] }
+            return output.split(separator: "\n").compactMap { name in
+                let n = String(name)
+                guard !n.isEmpty else { return nil }
+                return dir.appendingPathComponent(n)
+            }
+        } catch {
+            return []
         }
     }
 
@@ -366,9 +393,9 @@ class FileExplorerManager: ObservableObject {
            let index = allItems.firstIndex(where: { $0.url == remembered }) {
             selectedIndex = index
             selectedItem = remembered
-        } else if let first = allItems.first {
-            selectedIndex = 0
-            selectedItem = first.url
+        } else {
+            selectedIndex = -1
+            selectedItem = nil
         }
     }
 
@@ -394,7 +421,6 @@ class FileExplorerManager: ObservableObject {
             }
 
             currentPath = targetURL
-            searchText = ""
             sortMode = defaultSortMode(for: targetURL)
             loadContents()
             restoreSelection()

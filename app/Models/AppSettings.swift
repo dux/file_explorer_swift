@@ -100,7 +100,7 @@ class AppSettings: ObservableObject {
             rightPaneWidth = rightWidth
         }
         if let viewMode = json["browserViewMode"] as? String {
-            // Don't restore Search tab — always start on Files or Gallery
+            // Don't restore Search tab — always start on Files
             if viewMode.lowercased() != "search" {
                 browserViewMode = viewMode
             }

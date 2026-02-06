@@ -9,13 +9,11 @@ struct ImagePreviewView: View {
             PreviewHeader(title: url.lastPathComponent, icon: "photo.fill", color: .purple)
             Divider()
 
-            GeometryReader { geometry in
+            ScrollView {
                 if let nsImage = NSImage(contentsOf: url) {
                     Image(nsImage: nsImage)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: geometry.size.width, maxHeight: geometry.size.height)
-                        .frame(width: geometry.size.width, height: geometry.size.height)
                 } else {
                     VStack(spacing: 12) {
                         Image(systemName: "exclamationmark.triangle")
@@ -25,7 +23,7 @@ struct ImagePreviewView: View {
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
-                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .padding(.top, 40)
                 }
             }
         }

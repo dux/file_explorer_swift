@@ -35,7 +35,7 @@ struct FileExplorerApp: App {
         WindowGroup {
             ContentView()
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowStyle(.titleBar)
         .windowResizability(.contentSize)
     }
 }

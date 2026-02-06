@@ -23,14 +23,16 @@ class ShortcutsManager: ObservableObject {
         var items: [ShortcutItem] = []
         let home = fileManager.homeDirectoryForCurrentUser
 
-        items.append(ShortcutItem(url: home, name: "Home", isBuiltIn: true))
-        items.append(ShortcutItem(url: home.appendingPathComponent("Desktop"), name: "Desktop", isBuiltIn: true))
-        items.append(ShortcutItem(url: home.appendingPathComponent("Downloads"), name: "Downloads", isBuiltIn: true))
-        items.append(ShortcutItem(url: URL(fileURLWithPath: "/Applications"), name: "Applications", isBuiltIn: true))
-        items.append(ShortcutItem(url: home.appendingPathComponent(".Trash"), name: "Trash", isBuiltIn: true))
+        items.append(ShortcutItem(url: home, name: "Home", isBuiltIn: true, icon: "house.fill"))
+        items.append(ShortcutItem(url: home.appendingPathComponent("Desktop"), name: "Desktop", isBuiltIn: true, icon: "menubar.dock.rectangle"))
+        items.append(ShortcutItem(url: home.appendingPathComponent("Downloads"), name: "Downloads", isBuiltIn: true, icon: "arrow.down.circle.fill"))
+        items.append(ShortcutItem(url: URL(fileURLWithPath: "/Applications"), name: "Applications", isBuiltIn: true, icon: "square.grid.2x2.fill"))
 
         for folder in customFolders {
-            items.append(ShortcutItem(url: folder, name: folder.lastPathComponent, isBuiltIn: false))
+            let isProject = fileManager.fileExists(atPath: folder.appendingPathComponent("README.md").path)
+                || fileManager.fileExists(atPath: folder.appendingPathComponent("README.MD").path)
+                || fileManager.fileExists(atPath: folder.appendingPathComponent("readme.md").path)
+            items.append(ShortcutItem(url: folder, name: folder.lastPathComponent, isBuiltIn: false, icon: isProject ? "chevron.left.forwardslash.chevron.right" : nil))
         }
 
         return items
@@ -81,4 +83,5 @@ struct ShortcutItem: Identifiable {
     let url: URL
     let name: String
     let isBuiltIn: Bool
+    var icon: String? = nil
 }

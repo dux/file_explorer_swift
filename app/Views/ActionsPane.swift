@@ -24,6 +24,7 @@ struct ActionsPane: View {
     @ObservedObject var settings = AppSettings.shared
     @State private var allApps: [(url: URL, name: String, icon: NSImage)] = []
     @State private var showAppSelector = false
+    @State private var showOtherApps = false
     @State private var showExifSheet = false
     @State private var showOfficeMetadataSheet = false
     @State private var showImageResizeSheet = false
@@ -52,7 +53,7 @@ struct ActionsPane: View {
     }
 
     private var isImageFile: Bool {
-        let imageExtensions = ["jpg", "jpeg", "png", "heic", "heif", "tiff", "tif", "gif", "bmp", "webp"]
+        let imageExtensions = ["jpg", "jpeg", "png", "heic", "heif", "tiff", "tif", "gif", "bmp", "webp", "avif"]
         return imageExtensions.contains(targetURL.pathExtension.lowercased())
     }
 
@@ -85,12 +86,12 @@ struct ActionsPane: View {
             // File/Folder Options section
             VStack(alignment: .leading, spacing: 2) {
                 Text(isDirectory ? "Folder options" : "File options")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.secondary)
                     .textCase(.uppercase)
 
                 Text(targetName)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -160,74 +161,83 @@ struct ActionsPane: View {
 
             Divider()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Open with")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .textCase(.uppercase)
-                        .padding(.horizontal, 10)
-                        .padding(.top, 8)
-                        .padding(.bottom, 4)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Open with")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .textCase(.uppercase)
+                    .padding(.horizontal, 10)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
 
-                    // Select app option (first item)
-                    ActionButton(
-                        icon: "app.badge",
-                        title: "Select app...",
-                        color: .purple
-                    ) {
-                        showAppSelector = true
-                    }
+                ActionButton(
+                    icon: "app.badge",
+                    title: "Select app...",
+                    color: .purple
+                ) {
+                    showAppSelector = true
+                }
 
-                    // Preferred apps section
-                    if !preferredApps.isEmpty {
-                        ForEach(preferredApps, id: \.url.path) { app in
-                            PreferredAppButton(
-                                icon: app.icon,
-                                title: app.name,
-                                onOpen: {
-                                    NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
-                                },
-                                onRemove: {
-                                    settings.removePreferredApp(for: fileType, appPath: app.url.path)
-                                }
-                            )
-                        }
-
-                        Text("Other apps")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.secondary)
-                            .textCase(.uppercase)
-                            .padding(.horizontal, 10)
-                            .padding(.top, 12)
-                            .padding(.bottom, 4)
-                    }
-
-                    // Other apps
-                    ForEach(otherApps, id: \.url.path) { app in
-                        ActionButtonWithIcon(
+                if !preferredApps.isEmpty {
+                    ForEach(preferredApps, id: \.url.path) { app in
+                        PreferredAppButton(
                             icon: app.icon,
-                            title: app.name
-                        ) {
-                            // Add to preferred when clicked
-                            settings.addPreferredApp(for: fileType, appPath: app.url.path)
-                            NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
-                        }
-                    }
-
-                    if allApps.isEmpty {
-                        Text("No apps available")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                            .padding(.vertical, 20)
-                            .frame(maxWidth: .infinity)
+                            title: app.name,
+                            onOpen: {
+                                NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
+                            },
+                            onRemove: {
+                                settings.removePreferredApp(for: fileType, appPath: app.url.path)
+                            }
+                        )
                     }
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+
+                if !otherApps.isEmpty {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showOtherApps.toggle()
+                        }
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: showOtherApps ? "chevron.down" : "chevron.right")
+                                .font(.system(size: 9, weight: .semibold))
+                            Text("macOS suggested apps (\(otherApps.count))")
+                                .font(.system(size: 13, weight: .medium))
+                            Spacer()
+                        }
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+
+                    if showOtherApps {
+                        ForEach(otherApps, id: \.url.path) { app in
+                            ActionButtonWithIcon(
+                                icon: app.icon,
+                                title: app.name
+                            ) {
+                                settings.addPreferredApp(for: fileType, appPath: app.url.path)
+                                NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
+                            }
+                        }
+                    }
+                }
+
+                if allApps.isEmpty {
+                    Text("No apps available")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 20)
+                        .frame(maxWidth: .infinity)
+                }
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
         }
         .background(Color(NSColor.controlBackgroundColor))
+        .fixedSize(horizontal: false, vertical: true)
         .onChange(of: targetURL) { newURL in
             loadApps(for: newURL)
         }
@@ -331,16 +341,16 @@ struct ActionButton: View {
                 Image(systemName: icon)
                     .font(.system(size: 14))
                     .foregroundColor(color)
-                    .frame(width: 20)
+                    .frame(width: 22, height: 22)
 
                 Text(title)
-                    .font(.system(size: 13))
+                    .font(.system(size: 14))
                     .foregroundColor(.primary)
 
                 Spacer()
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isHovered ? Color.gray.opacity(0.15) : Color.clear)
@@ -365,10 +375,10 @@ struct ActionButtonWithIcon: View {
             HStack(spacing: 10) {
                 Image(nsImage: icon)
                     .resizable()
-                    .frame(width: 18, height: 18)
+                    .frame(width: 22, height: 22)
 
                 Text(title)
-                    .font(.system(size: 13))
+                    .font(.system(size: 14))
                     .foregroundColor(.primary)
 
                 Spacer()
@@ -401,10 +411,10 @@ struct PreferredAppButton: View {
                 HStack(spacing: 10) {
                     Image(nsImage: icon)
                         .resizable()
-                        .frame(width: 18, height: 18)
+                        .frame(width: 22, height: 22)
 
                     Text(title)
-                        .font(.system(size: 13))
+                        .font(.system(size: 14))
                         .foregroundColor(.primary)
 
                     Spacer()
@@ -467,7 +477,7 @@ struct ExifMetadataSheet: View {
                 VStack {
                     ProgressView()
                     Text("Reading metadata...")
-                        .font(.system(size: 13))
+                        .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -477,7 +487,7 @@ struct ExifMetadataSheet: View {
                         .font(.system(size: 32))
                         .foregroundColor(.orange)
                     Text(error)
-                        .font(.system(size: 13))
+                        .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -487,7 +497,7 @@ struct ExifMetadataSheet: View {
                         .font(.system(size: 32))
                         .foregroundColor(.secondary)
                     Text("No metadata found")
-                        .font(.system(size: 13))
+                        .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -498,12 +508,12 @@ struct ExifMetadataSheet: View {
                         ForEach(metadata, id: \.key) { item in
                             HStack(alignment: .top) {
                                 Text(item.key)
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(.secondary)
                                     .frame(width: 140, alignment: .trailing)
 
                                 Text(item.value)
-                                    .font(.system(size: 12))
+                                    .font(.system(size: 13))
                                     .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -523,7 +533,7 @@ struct ExifMetadataSheet: View {
             // Footer
             HStack {
                 Text(url.lastPathComponent)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                 Spacer()
@@ -687,7 +697,7 @@ struct OfficeMetadataSheet: View {
                 VStack {
                     ProgressView()
                     Text("Reading document...")
-                        .font(.system(size: 13))
+                        .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -697,7 +707,7 @@ struct OfficeMetadataSheet: View {
                         .font(.system(size: 32))
                         .foregroundColor(.orange)
                     Text(error)
-                        .font(.system(size: 13))
+                        .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -707,7 +717,7 @@ struct OfficeMetadataSheet: View {
                         .font(.system(size: 32))
                         .foregroundColor(.secondary)
                     Text("No metadata found")
-                        .font(.system(size: 13))
+                        .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -718,12 +728,12 @@ struct OfficeMetadataSheet: View {
                         ForEach(metadata, id: \.key) { item in
                             HStack(alignment: .top) {
                                 Text(item.key)
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(.secondary)
                                     .frame(width: 140, alignment: .trailing)
 
                                 Text(item.value)
-                                    .font(.system(size: 12))
+                                    .font(.system(size: 13))
                                     .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -743,7 +753,7 @@ struct OfficeMetadataSheet: View {
             // Footer
             HStack {
                 Text(url.lastPathComponent)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                 Spacer()
@@ -1118,12 +1128,12 @@ struct ImageResizeSheet: View {
                 // Size info
                 HStack {
                     Text("Original: \(Int(originalSize.width)) × \(Int(originalSize.height))")
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                         .foregroundColor(.secondary)
                     Spacer()
                     if !newWidth.isEmpty && !newHeight.isEmpty {
                         Text("New: \(newWidth) × \(newHeight)")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 13, weight: .medium))
                             .foregroundColor(.pink)
                     }
                 }
@@ -1132,7 +1142,7 @@ struct ImageResizeSheet: View {
                     // Crop instructions
                     if !isDragging {
                         Text("Drag on image to select crop area")
-                            .font(.system(size: 12))
+                            .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     } else {
                         HStack {
@@ -1141,7 +1151,7 @@ struct ImageResizeSheet: View {
                                 cropStart = .zero
                                 cropEnd = .zero
                             }
-                            .font(.system(size: 12))
+                            .font(.system(size: 13))
                         }
                     }
                 } else {
@@ -1150,7 +1160,7 @@ struct ImageResizeSheet: View {
                         ForEach(ResizePreset.allCases.filter { $0 != .custom }, id: \.self) { preset in
                             Button(action: { applyPreset(preset) }) {
                                 Text(preset.rawValue)
-                                    .font(.system(size: 11))
+                                    .font(.system(size: 13))
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 6)
                                     .background(
@@ -1192,14 +1202,14 @@ struct ImageResizeSheet: View {
                             }
 
                         Text("px")
-                            .font(.system(size: 11))
+                            .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
                 }
 
                 if let error = errorMessage {
                     Text(error)
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                         .foregroundColor(.red)
                 }
             }
@@ -1210,7 +1220,7 @@ struct ImageResizeSheet: View {
             // Footer
             HStack {
                 Text(url.lastPathComponent)
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
 

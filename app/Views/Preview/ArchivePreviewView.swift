@@ -16,6 +16,7 @@ struct ArchiveEntry: Identifiable, Hashable {
 
 struct ArchivePreviewView: View {
     let url: URL
+    @ObservedObject var manager: FileExplorerManager
     @State private var entries: [ArchiveEntry] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -46,7 +47,6 @@ struct ArchivePreviewView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                // Header
                 HStack(spacing: 0) {
                     Text("Name")
                         .frame(minWidth: 200, alignment: .leading)
@@ -62,14 +62,14 @@ struct ArchivePreviewView: View {
 
                 Divider()
 
-                // File list
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(entries) { entry in
                             ArchiveEntryRow(
                                 entry: entry,
                                 isSelected: selectedEntry?.id == entry.id,
-                                archiveURL: url
+                                archiveURL: url,
+                                manager: manager
                             )
                             .onTapGesture {
                                 selectedEntry = entry
@@ -77,21 +77,9 @@ struct ArchivePreviewView: View {
                         }
                     }
                 }
-                .overlay(
-                    // Drop zone overlay
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(isDragOver ? Color.accentColor : Color.clear, lineWidth: 3)
-                        .background(isDragOver ? Color.accentColor.opacity(0.1) : Color.clear)
-                        .padding(4)
-                )
-                .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
-                    handleDrop(providers: providers)
-                    return true
-                }
 
                 Divider()
 
-                // Footer with stats
                 HStack {
                     Text("\(entries.count) items")
                     Spacer()
@@ -103,6 +91,17 @@ struct ArchivePreviewView: View {
                 .padding(.vertical, 6)
                 .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
             }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isDragOver ? Color.accentColor : Color.clear, lineWidth: 3)
+                .background(isDragOver ? Color.accentColor.opacity(0.08) : Color.clear)
+                .cornerRadius(8)
+                .allowsHitTesting(false)
+        )
+        .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
+            handleDrop(providers: providers)
+            return true
         }
         .onAppear { loadArchive() }
         .onChange(of: url) { _ in loadArchive() }
@@ -119,10 +118,9 @@ struct ArchivePreviewView: View {
         entries = []
 
         let archiveURL = url
-        DispatchQueue.global(qos: .userInitiated).async {
+        Task.detached {
             let result = Self.listArchiveContents(url: archiveURL)
-
-            DispatchQueue.main.async {
+            await MainActor.run {
                 isLoading = false
                 switch result {
                 case .success(let items):
@@ -134,10 +132,9 @@ struct ArchivePreviewView: View {
         }
     }
 
-    private static func listArchiveContents(url: URL) -> Result<[ArchiveEntry], Error> {
+    nonisolated private static func listArchiveContents(url: URL) -> Result<[ArchiveEntry], Error> {
         let ext = url.pathExtension.lowercased()
 
-        // Use different tools based on archive type
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
 
@@ -151,7 +148,6 @@ struct ArchivePreviewView: View {
         case "7z":
             process.arguments = ["7z", "l", url.path]
         default:
-            // Try zip first
             process.arguments = ["unzip", "-l", url.path]
         }
 
@@ -161,28 +157,30 @@ struct ArchivePreviewView: View {
 
         do {
             try process.run()
+            // Read pipe BEFORE waitUntilExit to prevent deadlock
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
 
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
             guard let output = String(data: data, encoding: .utf8) else {
                 return .failure(NSError(domain: "Archive", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not read archive"]))
             }
 
-            let entries = parseArchiveOutput(output: output, type: ext)
+            let entries = parseArchiveOutput(output: output, type: ext).sorted { a, b in
+                if a.isDirectory != b.isDirectory { return a.isDirectory }
+                return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            }
             return .success(entries)
         } catch {
             return .failure(error)
         }
     }
 
-    private static func parseArchiveOutput(output: String, type: String) -> [ArchiveEntry] {
+    nonisolated private static func parseArchiveOutput(output: String, type: String) -> [ArchiveEntry] {
         var entries: [ArchiveEntry] = []
         let lines = output.components(separatedBy: .newlines)
 
         switch type {
         case "zip":
-            // Format: Length Date Time Name
-            // Skip header and footer lines
             var inFileList = false
             for line in lines {
                 if line.contains("--------") {
@@ -202,7 +200,6 @@ struct ArchivePreviewView: View {
             }
 
         case "tar", "tgz", "gz", "bz2", "xz":
-            // Format: -rw-r--r-- user/group size date time name
             for line in lines {
                 let parts = line.split(separator: " ", omittingEmptySubsequences: true)
                 if parts.count >= 6 {
@@ -218,7 +215,6 @@ struct ArchivePreviewView: View {
             }
 
         default:
-            // Generic parsing - just show lines
             for line in lines where !line.isEmpty {
                 entries.append(ArchiveEntry(path: line, name: line, size: 0, isDirectory: false, compressedSize: nil))
             }
@@ -228,40 +224,52 @@ struct ArchivePreviewView: View {
     }
 
     private func handleDrop(providers: [NSItemProvider]) {
+        let archiveURL = url
+        let ext = archiveURL.pathExtension.lowercased()
+        guard ext == "zip" || ext == "tar" else {
+            ToastManager.shared.show("Can only add to .zip and .tar")
+            return
+        }
+
         for provider in providers {
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { data, error in
                 guard let data = data as? Data,
                       let fileURL = URL(dataRepresentation: data, relativeTo: nil) else { return }
 
-                DispatchQueue.main.async {
-                    addFileToArchive(fileURL: fileURL)
+                let fileName = fileURL.lastPathComponent
+                Task.detached {
+                    let process = Process()
+                    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                    process.currentDirectoryURL = fileURL.deletingLastPathComponent()
+
+                    switch ext {
+                    case "zip":
+                        process.arguments = ["zip", "-r", archiveURL.path, fileName]
+                    case "tar":
+                        process.arguments = ["tar", "-rf", archiveURL.path, fileName]
+                    default:
+                        return
+                    }
+
+                    let pipe = Pipe()
+                    process.standardOutput = pipe
+                    process.standardError = pipe
+
+                    do {
+                        try process.run()
+                        _ = pipe.fileHandleForReading.readDataToEndOfFile()
+                        process.waitUntilExit()
+
+                        await MainActor.run {
+                            ToastManager.shared.show("Added \(fileName) to archive")
+                            loadArchive()
+                        }
+                    } catch {
+                        await MainActor.run {
+                            ToastManager.shared.show("Error: \(error.localizedDescription)")
+                        }
+                    }
                 }
-            }
-        }
-    }
-
-    private func addFileToArchive(fileURL: URL) {
-        let ext = url.pathExtension.lowercased()
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.currentDirectoryURL = fileURL.deletingLastPathComponent()
-
-            switch ext {
-            case "zip":
-                process.arguments = ["zip", "-r", url.path, fileURL.lastPathComponent]
-            case "tar":
-                process.arguments = ["tar", "-rf", url.path, fileURL.lastPathComponent]
-            default:
-                return // Not supported for other formats
-            }
-
-            try? process.run()
-            process.waitUntilExit()
-
-            DispatchQueue.main.async {
-                loadArchive() // Refresh
             }
         }
     }
@@ -271,58 +279,49 @@ struct ArchiveEntryRow: View {
     let entry: ArchiveEntry
     let isSelected: Bool
     let archiveURL: URL
-    @State private var isHovered = false
+    @ObservedObject var manager: FileExplorerManager
+
+    private var entryIcon: NSImage {
+        if entry.isDirectory {
+            return NSWorkspace.shared.icon(for: .folder)
+        }
+        let ext = URL(fileURLWithPath: entry.path).pathExtension.lowercased()
+        if let utType = UTType(filenameExtension: ext) {
+            return NSWorkspace.shared.icon(for: utType)
+        }
+        return NSWorkspace.shared.icon(for: .item)
+    }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: entry.isDirectory ? "folder.fill" : iconForFile)
-                .font(.system(size: 14))
-                .foregroundColor(entry.isDirectory ? .blue : .secondary)
-                .frame(width: 20)
+        HStack(spacing: 6) {
+            Image(nsImage: entryIcon)
+                .resizable()
+                .frame(width: 22, height: 22)
 
             Text(entry.name)
-                .font(.system(size: 12))
+                .font(.system(size: 14))
                 .lineLimit(1)
-                .frame(minWidth: 150, alignment: .leading)
+                .foregroundColor(isSelected ? .white : .primary)
 
             Spacer()
 
-            Text(entry.isDirectory ? "--" : entry.displaySize)
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-                .frame(width: 70, alignment: .trailing)
+            Text(entry.isDirectory ? "" : entry.displaySize)
+                .font(.system(size: 11))
+                .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
+                .frame(width: 60, alignment: .trailing)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            isSelected ? Color.accentColor :
-            (isHovered ? Color(NSColor.selectedContentBackgroundColor).opacity(0.2) : Color.clear)
-        )
-        .foregroundColor(isSelected ? .white : .primary)
+        .padding(.trailing, 12)
+        .padding(.vertical, 5)
+        .background(isSelected ? Color.accentColor : Color.clear)
+        .cornerRadius(4)
         .contentShape(Rectangle())
-        .onHover { hovering in
-            isHovered = hovering
-        }
         .onDrag {
-            // Extract file to temp and provide for drag
             let tempURL = extractToTemp()
             if let url = tempURL {
                 return NSItemProvider(object: url as NSURL)
             }
             return NSItemProvider()
-        }
-    }
-
-    private var iconForFile: String {
-        let ext = URL(fileURLWithPath: entry.path).pathExtension.lowercased()
-        switch ext {
-        case "jpg", "jpeg", "png", "gif", "webp", "heic": return "photo"
-        case "pdf": return "doc.richtext"
-        case "txt", "md": return "doc.text"
-        case "zip", "tar", "gz", "rar": return "doc.zipper"
-        case "mp3", "wav", "m4a": return "waveform"
-        case "mp4", "mov", "avi": return "film"
-        default: return "doc"
         }
     }
 
@@ -340,15 +339,20 @@ struct ArchiveEntryRow: View {
 
         switch ext {
         case "zip":
-            process.arguments = ["unzip", "-o", archiveURL.path, entry.path]
+            process.arguments = ["unzip", "-o", archiveURL.path, entry.path, "-d", tempDir.path]
         case "tar", "tgz", "gz", "bz2", "xz":
-            process.arguments = ["tar", "-xf", archiveURL.path, entry.path]
+            process.arguments = ["tar", "-xf", archiveURL.path, "-C", tempDir.path, entry.path]
         default:
             return nil
         }
 
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+
         do {
             try process.run()
+            _ = pipe.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
 
             let extractedURL = tempDir.appendingPathComponent(entry.path)

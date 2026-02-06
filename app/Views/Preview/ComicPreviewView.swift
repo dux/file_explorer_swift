@@ -1,10 +1,12 @@
 import SwiftUI
-import WebKit
+import AppKit
 
 struct ComicPreviewView: View {
     let url: URL
-    @State private var htmlPath: URL? = nil
+    @State private var pages: [URL] = []
+    @State private var totalPages: Int = 0
     @State private var isLoading = true
+    @State private var error: String? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,50 +16,112 @@ struct ComicPreviewView: View {
             if isLoading {
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text("Extracting preview...")
+                    Text("Extracting pages...")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let htmlPath = htmlPath {
-                ComicWebView(fileURL: htmlPath)
+            } else if let error = error {
+                VStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 32))
+                        .foregroundColor(.secondary)
+                    Text(error)
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                GeometryReader { geometry in
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            if totalPages > pages.count {
+                                Text("\(totalPages) pages")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                                    .padding(.vertical, 4)
+                            }
+                            ForEach(Array(pages.enumerated()), id: \.offset) { _, pageURL in
+                                ComicPageView(url: pageURL, width: geometry.size.width)
+                            }
+                        }
+                    }
+                }
             }
         }
-        .onAppear { extractImages() }
-        .onChange(of: url) { _ in extractImages() }
+        .task(id: url) {
+            await extractPages()
+        }
     }
 
-    private func extractImages() {
+    private func extractPages() async {
         isLoading = true
+        error = nil
+        pages = []
+
         let archiveURL = url
+        let result = await Task.detached(priority: .userInitiated) {
+            ComicExtractor.extract(from: archiveURL)
+        }.value
 
-        Task.detached(priority: .userInitiated) {
-            let path = ComicExtractor.extractAndGenerateHTML(from: archiveURL)
+        switch result {
+        case .success(let (urls, total)):
+            pages = urls
+            totalPages = total
+        case .failure(let err):
+            error = err.localizedDescription
+        }
+        isLoading = false
+    }
+}
 
-            await MainActor.run {
-                htmlPath = path
-                isLoading = false
+struct ComicPageView: View {
+    let url: URL
+    let width: CGFloat
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image = image {
+                let aspect = image.size.height / max(image.size.width, 1)
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: width, height: width * aspect)
+            } else {
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.1))
+                    .frame(width: width, height: width * 1.4)
+            }
+        }
+        .task(id: url) {
+            image = nil
+            let pageURL = url
+            let data = await Task.detached(priority: .userInitiated) {
+                try? Data(contentsOf: pageURL)
+            }.value
+            if let data = data {
+                image = NSImage(data: data)
             }
         }
     }
 }
 
-// Separate class to avoid View actor isolation
 enum ComicExtractor {
-    static func extractAndGenerateHTML(from url: URL) -> URL? {
+    private static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif"]
+
+    static func extract(from url: URL) -> Result<([URL], Int), Error> {
         let ext = url.pathExtension.lowercased()
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("ComicPreview")
             .appendingPathComponent(UUID().uuidString)
 
-        // Create temp dir
         do {
             try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         } catch {
-            return nil
+            return .failure(error)
         }
 
-        // Extract files
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.currentDirectoryURL = tempDir
@@ -75,107 +139,19 @@ enum ComicExtractor {
             try process.run()
             process.waitUntilExit()
         } catch {
-            return nil
+            return .failure(error)
         }
 
-        // Find image files
-        let imageExtensions = Set(["jpg", "jpeg", "png", "gif", "webp", "bmp"])
-        var imageURLs: [URL] = []
-
-        if let contents = try? FileManager.default.contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil) {
-            imageURLs = contents.filter { fileURL in
-                imageExtensions.contains(fileURL.pathExtension.lowercased())
-            }.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+        guard let contents = try? FileManager.default.contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil) else {
+            return .success(([], 0))
         }
 
-        // Take first 6
-        let previewImages = Array(imageURLs.prefix(9))
-
-        if previewImages.isEmpty {
-            return nil
+        let imageURLs = contents.filter {
+            imageExtensions.contains($0.pathExtension.lowercased())
+        }.sorted {
+            $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
         }
 
-        // Generate HTML and save to file
-        let html = generateHTML(images: previewImages, total: imageURLs.count)
-        let htmlFile = tempDir.appendingPathComponent("preview.html")
-
-        do {
-            try html.write(to: htmlFile, atomically: true, encoding: .utf8)
-            return htmlFile
-        } catch {
-            return nil
-        }
-    }
-
-    private static func generateHTML(images: [URL], total: Int) -> String {
-        let imagesTags = images.enumerated().map { index, url in
-            let filename = url.lastPathComponent
-            return "<img src=\"\(filename)\" alt=\"Page \(index + 1)\">"
-        }.joined(separator: "\n")
-
-        return """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <style>
-                :root { color-scheme: light dark; }
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-                    background: transparent;
-                    padding: 12px;
-                }
-                .info {
-                    padding: 8px;
-                    margin-bottom: 12px;
-                    font-size: 12px;
-                    color: #666;
-                }
-                @media (prefers-color-scheme: dark) {
-                    .info { color: #999; }
-                }
-                .images {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 16px;
-                    padding-bottom: 24px;
-                }
-                .images img {
-                    max-width: 600px;
-                    max-height: 600px;
-                    height: auto;
-                    border-radius: 4px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-                    margin-right: 8px;
-                    margin-bottom: 8px;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="info">Showing \(images.count) of \(total) pages</div>
-            <div class="images">
-                \(imagesTags)
-            </div>
-        </body>
-        </html>
-        """
-    }
-}
-
-struct ComicWebView: NSViewRepresentable {
-    let fileURL: URL
-
-    func makeNSView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        config.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.setValue(false, forKey: "drawsBackground")
-        webView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
-        return webView
-    }
-
-    func updateNSView(_ webView: WKWebView, context: Context) {
-        webView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
+        return .success((imageURLs, imageURLs.count))
     }
 }

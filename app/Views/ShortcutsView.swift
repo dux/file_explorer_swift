@@ -42,7 +42,7 @@ struct ShortcutsView: View {
                 .padding(.vertical, 4)
             }
         }
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(Color(red: 0xfa/255.0, green: 0xf9/255.0, blue: 0xf5/255.0))
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers: providers)
             return true
@@ -100,33 +100,6 @@ func formatPath(_ path: String, full: Bool) -> String {
     return path
 }
 
-func shortcutIcon(for name: String, isBuiltIn: Bool) -> String {
-    if !isBuiltIn {
-        return "folder.fill"
-    }
-    switch name {
-    case "Home": return "house.fill"
-    case "Desktop": return "menubar.dock.rectangle"
-    case "Downloads": return "arrow.down.circle.fill"
-    case "Applications": return "square.grid.2x2.fill"
-    case "Trash": return "trash.fill"
-    default: return "folder.fill"
-    }
-}
-
-func shortcutColor(for name: String, isBuiltIn: Bool) -> Color {
-    if !isBuiltIn {
-        return .orange
-    }
-    switch name {
-    case "Home": return .blue
-    case "Desktop": return .purple
-    case "Downloads": return .green
-    case "Applications": return .cyan
-    case "Trash": return .gray
-    default: return .orange
-    }
-}
 
 struct ShortcutRow: View {
     let item: ShortcutItem
@@ -140,13 +113,19 @@ struct ShortcutRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: shortcutIcon(for: item.name, isBuiltIn: item.isBuiltIn))
-                .font(.system(size: 14))
-                .foregroundColor(shortcutColor(for: item.name, isBuiltIn: item.isBuiltIn))
-                .frame(width: 20)
+            if let icon = item.icon {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundColor(.accentColor)
+                    .frame(width: 26, height: 26)
+            } else {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path))
+                    .resizable()
+                    .frame(width: 26, height: 26)
+            }
 
             Text(formatPath(item.url.path, full: !item.isBuiltIn))
-                .font(.system(size: 13))
+                .font(.system(size: 14))
                 .lineLimit(1)
                 .truncationMode(.middle)
 
@@ -162,7 +141,7 @@ struct ShortcutRow: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
@@ -196,15 +175,27 @@ struct DraggableShortcutRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "folder.fill")
-                .font(.system(size: 14))
-                .foregroundColor(.orange)
-                .frame(width: 20)
+            if let icon = item.icon {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .foregroundColor(.accentColor)
+                    .frame(width: 22, height: 22)
+            } else {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path))
+                    .resizable()
+                    .frame(width: 22, height: 22)
+            }
 
-            Text(formatPath(item.url.path, full: true))
-                .font(.system(size: 13))
-                .lineLimit(1)
-                .truncationMode(.middle)
+            HStack(spacing: 4) {
+                Text(item.url.lastPathComponent)
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                Text(formatPath(item.url.deletingLastPathComponent().path, full: true))
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
 
             Spacer()
 
@@ -218,7 +209,7 @@ struct DraggableShortcutRow: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isDragTarget ? Color.accentColor.opacity(0.3) :

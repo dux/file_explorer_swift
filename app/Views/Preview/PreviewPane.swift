@@ -29,7 +29,7 @@ enum PreviewType {
             return .json
         }
 
-        if ["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "tiff", "ico", "svg"].contains(ext) {
+        if ["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "tiff", "ico", "svg", "avif"].contains(ext) {
             return .image
         }
 
@@ -128,6 +128,7 @@ enum PreviewType {
 
 struct PreviewPane: View {
     let url: URL
+    var manager: FileExplorerManager?
 
     var body: some View {
         let previewType = PreviewType.detect(for: url)
@@ -144,7 +145,11 @@ struct PreviewPane: View {
         case .makefile:
             MakefilePreviewView(url: url)
         case .archive:
-            ArchivePreviewView(url: url)
+            if let manager = manager {
+                ArchivePreviewView(url: url, manager: manager)
+            } else {
+                ArchivePreviewView(url: url, manager: FileExplorerManager())
+            }
         case .comic:
             ComicPreviewView(url: url)
         case .epub:

@@ -9,8 +9,6 @@ struct MainPane: View {
             FileBrowserPane(manager: manager)
         case .selection:
             SelectionPane(manager: manager)
-        case .search:
-            SearchPane(manager: manager)
         case .iphone:
             iPhoneBrowserPane(manager: manager)
         }

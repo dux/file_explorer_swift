@@ -10,10 +10,6 @@ struct iPhoneBrowserPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Tab selector (same as local browser)
-            ViewModeSelector(manager: manager)
-            Divider()
-
             // Show different content based on view mode
             switch manager.browserViewMode {
             case .files:
@@ -25,10 +21,6 @@ struct iPhoneBrowserPane: View {
                     previewURL: $previewURL,
                     isLoadingPreview: $isLoadingPreview
                 )
-            case .gallery:
-                iPhoneGalleryContent(deviceManager: deviceManager)
-            case .search:
-                iPhoneSearchContent(manager: manager, deviceManager: deviceManager)
             case .selected:
                 SelectedFilesView(manager: manager)
             }
@@ -52,7 +44,7 @@ struct iPhoneBrowserPane: View {
         // Check if file type is previewable
         let ext = (file.name as NSString).pathExtension.lowercased()
         let previewableExtensions = Set([
-            "jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "tiff",
+            "jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "tiff", "avif",
             "txt", "md", "json", "xml", "yaml", "yml",
             "py", "js", "ts", "swift", "rb", "go", "rs", "c", "cpp", "h",
             "html", "css", "sh", "log",
@@ -137,7 +129,7 @@ struct iPhoneFilesContent: View {
 
         let ext = (file.name as NSString).pathExtension.lowercased()
         let previewableExtensions = Set([
-            "jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "tiff",
+            "jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "tiff", "avif",
             "txt", "md", "json", "xml", "yaml", "yml",
             "py", "js", "ts", "swift", "rb", "go", "rs", "c", "cpp", "h",
             "html", "css", "sh", "log",
@@ -161,7 +153,7 @@ struct iPhoneFilesContent: View {
 struct iPhoneGalleryContent: View {
     @ObservedObject var deviceManager: iPhoneManager
 
-    private static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif", "tiff", "tif"]
+    private static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif", "tiff", "tif", "avif"]
 
     private var imageFiles: [iPhoneFile] {
         deviceManager.files.filter { file in

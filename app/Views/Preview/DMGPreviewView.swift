@@ -369,72 +369,35 @@ struct DMGPreviewView: View {
 struct DMGEntryRow: View {
     let entry: DMGEntry
     let isSelected: Bool
-    @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            // Use actual app icon for .app bundles
-            if entry.isApp {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: entry.url.path))
-                    .resizable()
-                    .frame(width: 20, height: 20)
-            } else {
-                Image(systemName: iconForEntry)
-                    .font(.system(size: 14))
-                    .foregroundColor(iconColor)
-                    .frame(width: 20)
-            }
+        HStack(spacing: 6) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: entry.url.path))
+                .resizable()
+                .frame(width: 22, height: 22)
 
             Text(entry.name)
-                .font(.system(size: 12))
+                .font(.system(size: 14))
                 .lineLimit(1)
-                .frame(minWidth: 150, alignment: .leading)
+                .foregroundColor(isSelected ? .white : .primary)
 
             Spacer()
 
-            Text(entry.displaySize)
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-                .frame(width: 70, alignment: .trailing)
+            if !entry.isDirectory || entry.isApp {
+                Text(entry.displaySize)
+                    .font(.system(size: 11))
+                    .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
+                    .frame(width: 60, alignment: .trailing)
+            }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            isSelected ? Color.accentColor :
-            (isHovered ? Color(NSColor.selectedContentBackgroundColor).opacity(0.2) : Color.clear)
-        )
-        .foregroundColor(isSelected ? .white : .primary)
+        .padding(.trailing, 12)
+        .padding(.vertical, 5)
+        .background(isSelected ? Color.accentColor : Color.clear)
+        .cornerRadius(4)
         .contentShape(Rectangle())
-        .onHover { hovering in
-            isHovered = hovering
-        }
         .onDrag {
             NSItemProvider(object: entry.url as NSURL)
         }
-    }
-
-    private var iconForEntry: String {
-        if entry.isApp {
-            return "app.fill"
-        }
-        if entry.isDirectory {
-            return "folder.fill"
-        }
-
-        let ext = entry.url.pathExtension.lowercased()
-        switch ext {
-        case "pkg", "mpkg": return "shippingbox.fill"
-        case "txt", "rtf": return "doc.text"
-        case "pdf": return "doc.richtext"
-        case "html", "htm": return "globe"
-        default: return "doc"
-        }
-    }
-
-    private var iconColor: Color {
-        if entry.isApp { return .blue }
-        if entry.isDirectory { return .blue }
-        if entry.url.pathExtension.lowercased() == "pkg" { return .brown }
-        return .secondary
     }
 }
