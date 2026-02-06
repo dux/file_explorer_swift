@@ -17,6 +17,8 @@ struct ContentView: View {
                 Rectangle()
                     .fill(isDraggingLeftPane ? Color.accentColor : Color(NSColor.separatorColor))
                     .frame(width: isDraggingLeftPane ? 3 : 1)
+                    .padding(.horizontal, 2)
+                    .contentShape(Rectangle())
                     .onHover { hovering in
                         if hovering {
                             NSCursor.resizeLeftRight.push()

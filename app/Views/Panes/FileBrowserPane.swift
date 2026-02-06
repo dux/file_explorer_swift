@@ -11,7 +11,176 @@ struct FileBrowserPane: View {
             ActionButtonBar(manager: manager)
             Divider()
 
-            FileTreeView(manager: manager)
+            if manager.isSearching {
+                SearchBar(manager: manager)
+                Divider()
+                SearchResultsView(manager: manager)
+            } else {
+                FileTreeView(manager: manager)
+            }
+        }
+    }
+}
+
+// MARK: - Search Bar
+
+struct SearchBar: View {
+    @ObservedObject var manager: FileExplorerManager
+
+    private var displayPath: String {
+        let path = manager.currentPath.path
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        if path.hasPrefix(home) {
+            return "~" + path.dropFirst(home.count)
+        }
+        return path
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Search in \(displayPath)")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            HStack(spacing: 10) {
+                SearchTextField(text: Binding(
+                    get: { manager.searchQuery },
+                    set: { manager.performSearch($0) }
+                ), onCancel: { manager.cancelSearch() })
+                .frame(height: 36)
+
+                if manager.isSearchRunning {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                if !manager.searchQuery.isEmpty {
+                    Text("\(manager.searchResults.count)")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+
+                Button(action: { manager.cancelSearch() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+    }
+}
+
+// MARK: - Search Results View
+
+struct SearchResultsView: View {
+    @ObservedObject var manager: FileExplorerManager
+
+    private static let home = FileManager.default.homeDirectoryForCurrentUser
+
+    private func relativePath(_ url: URL) -> String {
+        let full = url.path
+        let base = manager.currentPath.path
+        if full.hasPrefix(base) {
+            let rel = String(full.dropFirst(base.count))
+            return rel.hasPrefix("/") ? String(rel.dropFirst()) : rel
+        }
+        return full
+    }
+
+    var body: some View {
+        if manager.searchResults.isEmpty && !manager.isSearchRunning {
+            VStack(spacing: 12) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 32))
+                    .foregroundColor(.secondary)
+                if manager.searchQuery.isEmpty {
+                    Text("Type to search files")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("No results for \"\(manager.searchQuery)\"")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(manager.searchResults) { item in
+                        SearchResultRow(
+                            item: item,
+                            relativePath: relativePath(item.url),
+                            manager: manager
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct SearchResultRow: View {
+    let item: CachedFileInfo
+    let relativePath: String
+    @ObservedObject var manager: FileExplorerManager
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path))
+                .resizable()
+                .frame(width: 22, height: 22)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.name)
+                    .font(.system(size: 14))
+                    .lineLimit(1)
+                Text(relativePath)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer()
+
+            if manager.isInSelection(item.url) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(.green)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(
+            manager.selectedItem == item.url ? Color.accentColor :
+            isHovered ? Color.gray.opacity(0.1) : Color.clear
+        )
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .onTapGesture {
+            if item.isDirectory {
+                manager.cancelSearch()
+                manager.navigateTo(item.url)
+            } else {
+                // Select file and navigate to its parent
+                let parent = item.url.deletingLastPathComponent()
+                manager.cancelSearch()
+                manager.navigateTo(parent)
+                // Select the file after navigation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    if let index = manager.allItems.firstIndex(where: { $0.url == item.url }) {
+                        manager.selectItem(at: index, url: item.url)
+                    }
+                }
+            }
         }
     }
 }

@@ -76,6 +76,8 @@ struct MainContentView: View {
                 Rectangle()
                     .fill(isDraggingRightPane ? Color.accentColor : Color(NSColor.separatorColor))
                     .frame(width: isDraggingRightPane ? 3 : 1)
+                    .padding(.horizontal, 2)
+                    .contentShape(Rectangle())
                     .onHover { hovering in
                         if hovering {
                             NSCursor.resizeLeftRight.push()
@@ -146,8 +148,8 @@ struct KeyEventHandlingView: NSViewRepresentable {
 
     func updateNSView(_ nsView: KeyCaptureView, context: Context) {
         nsView.manager = manager
-        // Reclaim focus when not renaming
-        if manager.renamingItem == nil {
+        // Reclaim focus when not renaming or searching
+        if manager.renamingItem == nil && !manager.isSearching {
             DispatchQueue.main.async {
                 nsView.window?.makeFirstResponder(nsView)
             }
@@ -346,7 +348,6 @@ struct ActionButtonBar: View {
 
     @State private var showNewFolderDialog = false
     @State private var newFolderName = ""
-    @State private var showSearchAlert = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -359,7 +360,11 @@ struct ActionButtonBar: View {
             .buttonStyle(.bordered)
 
             Button(action: {
-                showSearchAlert = true
+                if manager.isSearching {
+                    manager.cancelSearch()
+                } else {
+                    manager.startSearch()
+                }
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "magnifyingglass")
@@ -369,11 +374,7 @@ struct ActionButtonBar: View {
                 }
             }
             .buttonStyle(.bordered)
-            .alert("Search", isPresented: $showSearchAlert) {
-                Button("OK") { }
-            } message: {
-                Text("ok")
-            }
+            .keyboardShortcut("f", modifiers: .control)
 
             Divider()
                 .frame(height: 20)
@@ -522,6 +523,63 @@ struct TableHeaderView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+    }
+}
+
+// MARK: - Search TextField (auto-focus, Escape to cancel)
+
+struct SearchTextField: NSViewRepresentable {
+    @Binding var text: String
+    var onCancel: () -> Void
+
+    func makeNSView(context: Context) -> NSSearchField {
+        let field = NSSearchField()
+        field.placeholderString = "Search files…"
+        field.font = NSFont.systemFont(ofSize: 15)
+        field.delegate = context.coordinator
+        field.focusRingType = .none
+        field.sendsWholeSearchString = false
+        field.sendsSearchStringImmediately = true
+        // Hide the built-in cancel button — we have our own
+        if let cell = field.cell as? NSSearchFieldCell {
+            cell.cancelButtonCell = nil
+        }
+        // Auto-focus
+        DispatchQueue.main.async {
+            field.window?.makeFirstResponder(field)
+        }
+        return field
+    }
+
+    func updateNSView(_ nsView: NSSearchField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, NSSearchFieldDelegate {
+        let parent: SearchTextField
+
+        init(_ parent: SearchTextField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+                parent.onCancel()
+                return true
+            }
+            return false
+        }
     }
 }
 
