@@ -92,6 +92,7 @@ struct FileTableRow: View {
     let fileInfo: CachedFileInfo
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject var selection = SelectionManager.shared
+    @ObservedObject var tagManager = ColorTagManager.shared
     let index: Int
     @State private var showingDetails = false
     @State private var lastClickTime: Date = .distantPast
@@ -115,6 +116,11 @@ struct FileTableRow: View {
         manager.renamingItem == url
     }
 
+    private var fileColors: [TagColor] {
+        let _ = tagManager.version
+        return tagManager.colorsForFile(url)
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             HStack(spacing: 10) {
@@ -122,6 +128,9 @@ struct FileTableRow: View {
                     .resizable()
                     .interpolation(.high)
                     .frame(width: 24, height: 24)
+                    .onDrag {
+                        NSItemProvider(object: url as NSURL)
+                    }
 
                 if isRenaming {
                     RenameTextField(text: $manager.renameText, onCommit: {
@@ -135,6 +144,16 @@ struct FileTableRow: View {
                         .font(.system(size: 14))
                         .lineLimit(1)
                         .foregroundColor(isSelected ? .white : .primary)
+                }
+
+                if !fileColors.isEmpty {
+                    HStack(spacing: 2) {
+                        ForEach(fileColors) { c in
+                            Circle()
+                                .fill(c.color)
+                                .frame(width: 7, height: 7)
+                        }
+                    }
                 }
             }
             .frame(minWidth: 250, alignment: .leading)
@@ -165,7 +184,7 @@ struct FileTableRow: View {
                 if isDirectory {
                     manager.navigateTo(url)
                 } else {
-                    manager.addFileToSelection(url)
+                    manager.toggleFileSelection(url)
                 }
                 lastClickTime = .distantPast
             } else {
@@ -178,17 +197,17 @@ struct FileTableRow: View {
                 lastClickTime = now
             }
         }
-        .onDrag {
-            NSItemProvider(object: url as NSURL)
-        }
         .opacity(isHidden ? 0.5 : 1.0)
         .contextMenu {
             Button(action: { showingDetails = true }) {
                 Label("View Details", systemImage: "info.circle")
             }
-            Button(action: { manager.addFileToSelection(url) }) {
-                Label("Add to Selection", systemImage: "checkmark.circle")
+            Button(action: { manager.toggleFileSelection(url) }) {
+                Label(manager.isInSelection(url) ? "Remove from Selection" : "Add to Selection",
+                      systemImage: manager.isInSelection(url) ? "minus.circle" : "checkmark.circle")
             }
+            Divider()
+            ColorTagMenu(url: url, tagManager: tagManager)
             Divider()
             Button(action: { manager.duplicateFile(url) }) {
                 Label("Duplicate", systemImage: "doc.on.doc")

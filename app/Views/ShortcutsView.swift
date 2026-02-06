@@ -4,16 +4,27 @@ import AppKit
 struct ShortcutsView: View {
     @ObservedObject var shortcutsManager = ShortcutsManager.shared
     @ObservedObject var deviceManager = iPhoneManager.shared
+    @ObservedObject var volumesManager = VolumesManager.shared
+    @ObservedObject var tagManager = ColorTagManager.shared
     @ObservedObject var manager: FileExplorerManager
 
     var body: some View {
+        let builtIn = shortcutsManager.allShortcuts.filter { $0.isBuiltIn }
+        let builtInCount = builtIn.count
+        let pinnedCount = shortcutsManager.customFolders.count
+
         VStack(spacing: 0) {
             ScrollView {
                 LazyVStack(spacing: 2) {
                     SidebarSectionTitle(title: "Shortcuts", isFirst: true)
 
-                    ForEach(shortcutsManager.allShortcuts.filter { $0.isBuiltIn }) { item in
-                        ShortcutRow(item: item, manager: manager, shortcutsManager: shortcutsManager)
+                    ForEach(Array(builtIn.enumerated()), id: \.element.id) { idx, item in
+                        ShortcutRow(item: item, manager: manager, shortcutsManager: shortcutsManager, flatIndex: idx)
+                    }
+
+                    if tagManager.totalCount > 0 {
+                        SidebarSectionTitle(title: "Colors")
+                        ColorTagBoxes(manager: manager, tagManager: tagManager)
                     }
 
                     if !deviceManager.devices.isEmpty {
@@ -33,8 +44,17 @@ struct ShortcutsView: View {
                                 item: item,
                                 index: index,
                                 manager: manager,
-                                shortcutsManager: shortcutsManager
+                                shortcutsManager: shortcutsManager,
+                                flatIndex: builtInCount + index
                             )
+                        }
+                    }
+
+                    if !volumesManager.volumes.isEmpty {
+                        SidebarSectionTitle(title: "Volumes")
+
+                        ForEach(Array(volumesManager.volumes.enumerated()), id: \.element.id) { idx, volume in
+                            VolumeRow(volume: volume, manager: manager, volumesManager: volumesManager, flatIndex: builtInCount + pinnedCount + idx)
                         }
                     }
                 }
@@ -105,10 +125,15 @@ struct ShortcutRow: View {
     let item: ShortcutItem
     let manager: FileExplorerManager
     let shortcutsManager: ShortcutsManager
+    var flatIndex: Int = -1
     @State private var isHovered = false
 
     private var isSelected: Bool {
         manager.currentPath.path == item.url.path
+    }
+
+    private var isFocused: Bool {
+        manager.sidebarFocused && manager.sidebarIndex == flatIndex
     }
 
     var body: some View {
@@ -147,6 +172,10 @@ struct ShortcutRow: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isFocused ? Color.accentColor : Color.clear, lineWidth: 2)
+        )
         .contentShape(Rectangle())
         .onHover { hovering in
             isHovered = hovering
@@ -167,11 +196,16 @@ struct DraggableShortcutRow: View {
     let index: Int
     let manager: FileExplorerManager
     let shortcutsManager: ShortcutsManager
+    var flatIndex: Int = -1
     @State private var isHovered = false
     @State private var isDragTarget = false
 
     private var isSelected: Bool {
         manager.currentPath.path == item.url.path
+    }
+
+    private var isFocused: Bool {
+        manager.sidebarFocused && manager.sidebarIndex == flatIndex
     }
 
     var body: some View {
@@ -219,7 +253,7 @@ struct DraggableShortcutRow: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isDragTarget ? Color.accentColor : Color.clear, lineWidth: 2)
+                .stroke((isFocused || isDragTarget) ? Color.accentColor : Color.clear, lineWidth: 2)
         )
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -302,6 +336,131 @@ struct iPhoneRow: View {
                 manager.currentPane = .iphone
                 isLoading = false
             }
+        }
+    }
+}
+
+struct VolumeRow: View {
+    let volume: VolumeInfo
+    let manager: FileExplorerManager
+    let volumesManager: VolumesManager
+    var flatIndex: Int = -1
+    @State private var isHovered = false
+
+    private var isSelected: Bool {
+        manager.currentPath.path.hasPrefix(volume.url.path)
+    }
+
+    private var isFocused: Bool {
+        manager.sidebarFocused && manager.sidebarIndex == flatIndex
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: volume.icon)
+                .font(.system(size: 14))
+                .foregroundColor(Color(volume.iconColor))
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(volume.name)
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                if !volume.capacityText.isEmpty {
+                    Text(volume.capacityText)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            if isHovered && volume.isEjectable {
+                Button(action: { volumesManager.eject(volume) }) {
+                    Image(systemName: "eject.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isFocused ? Color.accentColor : Color.clear, lineWidth: 2)
+        )
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .onTapGesture {
+            if manager.currentPane == .iphone {
+                iPhoneManager.shared.currentDevice = nil
+                manager.currentPane = .browser
+            }
+            manager.navigateTo(volume.url)
+        }
+    }
+}
+
+struct ColorTagBoxes: View {
+    @ObservedObject var manager: FileExplorerManager
+    @ObservedObject var tagManager: ColorTagManager
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(TagColor.allCases) { color in
+                ColorTagBox(
+                    color: color,
+                    count: tagManager.counts[color] ?? 0,
+                    isActive: isActive(color),
+                    manager: manager
+                )
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+    }
+
+    private func isActive(_ color: TagColor) -> Bool {
+        if case .colorTag(let c) = manager.currentPane {
+            return c == color
+        }
+        return false
+    }
+}
+
+struct ColorTagBox: View {
+    let color: TagColor
+    let count: Int
+    let isActive: Bool
+    @ObservedObject var manager: FileExplorerManager
+    @State private var isHovered = false
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(color.color.opacity(isActive ? 1.0 : (isHovered ? 0.85 : 0.7)))
+                .shadow(color: isActive ? color.color.opacity(0.4) : .clear, radius: 4, y: 2)
+
+            Text("\(count)")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+        }
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .onTapGesture {
+            manager.currentPane = .colorTag(color)
         }
     }
 }

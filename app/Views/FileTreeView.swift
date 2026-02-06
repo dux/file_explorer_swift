@@ -18,8 +18,14 @@ struct FileTreeView: View {
                 components.insert((current.lastPathComponent, current), at: 0)
                 return components
             }
+            // Stop at volume mount points (e.g. /Volumes/KINGSTON)
+            let parent = current.deletingLastPathComponent()
+            if parent.path == "/Volumes" {
+                components.insert((current.lastPathComponent, current), at: 0)
+                return components
+            }
             components.insert((current.lastPathComponent, current), at: 0)
-            current = current.deletingLastPathComponent()
+            current = parent
         }
         components.insert(("Root", URL(fileURLWithPath: "/")), at: 0)
 
@@ -168,20 +174,20 @@ struct AncestorRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: true))
+            Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: true, selected: isSelected))
                 .resizable()
                 .interpolation(.high)
                 .frame(width: 20, height: 20)
 
             Text(name)
                 .font(.system(size: 14, weight: isCurrent ? .semibold : .regular))
-                .foregroundColor(isCurrent ? .primary : .secondary)
+                .foregroundColor(isSelected ? .white : (isCurrent ? .primary : .secondary))
                 .lineLimit(1)
 
             if isCurrent && manager.hiddenCount > 0 {
                 Text("+\(manager.hiddenCount) hidden")
                     .font(.system(size: 11))
-                    .foregroundColor(.secondary.opacity(0.6))
+                    .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary.opacity(0.6))
             }
 
             Spacer()
@@ -230,6 +236,7 @@ struct FileTreeRow: View {
     let fileInfo: CachedFileInfo
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject var selection = SelectionManager.shared
+    @ObservedObject var tagManager = ColorTagManager.shared
     let index: Int
     let depth: Int
     let indentStep: CGFloat
@@ -253,6 +260,11 @@ struct FileTreeRow: View {
 
     private var isRenaming: Bool {
         manager.renamingItem == url
+    }
+
+    private var fileColors: [TagColor] {
+        let _ = tagManager.version
+        return tagManager.colorsForFile(url)
     }
 
     private var humanReadableDate: String {
@@ -288,6 +300,9 @@ struct FileTreeRow: View {
                 .resizable()
                 .interpolation(.high)
                 .frame(width: 22, height: 22)
+                .onDrag {
+                    NSItemProvider(object: url as NSURL)
+                }
 
             if isRenaming {
                 RenameTextField(text: $manager.renameText, onCommit: {
@@ -301,6 +316,16 @@ struct FileTreeRow: View {
                     .font(.system(size: 14))
                     .lineLimit(1)
                     .foregroundColor(isSelected ? .white : .primary)
+            }
+
+            if !fileColors.isEmpty {
+                HStack(spacing: 2) {
+                    ForEach(fileColors) { c in
+                        Circle()
+                            .fill(c.color)
+                            .frame(width: 7, height: 7)
+                    }
+                }
             }
 
             Spacer()
@@ -333,7 +358,7 @@ struct FileTreeRow: View {
                 if isDirectory {
                     manager.navigateTo(url)
                 } else {
-                    manager.addFileToSelection(url)
+                    manager.toggleFileSelection(url)
                 }
                 lastClickTime = .distantPast
             } else {
@@ -347,17 +372,17 @@ struct FileTreeRow: View {
                 lastClickTime = now
             }
         }
-        .onDrag {
-            NSItemProvider(object: url as NSURL)
-        }
         .opacity(isHidden ? 0.5 : 1.0)
         .contextMenu {
             Button(action: { showingDetails = true }) {
                 Label("View Details", systemImage: "info.circle")
             }
-            Button(action: { manager.addFileToSelection(url) }) {
-                Label("Add to Selection", systemImage: "checkmark.circle")
+            Button(action: { manager.toggleFileSelection(url) }) {
+                Label(manager.isInSelection(url) ? "Remove from Selection" : "Add to Selection",
+                      systemImage: manager.isInSelection(url) ? "minus.circle" : "checkmark.circle")
             }
+            Divider()
+            ColorTagMenu(url: url, tagManager: tagManager)
             Divider()
             Button(action: { manager.duplicateFile(url) }) {
                 Label("Duplicate", systemImage: "doc.on.doc")

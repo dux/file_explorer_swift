@@ -8,16 +8,13 @@ struct AppSelectorSheet: View {
     @Binding var isPresented: Bool
 
     @State private var searchText = ""
-    @State private var allApps: [(url: URL, name: String, icon: NSImage)] = []
+    @State private var filteredApps: [AppInfo] = []
     @State private var isLoading = true
+    @State private var selectedIndex: Int = -1
+    @State private var isListFocused = false
+    @State private var searchFieldRef: NSTextField? = nil
 
-    private var filteredApps: [(url: URL, name: String, icon: NSImage)] {
-        if searchText.isEmpty {
-            return allApps
-        }
-        let query = searchText.lowercased()
-        return allApps.filter { $0.name.lowercased().contains(query) }
-    }
+    private let searcher = AppSearcher.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -41,10 +38,30 @@ struct AppSelectorSheet: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
-                TextField("Filter apps...", text: $searchText)
-                    .textFieldStyle(.plain)
+                SearchFieldWrapper(
+                    text: $searchText,
+                    fieldRef: $searchFieldRef,
+                    placeholder: "Filter apps...",
+                    onTextChange: { newText in
+                        filteredApps = searcher.search(newText)
+                        selectedIndex = filteredApps.isEmpty ? -1 : 0
+                    },
+                    onSubmit: {
+                        if !filteredApps.isEmpty {
+                            let idx = selectedIndex >= 0 && selectedIndex < filteredApps.count ? selectedIndex : 0
+                            openWithApp(filteredApps[idx])
+                        }
+                    }
+                )
+                .frame(height: 22)
                 if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
+                    Button(action: {
+                        searchText = ""
+                        searchFieldRef?.stringValue = ""
+                        filteredApps = searcher.search("")
+                        selectedIndex = filteredApps.isEmpty ? -1 : 0
+                        searchFieldRef?.window?.makeFirstResponder(searchFieldRef)
+                    }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.secondary)
                     }
@@ -53,6 +70,10 @@ struct AppSelectorSheet: View {
             }
             .padding(10)
             .background(Color(NSColor.textBackgroundColor))
+            .overlay(
+                RoundedRectangle(cornerRadius: 0)
+                    .stroke(!isListFocused ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 2)
+            )
 
             Divider()
 
@@ -72,75 +93,251 @@ struct AppSelectorSheet: View {
                     .foregroundColor(.secondary)
                 Spacer()
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(filteredApps, id: \.url.path) { app in
-                            AppRow(app: app) {
-                                openWithApp(app)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 2) {
+                            ForEach(Array(filteredApps.enumerated()), id: \.element.url.path) { idx, app in
+                                AppRow(app: app, isSelected: isListFocused && selectedIndex == idx) {
+                                    openWithApp(app)
+                                }
+                                .id(app.url.path)
                             }
                         }
+                        .padding(8)
                     }
-                    .padding(8)
+                    .onChange(of: selectedIndex) { newIdx in
+                        if isListFocused && newIdx >= 0 && newIdx < filteredApps.count {
+                            proxy.scrollTo(filteredApps[newIdx].url.path, anchor: .center)
+                        }
+                    }
                 }
             }
         }
         .frame(width: 350, height: 450)
         .background(Color(NSColor.controlBackgroundColor))
+        .background(AppSelectorKeyHandler(
+            isListFocused: $isListFocused,
+            selectedIndex: $selectedIndex,
+            searchText: $searchText,
+            searchFieldRef: $searchFieldRef,
+            itemCount: filteredApps.count,
+            onActivate: {
+                guard selectedIndex >= 0 && selectedIndex < filteredApps.count else { return }
+                openWithApp(filteredApps[selectedIndex])
+            },
+            onClose: {
+                isPresented = false
+            }
+        ))
         .onAppear {
-            loadAllApps()
+            loadApps()
+        }
+        .onChange(of: isListFocused) { focused in
+            if !focused {
+                searchFieldRef?.window?.makeFirstResponder(searchFieldRef)
+            }
         }
     }
 
-    private func openWithApp(_ app: (url: URL, name: String, icon: NSImage)) {
+    private func openWithApp(_ app: AppInfo) {
         settings.addPreferredApp(for: fileType, appPath: app.url.path)
         NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
         isPresented = false
     }
 
-    private func loadAllApps() {
+    private func loadApps() {
         isLoading = true
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            var apps: [(url: URL, name: String, icon: NSImage)] = []
-            var seen = Set<String>()
-
-            let appDirs = [
-                URL(fileURLWithPath: "/Applications"),
-                FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")
-            ]
-
-            for dir in appDirs {
-                if let contents = try? FileManager.default.contentsOfDirectory(
-                    at: dir,
-                    includingPropertiesForKeys: nil,
-                    options: [.skipsHiddenFiles]
-                ) {
-                    for url in contents {
-                        if url.pathExtension == "app" {
-                            let name = url.deletingPathExtension().lastPathComponent
-                            if !seen.contains(name) {
-                                seen.insert(name)
-                                let icon = NSWorkspace.shared.icon(forFile: url.path)
-                                apps.append((url: url, name: name, icon: icon))
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Sort alphabetically
-            apps.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-
-            DispatchQueue.main.async {
-                self.allApps = apps
-                self.isLoading = false
-            }
+        searcher.loadAll {
+            filteredApps = searcher.search(searchText)
+            isLoading = false
         }
     }
 }
 
+// MARK: - NSTextField wrapper with direct reference
+
+struct SearchFieldWrapper: NSViewRepresentable {
+    @Binding var text: String
+    @Binding var fieldRef: NSTextField?
+    var placeholder: String
+    var onTextChange: ((String) -> Void)?
+    var onSubmit: () -> Void
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField()
+        field.placeholderString = placeholder
+        field.isBordered = false
+        field.drawsBackground = false
+        field.font = .systemFont(ofSize: 14)
+        field.focusRingType = .none
+        field.delegate = context.coordinator
+        DispatchQueue.main.async {
+            self.fieldRef = field
+            field.window?.makeFirstResponder(field)
+        }
+        return field
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        context.coordinator.text = $text
+        context.coordinator.onTextChange = onTextChange
+        context.coordinator.onSubmit = onSubmit
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text, onTextChange: onTextChange, onSubmit: onSubmit)
+    }
+
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        var text: Binding<String>
+        var onTextChange: ((String) -> Void)?
+        var onSubmit: () -> Void
+
+        init(text: Binding<String>, onTextChange: ((String) -> Void)?, onSubmit: @escaping () -> Void) {
+            self.text = text
+            self.onTextChange = onTextChange
+            self.onSubmit = onSubmit
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            let value = field.stringValue
+            text.wrappedValue = value
+            onTextChange?(value)
+        }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                onSubmit()
+                return true
+            }
+            return false
+        }
+    }
+}
+
+// MARK: - Key handler
+
+struct AppSelectorKeyHandler: NSViewRepresentable {
+    @Binding var isListFocused: Bool
+    @Binding var selectedIndex: Int
+    @Binding var searchText: String
+    @Binding var searchFieldRef: NSTextField?
+    let itemCount: Int
+    let onActivate: () -> Void
+    let onClose: () -> Void
+
+    func makeNSView(context: Context) -> AppSelectorKeyView {
+        let view = AppSelectorKeyView()
+        view.handler = context.coordinator
+        return view
+    }
+
+    func updateNSView(_ nsView: AppSelectorKeyView, context: Context) {
+        context.coordinator.parent = self
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    @MainActor
+    class Coordinator {
+        var parent: AppSelectorKeyHandler
+
+        init(parent: AppSelectorKeyHandler) {
+            self.parent = parent
+        }
+
+        nonisolated func handleKey(_ event: NSEvent) -> Bool {
+            let keyCode = event.keyCode
+            let listFocused = MainActor.assumeIsolated { parent.isListFocused }
+
+            switch keyCode {
+            case 48: // Tab
+                MainActor.assumeIsolated {
+                    parent.isListFocused.toggle()
+                    if parent.isListFocused && parent.selectedIndex < 0 && parent.itemCount > 0 {
+                        parent.selectedIndex = 0
+                    }
+                }
+                return true
+            case 53: // Escape
+                if listFocused {
+                    MainActor.assumeIsolated { parent.isListFocused = false }
+                    return true
+                }
+                MainActor.assumeIsolated { parent.onClose() }
+                return true
+            default:
+                break
+            }
+
+            if listFocused {
+                switch keyCode {
+                case 125: // Down
+                    MainActor.assumeIsolated {
+                        if parent.itemCount > 0 {
+                            parent.selectedIndex = min(parent.selectedIndex + 1, parent.itemCount - 1)
+                        }
+                    }
+                    return true
+                case 126: // Up
+                    MainActor.assumeIsolated {
+                        parent.selectedIndex = max(parent.selectedIndex - 1, 0)
+                    }
+                    return true
+                case 36: // Enter
+                    MainActor.assumeIsolated { parent.onActivate() }
+                    return true
+                default:
+                    return true
+                }
+            }
+
+            return false
+        }
+    }
+}
+
+class AppSelectorKeyView: NSView {
+    var handler: AppSelectorKeyHandler.Coordinator?
+    private var monitor: Any?
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil && monitor == nil {
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                if let self = self, let handler = self.handler {
+                    if handler.handleKey(event) {
+                        return nil
+                    }
+                }
+                return event
+            }
+        } else if window == nil, let m = monitor {
+            NSEvent.removeMonitor(m)
+            monitor = nil
+        }
+    }
+
+    override func removeFromSuperview() {
+        if let m = monitor {
+            NSEvent.removeMonitor(m)
+            monitor = nil
+        }
+        super.removeFromSuperview()
+    }
+}
+
 struct AppRow: View {
-    let app: (url: URL, name: String, icon: NSImage)
+    let app: AppInfo
+    var isSelected: Bool = false
     let action: () -> Void
 
     @State private var isHovered = false
@@ -154,7 +351,7 @@ struct AppRow: View {
 
                 Text(app.name)
                     .font(.system(size: 13))
-                    .foregroundColor(.primary)
+                    .foregroundColor(isSelected ? .white : .primary)
 
                 Spacer()
             }
@@ -162,7 +359,7 @@ struct AppRow: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isHovered ? Color.accentColor.opacity(0.15) : Color.clear)
+                    .fill(isSelected ? Color.accentColor : (isHovered ? Color.accentColor.opacity(0.15) : Color.clear))
             )
         }
         .buttonStyle(.plain)

@@ -2,27 +2,10 @@ import SwiftUI
 import AppKit
 import ImageIO
 
-// Cache for apps per file extension
-@MainActor
-final class OpenWithCache {
-    static let shared = OpenWithCache()
-    private var cache: [String: [(url: URL, name: String, icon: NSImage)]] = [:]
-
-    private init() {}
-
-    func getApps(for ext: String) -> [(url: URL, name: String, icon: NSImage)]? {
-        return cache[ext]
-    }
-
-    func setApps(_ apps: [(url: URL, name: String, icon: NSImage)], for ext: String) {
-        cache[ext] = apps
-    }
-}
-
 struct ActionsPane: View {
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject var settings = AppSettings.shared
-    @State private var allApps: [(url: URL, name: String, icon: NSImage)] = []
+    @State private var allApps: [AppInfo] = []
     @State private var showAppSelector = false
     @State private var showOtherApps = false
     @State private var showExifSheet = false
@@ -78,22 +61,65 @@ struct ActionsPane: View {
         settings.getPreferredApps(for: fileType)
     }
 
-    private var preferredApps: [(url: URL, name: String, icon: NSImage)] {
-        preferredAppPaths.compactMap { path -> (url: URL, name: String, icon: NSImage)? in
+    private var preferredApps: [AppInfo] {
+        preferredAppPaths.compactMap { path -> AppInfo? in
             let url = URL(fileURLWithPath: path)
             guard FileManager.default.fileExists(atPath: path) else { return nil }
             let name = url.deletingPathExtension().lastPathComponent
             let icon = NSWorkspace.shared.icon(forFile: path)
-            return (url: url, name: name, icon: icon)
+            return AppInfo(url: url, name: name, icon: icon)
         }
     }
 
-    private var otherApps: [(url: URL, name: String, icon: NSImage)] {
+    private var otherApps: [AppInfo] {
         let preferredSet = Set(preferredAppPaths)
         return allApps.filter { !preferredSet.contains($0.url.path) }
     }
 
+    private func buildRightPaneItems() -> [RightPaneItem] {
+        var items: [RightPaneItem] = []
+        let url = targetURL
+        let inSelection = manager.isInSelection(url)
+        items.append(RightPaneItem(id: "selection", title: inSelection ? "Remove from selection" : "Add to selection") { [url] in
+            self.manager.toggleFileSelection(url)
+        })
+        items.append(RightPaneItem(id: "copypath", title: "Copy path") {
+            self.copyPath()
+        })
+        items.append(RightPaneItem(id: "rename", title: "Rename") {
+            self.manager.startRename()
+        })
+        if isImageFile {
+            items.append(RightPaneItem(id: "exif", title: "EXIF / Metadata") {
+                self.showExifSheet = true
+            })
+            items.append(RightPaneItem(id: "resize", title: "Resize / Crop") {
+                self.showImageResizeSheet = true
+            })
+            items.append(RightPaneItem(id: "convert", title: "Convert to...") {
+                self.showImageConvertSheet = true
+            })
+        }
+        if isOfficeFile {
+            items.append(RightPaneItem(id: "office", title: "Document Info") {
+                self.showOfficeMetadataSheet = true
+            })
+        }
+        items.append(RightPaneItem(id: "selectapp", title: "Select app...") {
+            self.showAppSelector = true
+        })
+        for app in preferredApps {
+            let appURL = app.url
+            items.append(RightPaneItem(id: "app-\(app.url.path)", title: app.name) { [url] in
+                NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
+            })
+        }
+        return items
+    }
+
     var body: some View {
+        let paneItems = buildRightPaneItems()
+
         VStack(alignment: .leading, spacing: 0) {
             // File/Folder header with icon + name
             HStack(spacing: 8) {
@@ -116,17 +142,21 @@ struct ActionsPane: View {
 
             VStack(spacing: 2) {
                 ActionButton(
-                    icon: "checkmark.circle",
-                    title: "Add to selection",
-                    color: .green
+                    icon: manager.isInSelection(targetURL) ? "minus.circle" : "checkmark.circle",
+                    title: manager.isInSelection(targetURL) ? "Remove from selection" : "Add to selection",
+                    color: manager.isInSelection(targetURL) ? .red : .green,
+                    flatIndex: 0,
+                    manager: manager
                 ) {
-                    manager.addFileToSelection(targetURL)
+                    manager.toggleFileSelection(targetURL)
                 }
 
                 ActionButton(
                     icon: "doc.on.doc",
                     title: "Copy path",
-                    color: .blue
+                    color: .blue,
+                    flatIndex: 1,
+                    manager: manager
                 ) {
                     copyPath()
                 }
@@ -134,17 +164,22 @@ struct ActionsPane: View {
                 ActionButton(
                     icon: "pencil",
                     title: "Rename",
-                    color: .orange
+                    color: .orange,
+                    flatIndex: 2,
+                    manager: manager
                 ) {
                     manager.startRename()
                 }
 
                 // EXIF for images
                 if isImageFile {
+                    let base = 3
                     ActionButton(
                         icon: "camera.aperture",
                         title: "EXIF / Metadata",
-                        color: .teal
+                        color: .teal,
+                        flatIndex: base,
+                        manager: manager
                     ) {
                         showExifSheet = true
                     }
@@ -152,7 +187,9 @@ struct ActionsPane: View {
                     ActionButton(
                         icon: "arrow.up.left.and.arrow.down.right",
                         title: "Resize / Crop",
-                        color: .pink
+                        color: .pink,
+                        flatIndex: base + 1,
+                        manager: manager
                     ) {
                         showImageResizeSheet = true
                     }
@@ -160,7 +197,9 @@ struct ActionsPane: View {
                     ActionButton(
                         icon: "arrow.triangle.2.circlepath",
                         title: "Convert to...",
-                        color: .cyan
+                        color: .cyan,
+                        flatIndex: base + 2,
+                        manager: manager
                     ) {
                         showImageConvertSheet = true
                     }
@@ -168,10 +207,13 @@ struct ActionsPane: View {
 
                 // Office metadata
                 if isOfficeFile {
+                    let base = 3
                     ActionButton(
                         icon: "doc.text.magnifyingglass",
                         title: "Document Info",
-                        color: .indigo
+                        color: .indigo,
+                        flatIndex: base,
+                        manager: manager
                     ) {
                         showOfficeMetadataSheet = true
                     }
@@ -191,19 +233,26 @@ struct ActionsPane: View {
                     .padding(.top, 8)
                     .padding(.bottom, 4)
 
+                let selectAppIdx = paneItems.firstIndex(where: { $0.id == "selectapp" }) ?? -1
                 ActionButton(
                     icon: "app.badge",
                     title: "Select app...",
-                    color: .purple
+                    color: .purple,
+                    flatIndex: selectAppIdx,
+                    manager: manager
                 ) {
                     showAppSelector = true
                 }
 
                 if !preferredApps.isEmpty {
-                    ForEach(preferredApps, id: \.url.path) { app in
+                    ForEach(Array(preferredApps.enumerated()), id: \.element.url.path) { idx, app in
+                        let appIdx = paneItems.firstIndex(where: { $0.id == "app-\(app.url.path)" }) ?? -1
                         PreferredAppButton(
                             icon: app.icon,
                             title: app.name,
+                            appURL: app.url,
+                            flatIndex: appIdx,
+                            manager: manager,
                             onOpen: {
                                 NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
                             },
@@ -237,7 +286,8 @@ struct ActionsPane: View {
                         ForEach(otherApps, id: \.url.path) { app in
                             ActionButtonWithIcon(
                                 icon: app.icon,
-                                title: app.name
+                                title: app.name,
+                                appURL: app.url
                             ) {
                                 settings.addPreferredApp(for: fileType, appPath: app.url.path)
                                 NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
@@ -263,9 +313,14 @@ struct ActionsPane: View {
         .fixedSize(horizontal: false, vertical: true)
         .onChange(of: targetURL) { newURL in
             loadApps(for: newURL)
+            manager.rightPaneItems = buildRightPaneItems()
+        }
+        .onChange(of: manager.rightPaneFocused) { _ in
+            manager.rightPaneItems = buildRightPaneItems()
         }
         .onAppear {
             loadApps(for: targetURL)
+            manager.rightPaneItems = buildRightPaneItems()
         }
         .sheet(isPresented: $showAppSelector) {
             AppSelectorSheet(
@@ -318,40 +373,7 @@ struct ActionsPane: View {
     }
 
     private func loadApps(for url: URL) {
-        let ext = fileType
-
-        // Check cache first
-        if let cached = OpenWithCache.shared.getApps(for: ext) {
-            allApps = cached
-            return
-        }
-
-        // Get apps from system (do this async to not block)
-        Task {
-            let result = await getAppsAsync(for: url, ext: ext)
-            allApps = result
-            OpenWithCache.shared.setApps(result, for: ext)
-        }
-    }
-
-    nonisolated private func getAppsAsync(for url: URL, ext: String) async -> [(url: URL, name: String, icon: NSImage)] {
-        var appURLs: [URL] = []
-
-        if let apps = LSCopyApplicationURLsForURL(url as CFURL, .all)?.takeRetainedValue() as? [URL] {
-            appURLs = apps
-        }
-
-        // Filter duplicates and limit to 15
-        var seen = Set<String>()
-        let filtered: [(url: URL, name: String, icon: NSImage)] = appURLs.compactMap { appURL in
-            let name = appURL.deletingPathExtension().lastPathComponent
-            if seen.contains(name) { return nil }
-            seen.insert(name)
-            let icon = NSWorkspace.shared.icon(forFile: appURL.path)
-            return (url: appURL, name: name, icon: icon)
-        }.prefix(15).map { $0 }
-
-        return Array(filtered)
+        allApps = AppSearcher.shared.appsForFile(url)
     }
 }
 
@@ -359,21 +381,28 @@ struct ActionButton: View {
     let icon: String
     let title: String
     let color: Color
+    var flatIndex: Int = -1
+    var manager: FileExplorerManager? = nil
     let action: () -> Void
 
     @State private var isHovered = false
+
+    private var isFocused: Bool {
+        guard let m = manager else { return false }
+        return m.rightPaneFocused && m.rightPaneIndex == flatIndex && flatIndex >= 0
+    }
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 14))
-                    .foregroundColor(color)
+                    .foregroundColor(isFocused ? .white : color)
                     .frame(width: 22, height: 22)
 
                 Text(title)
                     .font(.system(size: 14))
-                    .foregroundColor(.primary)
+                    .foregroundColor(isFocused ? .white : .primary)
 
                 Spacer()
             }
@@ -381,7 +410,7 @@ struct ActionButton: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isHovered ? Color.gray.opacity(0.15) : Color.clear)
+                    .fill(isFocused ? Color.accentColor : (isHovered ? Color.gray.opacity(0.15) : Color.clear))
             )
         }
         .buttonStyle(.plain)
@@ -394,9 +423,11 @@ struct ActionButton: View {
 struct ActionButtonWithIcon: View {
     let icon: NSImage
     let title: String
+    var appURL: URL? = nil
     let action: () -> Void
 
     @State private var isHovered = false
+    @State private var isDragTarget = false
 
     var body: some View {
         Button(action: action) {
@@ -415,12 +446,30 @@ struct ActionButtonWithIcon: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isHovered ? Color.gray.opacity(0.15) : Color.clear)
+                    .fill(isDragTarget ? Color.accentColor.opacity(0.2) :
+                          (isHovered ? Color.gray.opacity(0.15) : Color.clear))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isDragTarget ? Color.accentColor : Color.clear, lineWidth: 2)
             )
         }
         .buttonStyle(.plain)
         .onHover { hovering in
             isHovered = hovering
+        }
+        .onDrop(of: [.fileURL], isTargeted: $isDragTarget) { providers in
+            guard let app = appURL else { return false }
+            for provider in providers {
+                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
+                    guard let data = item as? Data,
+                          let fileURL = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                    DispatchQueue.main.async {
+                        NSWorkspace.shared.open([fileURL], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+                    }
+                }
+            }
+            return true
         }
     }
 }
@@ -428,10 +477,19 @@ struct ActionButtonWithIcon: View {
 struct PreferredAppButton: View {
     let icon: NSImage
     let title: String
+    let appURL: URL
+    var flatIndex: Int = -1
+    var manager: FileExplorerManager? = nil
     let onOpen: () -> Void
     let onRemove: () -> Void
 
     @State private var isHovered = false
+    @State private var isDragTarget = false
+
+    private var isFocused: Bool {
+        guard let m = manager else { return false }
+        return m.rightPaneFocused && m.rightPaneIndex == flatIndex && flatIndex >= 0
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -443,7 +501,7 @@ struct PreferredAppButton: View {
 
                     Text(title)
                         .font(.system(size: 14))
-                        .foregroundColor(.primary)
+                        .foregroundColor(isFocused ? .white : .primary)
 
                     Spacer()
                 }
@@ -453,19 +511,42 @@ struct PreferredAppButton: View {
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 14))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(isFocused ? .white.opacity(0.7) : .secondary)
             }
             .buttonStyle(.plain)
-            .opacity(isHovered ? 1 : 0)
+            .opacity(isHovered || isFocused ? 1 : 0)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isHovered ? Color.gray.opacity(0.15) : Color.clear)
+                .fill(isFocused ? Color.accentColor :
+                      (isDragTarget ? Color.accentColor.opacity(0.2) :
+                      (isHovered ? Color.gray.opacity(0.15) : Color.clear)))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isDragTarget ? Color.accentColor : Color.clear, lineWidth: 2)
         )
         .onHover { hovering in
             isHovered = hovering
+        }
+        .onDrop(of: [.fileURL], isTargeted: $isDragTarget) { providers in
+            handleDrop(providers: providers)
+            return true
+        }
+    }
+
+    private func handleDrop(providers: [NSItemProvider]) {
+        let app = appURL
+        for provider in providers {
+            provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
+                guard let data = item as? Data,
+                      let fileURL = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                DispatchQueue.main.async {
+                    NSWorkspace.shared.open([fileURL], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+                }
+            }
         }
     }
 }

@@ -11,6 +11,8 @@ struct MainPane: View {
             SelectionPane(manager: manager)
         case .iphone:
             iPhoneBrowserPane(manager: manager)
+        case .colorTag(let color):
+            ColorTagView(color: color, manager: manager)
         }
     }
 }

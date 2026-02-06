@@ -111,11 +111,13 @@ struct MainContentView: View {
                         if isDirectoryWithImages(selected) {
                             Divider()
                             FolderGalleryPreview(folderURL: selected)
+                                .id(selected)
                                 .frame(maxHeight: .infinity)
                                 .background(Color.white)
                         } else if PreviewType.detect(for: selected) != .none {
                             Divider()
                             PreviewPane(url: selected, manager: manager)
+                                .id(selected)
                                 .frame(maxHeight: .infinity)
                                 .background(Color.white)
                         } else {
@@ -185,11 +187,72 @@ class KeyCaptureView: NSView {
             return
         }
 
+        // Tab - cycle panes: left -> center -> right -> left
+        if event.keyCode == 48 { // Tab
+            if manager.sidebarFocused {
+                // left -> center
+                manager.unfocusSidebar()
+            } else if manager.rightPaneFocused {
+                // right -> left
+                manager.unfocusRightPane()
+                manager.focusSidebar()
+            } else {
+                // center -> right
+                manager.focusRightPane()
+            }
+            return
+        }
+
+        // Sidebar-focused mode
+        if manager.sidebarFocused {
+            switch event.keyCode {
+            case 125: // Down arrow
+                manager.sidebarSelectNext()
+            case 126: // Up arrow
+                manager.sidebarSelectPrevious()
+            case 124, 36: // Right arrow or Enter - activate item
+                manager.sidebarActivate()
+            case 123: // Left arrow - do nothing in sidebar
+                break
+            case 53: // Escape - back to main
+                manager.unfocusSidebar()
+            default:
+                break
+            }
+            return
+        }
+
+        // Right pane focused mode
+        if manager.rightPaneFocused {
+            switch event.keyCode {
+            case 125: // Down arrow
+                manager.rightPaneSelectNext()
+            case 126: // Up arrow
+                manager.rightPaneSelectPrevious()
+            case 36: // Enter - activate item
+                manager.rightPaneActivate()
+            case 123: // Left arrow - back to main
+                manager.unfocusRightPane()
+            case 53: // Escape - back to main
+                manager.unfocusRightPane()
+            default:
+                break
+            }
+            return
+        }
+
         // Normal mode - Finder-like behavior
         switch event.keyCode {
         case 0: // A key - check for Ctrl+A or Cmd+A
             if event.modifierFlags.contains(.control) || event.modifierFlags.contains(.command) {
                 manager.selectAllFiles()
+                return
+            }
+        case 8: // C key - Ctrl+C toggles selection
+            if event.modifierFlags.contains(.control) {
+                if let item = manager.selectedItem {
+                    manager.toggleFileSelection(item)
+                }
                 return
             }
         case 15: // R key - check for Ctrl+R
@@ -201,16 +264,17 @@ class KeyCaptureView: NSView {
             manager.selectNext()
         case 126: // Up arrow - select previous
             manager.selectPrevious()
-        case 123: // Left arrow - go back/up
-            manager.goBack()
-        case 124: // Right arrow - enter folder or open file
+        case 123: // Left arrow - go to parent folder
+            manager.navigateUp()
+        case 124: // Right arrow - enter folder
             if let item = manager.selectedItem {
                 var isDirectory: ObjCBool = false
                 FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory)
                 if isDirectory.boolValue {
                     manager.navigateTo(item)
-                } else {
-                    NSWorkspace.shared.open(item)
+                    if manager.selectedItem == nil && !manager.allItems.isEmpty {
+                        manager.selectItem(at: 0, url: manager.allItems[0].url)
+                    }
                 }
             }
         case 49: // Space - quick look / toggle selection
@@ -378,7 +442,7 @@ struct ActionButtonBar: View {
                 }
             }
             .buttonStyle(.bordered)
-            .keyboardShortcut("f", modifiers: .control)
+            .keyboardShortcut("f", modifiers: .command)
 
             Divider()
                 .frame(height: 20)

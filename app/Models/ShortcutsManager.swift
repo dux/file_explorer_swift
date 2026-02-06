@@ -11,12 +11,29 @@ class ShortcutsManager: ObservableObject {
     static let shared = ShortcutsManager()
 
     private init() {
-        let homeURL = fileManager.homeDirectoryForCurrentUser
-        configDirectory = homeURL.appendingPathComponent(".dux-file-explorer")
+        configDirectory = AppSettings.configBase
         foldersFile = configDirectory.appendingPathComponent("folders.txt")
 
         createConfigDirectoryIfNeeded()
+        migrateOldConfig()
         loadCustomFolders()
+    }
+
+    private func migrateOldConfig() {
+        let oldDir = fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".dux-file-explorer")
+        let oldFile = oldDir.appendingPathComponent("folders.txt")
+
+        if fileManager.fileExists(atPath: oldFile.path) && !fileManager.fileExists(atPath: foldersFile.path) {
+            try? fileManager.copyItem(at: oldFile, to: foldersFile)
+        }
+
+        // Clean up old dir if empty or only has folders.txt
+        if fileManager.fileExists(atPath: oldDir.path) {
+            let contents = (try? fileManager.contentsOfDirectory(atPath: oldDir.path)) ?? []
+            if contents.isEmpty || contents == ["folders.txt"] {
+                try? fileManager.removeItem(at: oldDir)
+            }
+        }
     }
 
     var allShortcuts: [ShortcutItem] {

@@ -1,10 +1,11 @@
 import SwiftUI
 import AppKit
 
-enum MainPaneType {
+enum MainPaneType: Equatable {
     case browser
     case selection
     case iphone
+    case colorTag(TagColor)
 }
 
 enum BrowserViewMode: String, CaseIterable {
@@ -15,6 +16,12 @@ enum BrowserViewMode: String, CaseIterable {
 enum SortMode: String, CaseIterable {
     case name = "Name"
     case modified = "Modified"
+}
+
+struct RightPaneItem: Identifiable {
+    let id: String
+    let title: String
+    let action: @MainActor () -> Void
 }
 
 struct CachedFileInfo: Identifiable, Equatable {
@@ -42,6 +49,17 @@ class FileExplorerManager: ObservableObject {
     @Published var hiddenCount: Int = 0
     @Published var hasImages: Bool = false
     @Published var showItemDialog: Bool = false
+
+    // Sidebar focus
+    @Published var sidebarFocused: Bool = false
+    @Published var sidebarIndex: Int = 0
+    private var savedSelectedItem: URL? = nil
+    private var savedSelectedIndex: Int = -1
+
+    // Right pane focus
+    @Published var rightPaneFocused: Bool = false
+    @Published var rightPaneIndex: Int = 0
+    @Published var rightPaneItems: [RightPaneItem] = []
 
     // Search state
     @Published var isSearching: Bool = false
@@ -449,6 +467,94 @@ class FileExplorerManager: ObservableObject {
         navigateTo(parent)
     }
 
+    // MARK: - Sidebar navigation
+
+    var sidebarItems: [URL] {
+        var items: [URL] = []
+        let sm = ShortcutsManager.shared
+        for s in sm.allShortcuts where s.isBuiltIn {
+            items.append(s.url)
+        }
+        for folder in sm.customFolders {
+            items.append(folder)
+        }
+        for volume in VolumesManager.shared.volumes {
+            items.append(volume.url)
+        }
+        return items
+    }
+
+    func sidebarSelectNext() {
+        let items = sidebarItems
+        guard !items.isEmpty else { return }
+        sidebarIndex = min(sidebarIndex + 1, items.count - 1)
+    }
+
+    func sidebarSelectPrevious() {
+        sidebarIndex = max(sidebarIndex - 1, 0)
+    }
+
+    func sidebarActivate() {
+        let items = sidebarItems
+        guard sidebarIndex >= 0 && sidebarIndex < items.count else { return }
+        let url = items[sidebarIndex]
+        if currentPane == .iphone {
+            iPhoneManager.shared.currentDevice = nil
+            currentPane = .browser
+        }
+        navigateTo(url)
+    }
+
+    func focusSidebar() {
+        // Remember current main selection
+        savedSelectedItem = selectedItem
+        savedSelectedIndex = selectedIndex
+        sidebarFocused = true
+        // Try to highlight the item matching the current path
+        let items = sidebarItems
+        if let idx = items.firstIndex(where: { $0.path == currentPath.path }) {
+            sidebarIndex = idx
+        } else {
+            sidebarIndex = min(sidebarIndex, max(items.count - 1, 0))
+        }
+    }
+
+    func unfocusSidebar() {
+        sidebarFocused = false
+        // Restore main selection if it still exists in current directory
+        if let saved = savedSelectedItem,
+           let idx = allItems.firstIndex(where: { $0.url == saved }) {
+            selectItem(at: idx, url: saved)
+        } else if !allItems.isEmpty {
+            selectItem(at: 0, url: allItems[0].url)
+        }
+    }
+
+    // MARK: - Right pane navigation
+
+    func focusRightPane() {
+        rightPaneFocused = true
+        rightPaneIndex = 0
+    }
+
+    func unfocusRightPane() {
+        rightPaneFocused = false
+    }
+
+    func rightPaneSelectNext() {
+        guard !rightPaneItems.isEmpty else { return }
+        rightPaneIndex = min(rightPaneIndex + 1, rightPaneItems.count - 1)
+    }
+
+    func rightPaneSelectPrevious() {
+        rightPaneIndex = max(rightPaneIndex - 1, 0)
+    }
+
+    func rightPaneActivate() {
+        guard rightPaneIndex >= 0 && rightPaneIndex < rightPaneItems.count else { return }
+        rightPaneItems[rightPaneIndex].action()
+    }
+
     func goBack() {
         guard historyIndex > 0 else { return }
         saveSelection()
@@ -543,6 +649,13 @@ class FileExplorerManager: ObservableObject {
     // Add a file to global selection
     func addFileToSelection(_ url: URL) {
         selection.addLocal(url)
+    }
+
+    // Toggle a file in global selection
+    func toggleFileSelection(_ url: URL) {
+        if let item = FileItem.fromLocal(url) {
+            selection.toggle(item)
+        }
     }
 
     // Select all files in current folder

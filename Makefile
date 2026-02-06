@@ -1,4 +1,4 @@
-.PHONY: help all clean build run app install watch
+.PHONY: help all clean build run app install watch gh-pub
 
 default: build run
 
@@ -13,6 +13,7 @@ help:
 	@echo "  make install      - Install to ~/Applications"
 	@echo "  make run          - Run the installed app"
 	@echo "  make clean        - Remove build artifacts"
+	@echo "  make gh-pub       - Build release, tag and publish to GitHub"
 	@echo "  make help         - Show this help message"
 	@echo ""
 
@@ -42,6 +43,19 @@ build:
 run:
 	@echo "Running FileExplorer..."
 	@open ~/Applications/FileExplorer.app
+
+gh-pub: build
+	@VERSION=$$(date +%Y.%m.%d-%H%M); \
+	echo "Publishing v$$VERSION to GitHub..."; \
+	tar -czf FileExplorer.app.tar.gz -C ~/Applications FileExplorer.app; \
+	git tag -f "v$$VERSION"; \
+	git push origin main --tags --force; \
+	gh release create "v$$VERSION" FileExplorer.app.tar.gz \
+		--title "v$$VERSION" \
+		--notes "Release v$$VERSION" \
+		--latest; \
+	rm -f FileExplorer.app.tar.gz; \
+	echo "Published v$$VERSION"
 
 watch:
 	@echo "Watching for Swift file changes..."

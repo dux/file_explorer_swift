@@ -229,9 +229,10 @@ struct SelectionBar: View {
 
                     // Action buttons always visible
                     if !localItems.isEmpty {
-                        SelectionBarButton(title: "Copy here", icon: "doc.on.doc", color: .blue) {
+                        SelectionBarButton(title: "Paste here", icon: "doc.on.doc", color: .blue) {
                             let count = selection.copyLocalItems(to: manager.currentPath)
-                            ToastManager.shared.show("Copied \(count) file(s)")
+                            selection.clear()
+                            ToastManager.shared.show("Pasted \(count) file(s)")
                             manager.refresh()
                         }
                         SelectionBarButton(title: "Move here", icon: "folder", color: .orange) {
@@ -441,7 +442,7 @@ struct SelectedFilesView: View {
                             Text("Local (\(localItems.count)):")
                                 .font(.system(size: 12))
                                 .foregroundColor(.secondary)
-                            SelectionActionButton(title: "Copy here", icon: "doc.on.doc", color: .blue) {
+                            SelectionActionButton(title: "Paste here", icon: "doc.on.doc", color: .blue) {
                                 copyLocalFilesHere()
                             }
                             SelectionActionButton(title: "Move here", icon: "folder", color: .orange) {
@@ -502,7 +503,8 @@ struct SelectedFilesView: View {
 
     private func copyLocalFilesHere() {
         let count = selection.copyLocalItems(to: manager.currentPath)
-        ToastManager.shared.show("Copied \(count) file(s)")
+        selection.clear()
+        ToastManager.shared.show("Pasted \(count) file(s)")
         manager.refresh()
     }
 

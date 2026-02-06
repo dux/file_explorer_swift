@@ -5,8 +5,9 @@ import SwiftUI
 class AppSettings: ObservableObject {
     static let shared = AppSettings()
 
-    private let configDir = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/dux-finder")
+    static let configBase = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".config/dux-file-explorer")
+    private let configDir = AppSettings.configBase
     private let configFile: URL
 
     @Published var previewFontSize: CGFloat {
@@ -70,8 +71,33 @@ class AppSettings: ObservableObject {
         windowHeight = nil
         preferredApps = [:]
 
+        // Migrate from old config path
+        migrateOldConfig()
+
         // Load saved settings
         load()
+    }
+
+    private func migrateOldConfig() {
+        let fm = FileManager.default
+        let oldDir = fm.homeDirectoryForCurrentUser.appendingPathComponent(".config/dux-finder")
+        let oldFile = oldDir.appendingPathComponent("settings.json")
+
+        // Ensure new config dir exists
+        try? fm.createDirectory(at: configDir, withIntermediateDirectories: true)
+
+        // Migrate settings.json if old exists and new doesn't
+        if fm.fileExists(atPath: oldFile.path) && !fm.fileExists(atPath: configFile.path) {
+            try? fm.copyItem(at: oldFile, to: configFile)
+        }
+
+        // Clean up old dir if empty or only has settings.json
+        if fm.fileExists(atPath: oldDir.path) {
+            let contents = (try? fm.contentsOfDirectory(atPath: oldDir.path)) ?? []
+            if contents.isEmpty || contents == ["settings.json"] {
+                try? fm.removeItem(at: oldDir)
+            }
+        }
     }
 
     private func load() {
