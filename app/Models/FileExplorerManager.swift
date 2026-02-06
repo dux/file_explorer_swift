@@ -95,9 +95,7 @@ class FileExplorerManager: ObservableObject {
         directories + files
     }
 
-    var filteredItems: [CachedFileInfo] {
-        return allItems
-    }
+
 
     init() {
         // Use initial path from command line argument if provided
@@ -165,7 +163,7 @@ class FileExplorerManager: ObservableObject {
             selectedItem = nil
 
         } catch {
-            print("Error loading directory \(currentPath.path): \(error)")
+            ToastManager.shared.showError("Error loading directory: \(error.localizedDescription)")
             directories = []
             files = []
         }
@@ -241,7 +239,7 @@ class FileExplorerManager: ObservableObject {
                 selectedIndex = index
             }
         } catch {
-            print("Error creating folder: \(error)")
+            ToastManager.shared.showError("Error creating folder: \(error.localizedDescription)")
         }
     }
 
@@ -270,7 +268,7 @@ class FileExplorerManager: ObservableObject {
                 startRename()
             }
         } catch {
-            print("Error creating file: \(error)")
+            ToastManager.shared.showError("Error creating file: \(error.localizedDescription)")
         }
     }
 
@@ -297,7 +295,7 @@ class FileExplorerManager: ObservableObject {
                 selectedIndex = index
             }
         } catch {
-            print("Error duplicating file: \(error)")
+            ToastManager.shared.showError("Error duplicating file: \(error.localizedDescription)")
         }
     }
 
@@ -358,12 +356,22 @@ class FileExplorerManager: ObservableObject {
             loadContents()
             ToastManager.shared.show("Moved to Trash")
         } catch {
-            print("Error moving to trash: \(error)")
+            ToastManager.shared.showError("Error moving to trash: \(error.localizedDescription)")
         }
     }
 
     func refresh() {
         loadContents()
+    }
+
+    func clearSelection() {
+        selectedIndex = -1
+        selectedItem = nil
+    }
+
+    func selectCurrentFolder() {
+        selectedIndex = -1
+        selectedItem = currentPath
     }
 
     func startRename() {
@@ -403,7 +411,7 @@ class FileExplorerManager: ObservableObject {
                 selectedIndex = index
             }
         } catch {
-            print("Error renaming: \(error)")
+            ToastManager.shared.showError("Error renaming: \(error.localizedDescription)")
             cancelRename()
         }
     }
@@ -503,6 +511,7 @@ class FileExplorerManager: ObservableObject {
             currentPane = .browser
         }
         navigateTo(url)
+        selectCurrentFolder()
     }
 
     func focusSidebar() {

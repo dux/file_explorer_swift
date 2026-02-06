@@ -45,11 +45,21 @@ struct DMGPreviewView: View {
     @State private var mountPath: String?
     @State private var volumeName: String?
     @State private var dmgInfo: DMGInfo?
+    @State private var installingApp: String?
+    @State private var installedApps: Set<String> = []
 
     struct DMGInfo {
         let format: String
         let compressedSize: Int64
         let totalSize: Int64
+    }
+
+    private var appEntries: [DMGEntry] {
+        entries.filter { $0.isApp }
+    }
+
+    private var otherEntries: [DMGEntry] {
+        entries.filter { !$0.isApp }
     }
 
     var body: some View {
@@ -98,35 +108,81 @@ struct DMGPreviewView: View {
                     Divider()
                 }
 
-                // Column header
-                HStack(spacing: 0) {
-                    Text("Name")
-                        .frame(minWidth: 200, alignment: .leading)
-                    Spacer()
-                    Text("Size")
-                        .frame(width: 80, alignment: .trailing)
-                }
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
-
-                Divider()
-
-                // File list
                 ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(entries) { entry in
-                            DMGEntryRow(
-                                entry: entry,
-                                isSelected: selectedEntry?.id == entry.id
-                            )
-                            .onTapGesture {
-                                selectedEntry = entry
+                    VStack(spacing: 0) {
+                        // Install buttons for each .app
+                        ForEach(appEntries) { app in
+                            let appName = app.name.replacingOccurrences(of: ".app", with: "")
+                            let isInstalled = installedApps.contains(app.name)
+                            let isInstalling = installingApp == app.name
+
+                            VStack(spacing: 8) {
+                                HStack(spacing: 10) {
+                                    Image(nsImage: NSWorkspace.shared.icon(forFile: app.url.path))
+                                        .resizable()
+                                        .frame(width: 48, height: 48)
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(appName)
+                                            .font(.system(size: 15, weight: .semibold))
+                                        Text(app.displaySize)
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.secondary)
+                                    }
+
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.top, 12)
+
+                                Button(action: {
+                                    installApp(app)
+                                }) {
+                                    HStack(spacing: 6) {
+                                        if isInstalling {
+                                            ProgressView()
+                                                .scaleEffect(0.6)
+                                                .frame(width: 16, height: 16)
+                                        } else if isInstalled {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundColor(.white)
+                                        } else {
+                                            Image(systemName: "arrow.down.to.line")
+                                                .foregroundColor(.white)
+                                        }
+                                        Text(isInstalled ? "\(appName) installed" : "Install \(appName) to Applications")
+                                            .font(.system(size: 13, weight: .medium))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .background(isInstalled ? Color.green : Color.accentColor)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(isInstalling || isInstalled)
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 12)
                             }
-                            .onTapGesture(count: 2) {
-                                openEntry(entry)
+
+                            Divider()
+                        }
+
+                        // Other files (README, license, etc.)
+                        if !otherEntries.isEmpty {
+                            LazyVStack(spacing: 0) {
+                                ForEach(otherEntries) { entry in
+                                    DMGEntryRow(
+                                        entry: entry,
+                                        isSelected: selectedEntry?.id == entry.id
+                                    )
+                                    .onTapGesture {
+                                        selectedEntry = entry
+                                    }
+                                    .onTapGesture(count: 2) {
+                                        openEntry(entry)
+                                    }
+                                }
                             }
                         }
                     }
@@ -150,9 +206,63 @@ struct DMGPreviewView: View {
                 .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
             }
         }
-        .onAppear { mountAndLoad() }
-        .onChange(of: url) { _ in mountAndLoad() }
+        .onAppear {
+            checkAlreadyInstalled()
+            mountAndLoad()
+        }
+        .onChange(of: url) { _ in
+            installedApps = []
+            installingApp = nil
+            checkAlreadyInstalled()
+            mountAndLoad()
+        }
         .onDisappear { unmount() }
+    }
+
+    private func checkAlreadyInstalled() {
+        // Will be checked again after mount when we have entries
+    }
+
+    private func installApp(_ app: DMGEntry) {
+        let appName = app.name
+        let srcURL = app.url
+        let destURL = URL(fileURLWithPath: "/Applications/\(appName)")
+
+        installingApp = appName
+
+        Task.detached {
+            let fm = FileManager.default
+
+            do {
+                // Remove existing version if present
+                if fm.fileExists(atPath: destURL.path) {
+                    try fm.removeItem(at: destURL)
+                }
+
+                // Copy app to /Applications
+                try fm.copyItem(at: srcURL, to: destURL)
+
+                // Remove quarantine flag so macOS doesn't nag about "from internet"
+                let xattr = Process()
+                xattr.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
+                xattr.arguments = ["-dr", "com.apple.quarantine", destURL.path]
+                xattr.standardOutput = FileHandle.nullDevice
+                xattr.standardError = FileHandle.nullDevice
+                try xattr.run()
+                xattr.waitUntilExit()
+
+                await MainActor.run {
+                    installingApp = nil
+                    installedApps.insert(appName)
+                    ToastManager.shared.show("Installed \(appName.replacingOccurrences(of: ".app", with: "")) to Applications")
+                }
+            } catch {
+                await MainActor.run {
+                    installingApp = nil
+                    ToastManager.shared.showError("Install failed: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     private func mountAndLoad() {
@@ -195,7 +305,9 @@ struct DMGPreviewView: View {
 
                 return DMGInfo(format: format, compressedSize: compressedSize, totalSize: totalSize)
             }
-        } catch {}
+        } catch {
+            // DMG info is optional, silently ignore parse failures
+        }
         return nil
     }
 
@@ -264,6 +376,14 @@ struct DMGPreviewView: View {
             self.volumeName = volName ?? dmgURL.deletingPathExtension().lastPathComponent
             DMGMountManager.shared.setMountPath(result.mountPoint, for: dmgURL)
             loadContents(from: result.mountPoint)
+
+            // Check which apps are already installed
+            for entry in entries where entry.isApp {
+                let installed = URL(fileURLWithPath: "/Applications/\(entry.name)")
+                if FileManager.default.fileExists(atPath: installed.path) {
+                    installedApps.insert(entry.name)
+                }
+            }
         } else {
             let errorStr = String(data: result.data, encoding: .utf8) ?? "Mount failed"
 
@@ -285,7 +405,7 @@ struct DMGPreviewView: View {
                                                                 includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey, .totalFileSizeKey])
 
             for fileURL in contents {
-                // Skip hidden files except .app bundles hidden inside
+                // Skip hidden files
                 let name = fileURL.lastPathComponent
                 if name.hasPrefix(".") { continue }
 
@@ -295,7 +415,6 @@ struct DMGPreviewView: View {
 
                 var size: Int64 = 0
                 if isApp {
-                    // Get total size of .app bundle
                     size = getDirectorySize(fileURL)
                 } else if !isDirectory {
                     size = Int64(resourceValues?.fileSize ?? 0)

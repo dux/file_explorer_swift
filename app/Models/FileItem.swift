@@ -246,7 +246,9 @@ class SelectionManager: ObservableObject {
                 do {
                     try fm.trashItem(at: URL(fileURLWithPath: item.path), resultingItemURL: nil)
                     count += 1
-                } catch {}
+                } catch {
+                    ToastManager.shared.showError("Failed to trash \(item.name): \(error.localizedDescription)")
+                }
 
             case .iPhone(let deviceId, let appId, _):
                 let success = await iPhoneManager.deleteFileFromContext(
@@ -275,7 +277,9 @@ class SelectionManager: ObservableObject {
                 try fm.moveItem(at: url, to: destPath)
                 count += 1
                 remove(item)
-            } catch {}
+            } catch {
+                ToastManager.shared.showError("Failed to move \(item.name): \(error.localizedDescription)")
+            }
         }
 
         return count
@@ -293,7 +297,9 @@ class SelectionManager: ObservableObject {
             do {
                 try fm.copyItem(at: url, to: destPath)
                 count += 1
-            } catch {}
+            } catch {
+                ToastManager.shared.showError("Failed to copy \(item.name): \(error.localizedDescription)")
+            }
         }
 
         return count

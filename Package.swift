@@ -29,6 +29,11 @@ let package = Package(
             resources: [
                 .copy("Resources/Icons")
             ]
+        ),
+        .testTarget(
+            name: "FileExplorerTests",
+            dependencies: ["FileExplorer"],
+            path: "Tests"
         )
     ]
 )

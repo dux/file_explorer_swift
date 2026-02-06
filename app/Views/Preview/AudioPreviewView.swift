@@ -256,7 +256,7 @@ class AudioPlayerManager: ObservableObject {
             // Load metadata
             loadMetadata(from: url)
         } catch {
-            print("Error loading audio: \(error)")
+            ToastManager.shared.showError("Error loading audio: \(error.localizedDescription)")
         }
     }
 

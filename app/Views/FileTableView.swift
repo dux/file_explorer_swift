@@ -16,7 +16,7 @@ struct FileTableView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(manager.filteredItems.enumerated()), id: \.element.id) { index, fileInfo in
+                        ForEach(Array(manager.allItems.enumerated()), id: \.element.id) { index, fileInfo in
                             let actualIndex = manager.allItems.firstIndex(where: { $0.url == fileInfo.url }) ?? -1
                             FileTableRow(fileInfo: fileInfo, manager: manager, index: actualIndex)
                                 .id(fileInfo.id)
@@ -47,20 +47,12 @@ struct FileTableView: View {
     private func handleDrop(providers: [NSItemProvider]) {
         let currentPath = manager.currentPath
 
-        for provider in providers {
-            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { data, error in
-                guard let data = data as? Data,
-                      let sourceURL = URL(dataRepresentation: data, relativeTo: nil) else { return }
+        collectDropURLs(from: providers) { uniqueURLs in
+            Task.detached {
+                for srcURL in uniqueURLs {
+                    if srcURL.deletingLastPathComponent().path == currentPath.path { continue }
 
-                let destinationURL = currentPath.appendingPathComponent(sourceURL.lastPathComponent)
-
-                // Don't copy if source is same as destination
-                guard sourceURL.deletingLastPathComponent().path != currentPath.path else { return }
-
-                let destURL = destinationURL
-                let srcURL = sourceURL
-                let curPath = currentPath
-                Task.detached {
+                    let destURL = currentPath.appendingPathComponent(srcURL.lastPathComponent)
                     do {
                         var finalURL = destURL
                         var counter = 1
@@ -68,13 +60,12 @@ struct FileTableView: View {
                             let baseName = destURL.deletingPathExtension().lastPathComponent
                             let ext = destURL.pathExtension
                             let newName = ext.isEmpty ? "\(baseName) \(counter)" : "\(baseName) \(counter).\(ext)"
-                            finalURL = curPath.appendingPathComponent(newName)
+                            finalURL = currentPath.appendingPathComponent(newName)
                             counter += 1
                         }
 
                         try FileManager.default.copyItem(at: srcURL, to: finalURL)
                         await MainActor.run {
-                            self.manager.refresh()
                             ToastManager.shared.show("Copied \(srcURL.lastPathComponent)")
                         }
                     } catch {
@@ -82,6 +73,10 @@ struct FileTableView: View {
                             ToastManager.shared.show("Drop error: \(error.localizedDescription)")
                         }
                     }
+                }
+
+                await MainActor.run {
+                    self.manager.refresh()
                 }
             }
         }
@@ -128,9 +123,6 @@ struct FileTableRow: View {
                     .resizable()
                     .interpolation(.high)
                     .frame(width: 24, height: 24)
-                    .onDrag {
-                        NSItemProvider(object: url as NSURL)
-                    }
 
                 if isRenaming {
                     RenameTextField(text: $manager.renameText, onCommit: {
@@ -177,6 +169,11 @@ struct FileTableRow: View {
             (isInSelection ? Color.green.opacity(0.15) : Color.clear)
         )
         .contentShape(Rectangle())
+        .onDrag {
+            manager.selectedItem = nil
+            manager.selectedIndex = -1
+            return NSItemProvider(object: url as NSURL)
+        }
         .onAppear { }
         .onTapGesture {
             let now = Date()

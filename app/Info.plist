@@ -5,7 +5,7 @@
     <key>CFBundleExecutable</key>
     <string>FileExplorer</string>
     <key>CFBundleIdentifier</key>
-    <string>com.example.fileexplorer</string>
+    <string>com.dux.file-explorer</string>
     <key>CFBundleName</key>
     <string>File explorer by @dux</string>
     <key>CFBundleVersion</key>

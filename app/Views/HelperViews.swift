@@ -33,10 +33,10 @@ struct FileDetailsView: View {
                 }
                 DetailRow(label: "Location", value: url.deletingLastPathComponent().path)
                 if let created = cachedAttributes?[.creationDate] as? Date {
-                    DetailRow(label: "Created", value: formatDate(created))
+                    DetailRow(label: "Created", value: formatDateShort(created))
                 }
                 if let modified = cachedAttributes?[.modificationDate] as? Date {
-                    DetailRow(label: "Modified", value: formatDate(modified))
+                    DetailRow(label: "Modified", value: formatDateShort(modified))
                 }
                 if let permissions = cachedAttributes?[.posixPermissions] as? Int {
                     DetailRow(label: "Permissions", value: String(format: "%o", permissions))
@@ -67,40 +67,10 @@ struct FileDetailsView: View {
         return "\(ext.uppercased()) file"
     }
 
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-
     private func calculateSize() {
-        DispatchQueue.global(qos: .userInitiated).async {
-            if isDirectory {
-                var totalSize: UInt64 = 0
-                var count = 0
-                if let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey], options: []) {
-                    for case let fileURL as URL in enumerator {
-                        count += 1
-                        if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-                            totalSize += UInt64(size)
-                        }
-                    }
-                }
-                let sizeStr = ByteCountFormatter.string(fromByteCount: Int64(totalSize), countStyle: .file)
-                DispatchQueue.main.async {
-                    fileSize = sizeStr
-                    itemCount = count
-                }
-            } else {
-                if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-                   let size = attrs[.size] as? UInt64 {
-                    let sizeStr = ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
-                    DispatchQueue.main.async {
-                        fileSize = sizeStr
-                    }
-                }
-            }
+        calculateFileSize(url: url, isDirectory: isDirectory) { sizeStr, count in
+            fileSize = sizeStr
+            itemCount = count
         }
     }
 }
@@ -166,10 +136,10 @@ struct FileItemDialog: View {
                 }
                 DetailRow(label: "Location", value: url.deletingLastPathComponent().path)
                 if let modified = cachedAttributes?[.modificationDate] as? Date {
-                    DetailRow(label: "Modified", value: formatDate(modified))
+                    DetailRow(label: "Modified", value: formatDateShort(modified))
                 }
                 if let created = cachedAttributes?[.creationDate] as? Date {
-                    DetailRow(label: "Created", value: formatDate(created))
+                    DetailRow(label: "Created", value: formatDateShort(created))
                 }
                 if let permissions = cachedAttributes?[.posixPermissions] as? Int {
                     DetailRow(label: "Permissions", value: String(format: "%o", permissions))
@@ -324,13 +294,6 @@ struct FileItemDialog: View {
         return "\(ext.uppercased()) file"
     }
 
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-
     private func performRename() {
         let newName = renameText.trimmingCharacters(in: .whitespaces)
         guard !newName.isEmpty, newName != url.lastPathComponent else {
@@ -358,32 +321,9 @@ struct FileItemDialog: View {
     }
 
     private func calculateSize() {
-        DispatchQueue.global(qos: .userInitiated).async {
-            if isDirectory {
-                var totalSize: UInt64 = 0
-                var count = 0
-                if let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey], options: []) {
-                    for case let fileURL as URL in enumerator {
-                        count += 1
-                        if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-                            totalSize += UInt64(size)
-                        }
-                    }
-                }
-                let sizeStr = ByteCountFormatter.string(fromByteCount: Int64(totalSize), countStyle: .file)
-                DispatchQueue.main.async {
-                    fileSize = sizeStr
-                    itemCount = count
-                }
-            } else {
-                if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-                   let size = attrs[.size] as? UInt64 {
-                    let sizeStr = ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
-                    DispatchQueue.main.async {
-                        fileSize = sizeStr
-                    }
-                }
-            }
+        calculateFileSize(url: url, isDirectory: isDirectory) { sizeStr, count in
+            fileSize = sizeStr
+            itemCount = count
         }
     }
 }

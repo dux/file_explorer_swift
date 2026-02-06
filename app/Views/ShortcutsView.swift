@@ -127,9 +127,19 @@ struct ShortcutRow: View {
     let shortcutsManager: ShortcutsManager
     var flatIndex: Int = -1
     @State private var isHovered = false
+    @State private var isLocalHovered = false
 
     private var isSelected: Bool {
         manager.currentPath.path == item.url.path
+    }
+
+    private var isApplicationsRow: Bool {
+        item.url.path == "/Applications"
+    }
+
+    private var isShowingLocalApps: Bool {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return manager.currentPath.path == "\(home)/Applications"
     }
 
     private var isFocused: Bool {
@@ -157,6 +167,30 @@ struct ShortcutRow: View {
 
             Spacer()
 
+            if isApplicationsRow && (isSelected || isShowingLocalApps) {
+                Button(action: {
+                    let localApps = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")
+                    if manager.currentPane == .iphone {
+                        iPhoneManager.shared.currentDevice = nil
+                        manager.currentPane = .browser
+                    }
+                    manager.navigateTo(localApps)
+                    manager.selectCurrentFolder()
+                }) {
+                    Text("local")
+                        .font(.system(size: 11, weight: isShowingLocalApps ? .semibold : .medium))
+                        .foregroundColor(isShowingLocalApps ? .white : .secondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(isShowingLocalApps ? Color.accentColor : (isLocalHovered ? Color.gray.opacity(0.15) : Color.gray.opacity(0.08)))
+                        )
+                }
+                .buttonStyle(.plain)
+                .onHover { isLocalHovered = $0 }
+            }
+
             if !item.isBuiltIn && isHovered {
                 Button(action: { shortcutsManager.removeFolder(item.url) }) {
                     Image(systemName: "xmark.circle.fill")
@@ -170,7 +204,7 @@ struct ShortcutRow: View {
         .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
+                .fill((isSelected || (isApplicationsRow && isShowingLocalApps)) ? Color.accentColor.opacity(0.2) : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
@@ -187,6 +221,7 @@ struct ShortcutRow: View {
                 manager.currentPane = .browser
             }
             manager.navigateTo(item.url)
+            manager.selectCurrentFolder()
         }
     }
 }
@@ -265,6 +300,7 @@ struct DraggableShortcutRow: View {
                 manager.currentPane = .browser
             }
             manager.navigateTo(item.url)
+            manager.selectCurrentFolder()
         }
         .onDrag {
             NSItemProvider(object: String(index) as NSString)
@@ -407,6 +443,7 @@ struct VolumeRow: View {
                 manager.currentPane = .browser
             }
             manager.navigateTo(volume.url)
+            manager.selectCurrentFolder()
         }
     }
 }

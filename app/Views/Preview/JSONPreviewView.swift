@@ -34,25 +34,7 @@ struct JSONPreviewView: View {
                 }
                 .buttonStyle(.plain)
 
-                // Font size controls
-                HStack(spacing: 4) {
-                    Button(action: { settings.decreaseFontSize() }) {
-                        Image(systemName: "minus")
-                            .frame(width: 20, height: 20)
-                    }
-                    .buttonStyle(.borderless)
-
-                    Text("\(Int(settings.previewFontSize))px")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                        .frame(width: 32)
-
-                    Button(action: { settings.increaseFontSize() }) {
-                        Image(systemName: "plus")
-                            .frame(width: 20, height: 20)
-                    }
-                    .buttonStyle(.borderless)
-                }
+                FontSizeControls(settings: settings)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)

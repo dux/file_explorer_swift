@@ -31,7 +31,6 @@ build:
 	@mkdir -p FileExplorer.app/Contents/Resources
 	@cp app/Info.plist FileExplorer.app/Contents/
 	@cp .build/debug/FileExplorer FileExplorer.app/Contents/MacOS/
-	@cp /opt/homebrew/bin/fzf FileExplorer.app/Contents/MacOS/
 	@codesign --force --sign - --entitlements FileExplorer.entitlements FileExplorer.app/Contents/MacOS/FileExplorer 2>/dev/null || true
 	@pkill -x "FileExplorer" 2>/dev/null || true
 	@sleep 0.3

@@ -187,18 +187,18 @@ class KeyCaptureView: NSView {
             return
         }
 
-        // Tab - cycle panes: left -> center -> right -> left
+        // Tab - cycle panes: center -> left -> right -> center
         if event.keyCode == 48 { // Tab
             if manager.sidebarFocused {
-                // left -> center
+                // left -> right
                 manager.unfocusSidebar()
-            } else if manager.rightPaneFocused {
-                // right -> left
-                manager.unfocusRightPane()
-                manager.focusSidebar()
-            } else {
-                // center -> right
                 manager.focusRightPane()
+            } else if manager.rightPaneFocused {
+                // right -> center
+                manager.unfocusRightPane()
+            } else {
+                // center -> left
+                manager.focusSidebar()
             }
             return
         }

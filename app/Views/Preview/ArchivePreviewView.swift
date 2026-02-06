@@ -360,7 +360,7 @@ struct ArchiveEntryRow: View {
                 return extractedURL
             }
         } catch {
-            print("Extract error: \(error)")
+            ToastManager.shared.showError("Extract error: \(error.localizedDescription)")
         }
 
         return nil

@@ -8,6 +8,8 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
+            Divider()
             HStack(spacing: 0) {
                 // Left pane (shortcuts)
                 ShortcutsView(manager: manager)
@@ -41,6 +43,7 @@ struct ContentView: View {
                 // Main content (includes right pane)
                 MainContentView(manager: manager)
                     .frame(minWidth: 600)
+            }
             }
 
             ToastView()

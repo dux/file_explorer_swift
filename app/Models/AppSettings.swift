@@ -63,7 +63,7 @@ class AppSettings: ObservableObject {
         previewPaneSplit = 0.5
         showPreviewPane = true
         leftPaneWidth = 200
-        rightPaneWidth = 300
+        rightPaneWidth = 260
         browserViewMode = "files"
         windowX = nil
         windowY = nil
