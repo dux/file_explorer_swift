@@ -49,17 +49,21 @@ run:
 	@open /Applications/$(APP_NAME).app
 
 gh-pub: build
-	@VERSION=$$(date +%Y.%m.%d-%H%M); \
-	echo "Publishing v$$VERSION to GitHub..."; \
+	@HASH=$$(git rev-parse --short HEAD); \
+	sed -i '' "s|/main/install.sh.*|/main/install.sh?v=$$HASH \| bash|" README.md; \
+	git add -A && git commit -m "release" --allow-empty && git push origin main; \
+	echo "Deleting old releases..."; \
+	gh release list --json tagName -q '.[].tagName' | while read tag; do \
+		gh release delete "$$tag" --yes --cleanup-tag 2>/dev/null; \
+	done; \
+	echo "Publishing latest release..."; \
 	tar -czf $(APP_NAME).app.tar.gz -C /Applications $(APP_NAME).app; \
-	git tag -f "v$$VERSION"; \
-	git push origin main --tags --force; \
-	gh release create "v$$VERSION" $(APP_NAME).app.tar.gz \
-		--title "v$$VERSION" \
-		--notes "Release v$$VERSION" \
+	gh release create latest $(APP_NAME).app.tar.gz \
+		--title "$(APP_NAME)" \
+		--notes "Latest build" \
 		--latest; \
 	rm -f $(APP_NAME).app.tar.gz; \
-	echo "Published v$$VERSION"
+	echo "Published"
 
 watch:
 	@echo "Watching for Swift file changes..."
