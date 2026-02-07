@@ -73,6 +73,39 @@ struct MainContentView: View {
         return contents.contains { Self.imageExtensionsCheck.contains($0.pathExtension.lowercased()) }
     }
 
+    // Cache last result to avoid repeated disk I/O during body re-renders
+    @State private var movieCheckCache: (path: String, result: Bool) = ("", false)
+
+    private func isMovieFolder(_ url: URL) -> Bool {
+        let path = url.path
+        if movieCheckCache.path == path { return movieCheckCache.result }
+
+        // Fast string-only checks first — no disk I/O
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir) else { return false }
+
+        let result: Bool
+        if isDir.boolValue {
+            guard MovieManager.detectMovie(folderName: url.lastPathComponent) != nil else {
+                result = false
+                movieCheckCache = (path, result)
+                return result
+            }
+            result = MovieManager.hasVideoFile(in: url)
+        } else {
+            let ext = url.pathExtension.lowercased()
+            guard MovieManager.videoExtensions.contains(ext) else {
+                result = false
+                movieCheckCache = (path, result)
+                return result
+            }
+            result = MovieManager.detectMovie(folderName: url.lastPathComponent) != nil
+        }
+
+        movieCheckCache = (path, result)
+        return result
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             // Main pane (browser, selection, or search)
@@ -120,7 +153,13 @@ struct MainContentView: View {
 
                     // Preview below actions
                     if let selected = manager.selectedItem {
-                        if isDirectoryWithImages(selected) {
+                        if isMovieFolder(selected) {
+                            Divider()
+                            MoviePreviewView(folderURL: selected)
+                                .id(selected)
+                                .frame(maxHeight: .infinity)
+                                .background(Color.white)
+                        } else if isDirectoryWithImages(selected) {
                             Divider()
                             FolderGalleryPreview(folderURL: selected)
                                 .id(selected)
@@ -678,6 +717,8 @@ struct NewFolderDialog: View {
 
 
 struct TableHeaderView: View {
+    var showModified: Bool = true
+
     var body: some View {
         HStack(spacing: 0) {
             Text("Name")
@@ -685,8 +726,10 @@ struct TableHeaderView: View {
 
             Spacer()
 
-            Text("Modified ago")
-                .frame(width: 180, alignment: .leading)
+            if showModified {
+                Text("Modified ago")
+                    .frame(width: 180, alignment: .leading)
+            }
 
             Text("Size")
                 .frame(width: 80, alignment: .trailing)

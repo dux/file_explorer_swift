@@ -37,5 +37,9 @@ struct FileExplorerApp: App {
         }
         .windowStyle(.titleBar)
         .windowResizability(.contentSize)
+
+        Settings {
+            SettingsView()
+        }
     }
 }

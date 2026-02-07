@@ -46,48 +46,24 @@ fi
 
 ok "Homebrew ready"
 
-# --- required brew dependencies ---
-# fzf             - bundled in app for fuzzy file search
-# libimobiledevice - required at build/link time for iPhone file browsing
+# --- brew dependencies ---
+DEPS=(libimobiledevice fd ffmpeg)
 
-REQUIRED_DEPS=(fzf libimobiledevice)
-
-# --- optional brew dependencies ---
-# fd     - fast file search (app shows install hint if missing)
-# ffmpeg - video/audio cropping and trimming (app shows install hint if missing)
-
-OPTIONAL_DEPS=(fd ffmpeg)
-
-install_brew_packages() {
-  local packages=("$@")
-  local to_install=()
-
-  for pkg in "${packages[@]}"; do
-    if brew list "$pkg" &>/dev/null; then
-      ok "$pkg already installed"
-    else
-      to_install+=("$pkg")
-    fi
-  done
-
-  if [[ ${#to_install[@]} -gt 0 ]]; then
-    info "Installing: ${to_install[*]}"
-    brew install "${to_install[@]}"
-    ok "Installed: ${to_install[*]}"
-  fi
-}
-
-info "Checking required dependencies..."
-install_brew_packages "${REQUIRED_DEPS[@]}"
-
-info "Checking optional dependencies..."
-for pkg in "${OPTIONAL_DEPS[@]}"; do
+info "Checking dependencies..."
+to_install=()
+for pkg in "${DEPS[@]}"; do
   if brew list "$pkg" &>/dev/null; then
-    ok "$pkg already installed"
+    ok "$pkg"
   else
-    warn "$pkg not installed (optional - install with: brew install $pkg)"
+    to_install+=("$pkg")
   fi
 done
+
+if [[ ${#to_install[@]} -gt 0 ]]; then
+  info "Installing: ${to_install[*]}"
+  brew install "${to_install[@]}"
+  ok "Installed: ${to_install[*]}"
+fi
 
 # --- download and install app ---
 info "Downloading $APP_NAME..."

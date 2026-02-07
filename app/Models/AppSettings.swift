@@ -57,6 +57,11 @@ class AppSettings: ObservableObject {
         didSet { saveAsync() }
     }
 
+    // OMDB API key for movie preview
+    @Published var omdbAPIKey: String {
+        didSet { saveAsync() }
+    }
+
     private init() {
         configFile = configDir.appendingPathComponent("settings.json")
 
@@ -72,6 +77,7 @@ class AppSettings: ObservableObject {
         windowWidth = nil
         windowHeight = nil
         preferredApps = [:]
+        omdbAPIKey = ""
 
         // Migrate from old config path
         migrateOldConfig()
@@ -147,6 +153,9 @@ class AppSettings: ObservableObject {
         if let h = json["windowHeight"] as? CGFloat {
             windowHeight = h
         }
+        if let key = json["omdbAPIKey"] as? String {
+            omdbAPIKey = key
+        }
     }
 
     private func saveAsync() {
@@ -168,7 +177,8 @@ class AppSettings: ObservableObject {
             winY: windowY,
             winW: windowWidth,
             winH: windowHeight,
-            apps: preferredApps
+            apps: preferredApps,
+            omdbKey: omdbAPIKey
         )
 
         saveTask = Task.detached(priority: .utility) {
@@ -192,6 +202,7 @@ class AppSettings: ObservableObject {
         let winW: CGFloat?
         let winH: CGFloat?
         let apps: [String: [String]]
+        let omdbKey: String
     }
 
     private nonisolated static func writeToDisk(_ s: SettingsSnapshot) {
@@ -211,6 +222,8 @@ class AppSettings: ObservableObject {
         if let y = s.winY { json["windowY"] = y }
         if let w = s.winW { json["windowWidth"] = w }
         if let h = s.winH { json["windowHeight"] = h }
+
+        json["omdbAPIKey"] = s.omdbKey
 
         if let data = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted) {
             try? data.write(to: s.configFile)

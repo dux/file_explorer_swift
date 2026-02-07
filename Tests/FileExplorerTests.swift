@@ -853,6 +853,190 @@ struct AppSettingsTests {
     }
 }
 
+// MARK: - MovieManager Tests
+
+@Suite("MovieManager Detection")
+struct MovieDetectionTests {
+    @Test("detects year in parentheses")
+    func parenthesesYear() {
+        let result = MovieManager.detectMovie(folderName: "The Matrix (1999)")
+        #expect(result != nil)
+        #expect(result?.title == "The Matrix")
+        #expect(result?.year == "1999")
+    }
+
+    @Test("detects dot-separated title and year")
+    func dotSeparated() {
+        let result = MovieManager.detectMovie(folderName: "Inception.2010.1080p.BluRay")
+        #expect(result != nil)
+        #expect(result?.title == "Inception")
+        #expect(result?.year == "2010")
+    }
+
+    @Test("detects space-separated title and year")
+    func spaceSeparated() {
+        let result = MovieManager.detectMovie(folderName: "Blade Runner 2049 2017")
+        #expect(result != nil)
+        // "2049" is picked up as year first (it's in valid range)
+        #expect(result?.title == "Blade Runner")
+        #expect(result?.year == "2049")
+    }
+
+    @Test("detects title with year in parentheses even when title has numbers")
+    func titleWithNumbers() {
+        // Parenthesized year takes priority
+        let result = MovieManager.detectMovie(folderName: "Blade Runner 2049 (2017)")
+        #expect(result != nil)
+        #expect(result?.title == "Blade Runner 2049")
+        #expect(result?.year == "2017")
+    }
+
+    @Test("detects underscore-separated title")
+    func underscoreSeparated() {
+        let result = MovieManager.detectMovie(folderName: "The_Dark_Knight_2008")
+        #expect(result != nil)
+        #expect(result?.title == "The Dark Knight")
+        #expect(result?.year == "2008")
+    }
+
+    @Test("returns nil for folder without year")
+    func noYear() {
+        let result = MovieManager.detectMovie(folderName: "Documents")
+        #expect(result == nil)
+    }
+
+    @Test("returns nil for year outside range")
+    func yearOutOfRange() {
+        let result = MovieManager.detectMovie(folderName: "Project 1850")
+        #expect(result == nil)
+    }
+
+    @Test("strips release tags from title")
+    func stripsReleaseTags() {
+        let result = MovieManager.detectMovie(folderName: "Interstellar.2014.1080p.BluRay.x264")
+        #expect(result != nil)
+        #expect(result?.title == "Interstellar")
+    }
+
+    @Test("handles hyphen-separated names")
+    func hyphenSeparated() {
+        let result = MovieManager.detectMovie(folderName: "No-Country-for-Old-Men-2007")
+        #expect(result != nil)
+        #expect(result?.title == "No Country for Old Men")
+        #expect(result?.year == "2007")
+    }
+
+    @Test("extracts title from video filename with extension")
+    func videoFilename() {
+        let result = MovieManager.detectMovie(folderName: "Cabeza.de.Vaca.1991.DVDRip.blablebliblobluao.avi")
+        #expect(result != nil)
+        #expect(result?.title == "Cabeza de Vaca")
+        #expect(result?.year == "1991")
+    }
+
+    @Test("extracts title from mkv filename")
+    func mkvFilename() {
+        let result = MovieManager.detectMovie(folderName: "The.Shawshank.Redemption.1994.1080p.BluRay.x264.mkv")
+        #expect(result != nil)
+        #expect(result?.title == "The Shawshank Redemption")
+        #expect(result?.year == "1994")
+    }
+
+    @Test("hasVideoFile detects video in folder")
+    func hasVideoFile() throws {
+        let fm = FileManager.default
+        let tmpDir = fm.temporaryDirectory.appendingPathComponent("video-check-\(UUID().uuidString)")
+        try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: tmpDir) }
+
+        // No video yet
+        #expect(!MovieManager.hasVideoFile(in: tmpDir))
+
+        // Add a video file
+        try "".write(to: tmpDir.appendingPathComponent("movie.mkv"), atomically: true, encoding: .utf8)
+        #expect(MovieManager.hasVideoFile(in: tmpDir))
+    }
+
+    @Test("hasVideoFile ignores audio files")
+    func ignoresAudio() throws {
+        let fm = FileManager.default
+        let tmpDir = fm.temporaryDirectory.appendingPathComponent("audio-check-\(UUID().uuidString)")
+        try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: tmpDir) }
+
+        try "".write(to: tmpDir.appendingPathComponent("soundtrack.mp3"), atomically: true, encoding: .utf8)
+        try "".write(to: tmpDir.appendingPathComponent("audio.flac"), atomically: true, encoding: .utf8)
+        #expect(!MovieManager.hasVideoFile(in: tmpDir))
+    }
+}
+
+@Suite("MovieManager API")
+struct MovieAPITests {
+    @Test("fetches The Matrix folder and caches as .fe-movie.json")
+    @MainActor func fetchMatrixFolder() async throws {
+        let fm = FileManager.default
+        let tmpDir = fm.temporaryDirectory.appendingPathComponent("movie-test-\(UUID().uuidString)")
+        try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: tmpDir) }
+
+        let movieDir = tmpDir.appendingPathComponent("The Matrix (1999)")
+        try fm.createDirectory(at: movieDir, withIntermediateDirectories: true)
+
+        let info = await MovieManager.shared.getMovieInfo(for: movieDir)
+        #expect(info != nil)
+        #expect(info?.title == "The Matrix")
+        #expect(info?.year == "1999")
+        #expect(info?.imdbID == "tt0133093")
+        #expect(info?.director.contains("Wachowski") == true)
+        #expect(info?.imdbRating != "N/A")
+        #expect(info?.rottenTomatoesRating != "N/A")
+        #expect(info?.topActors.count == 3)
+
+        // Folder cache: .fe-movie.json inside the folder
+        let cacheFile = movieDir.appendingPathComponent(".fe-movie.json")
+        #expect(fm.fileExists(atPath: cacheFile.path))
+        let data = try Data(contentsOf: cacheFile)
+        let cached = try JSONDecoder().decode(MovieInfo.self, from: data)
+        #expect(cached.title == "The Matrix")
+
+        let json = String(data: data, encoding: .utf8) ?? "failed to read"
+        print("=== .fe-movie.json for folder ===")
+        print(json)
+        print("=== end ===")
+
+        // Second call should use cache
+        let cached2 = await MovieManager.shared.getMovieInfo(for: movieDir)
+        #expect(cached2?.title == "The Matrix")
+    }
+
+    @Test("fetches movie file and caches as .fe-FILENAME.json")
+    @MainActor func fetchMovieFile() async throws {
+        let fm = FileManager.default
+        let tmpDir = fm.temporaryDirectory.appendingPathComponent("movie-file-test-\(UUID().uuidString)")
+        try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: tmpDir) }
+
+        let movieFile = tmpDir.appendingPathComponent("Inception.2010.1080p.BluRay.mkv")
+        try "".write(to: movieFile, atomically: true, encoding: .utf8)
+
+        let info = await MovieManager.shared.getMovieInfo(for: movieFile)
+        #expect(info != nil)
+        #expect(info?.title == "Inception")
+
+        // File cache: .fe-Inception.2010.1080p.BluRay.mkv.json in same dir
+        let cacheFile = tmpDir.appendingPathComponent(".fe-Inception.2010.1080p.BluRay.mkv.json")
+        #expect(fm.fileExists(atPath: cacheFile.path))
+        let data = try Data(contentsOf: cacheFile)
+        let cached = try JSONDecoder().decode(MovieInfo.self, from: data)
+        #expect(cached.title == "Inception")
+
+        let json = String(data: data, encoding: .utf8) ?? "failed to read"
+        print("=== .fe-FILENAME.json for file ===")
+        print(json)
+        print("=== end ===")
+    }
+}
+
 // MARK: - Search Debounce Tests
 
 @Suite("Search Debounce")

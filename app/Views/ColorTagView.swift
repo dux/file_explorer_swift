@@ -154,32 +154,29 @@ struct ColorTagFileRow: View {
     }
 }
 
-// MARK: - Reusable context menu for color tags
+// MARK: - Reusable inline color tag items for context menu
 
-struct ColorTagMenu: View {
+struct ColorTagMenuItems: View {
     let url: URL
     @ObservedObject var tagManager: ColorTagManager
 
     var body: some View {
-        Menu {
-            ForEach(TagColor.allCases) { color in
-                Button(action: { tagManager.toggleTag(url, color: color) }) {
-                    HStack {
-                        Image(systemName: tagManager.isTagged(url, color: color) ? "checkmark.circle.fill" : "circle.fill")
-                        Text(color.label)
-                    }
+        ForEach(TagColor.allCases) { color in
+            Button(action: { tagManager.toggleTag(url, color: color) }) {
+                Label {
+                    Text(color.label)
+                } icon: {
+                    Image(systemName: tagManager.isTagged(url, color: color) ? "checkmark.circle.fill" : "circle.fill")
+                        .foregroundColor(color.color)
                 }
             }
+        }
 
-            let currentColors = tagManager.colorsForFile(url)
-            if !currentColors.isEmpty {
-                Divider()
-                Button(action: { tagManager.untagFile(url) }) {
-                    Label("Remove All Tags", systemImage: "xmark.circle")
-                }
+        let currentColors = tagManager.colorsForFile(url)
+        if !currentColors.isEmpty {
+            Button(action: { tagManager.untagFile(url) }) {
+                Label("Remove All Labels", systemImage: "xmark.circle")
             }
-        } label: {
-            Label("Color Label", systemImage: "tag")
         }
     }
 }

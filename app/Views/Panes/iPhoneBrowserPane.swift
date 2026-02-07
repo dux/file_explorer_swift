@@ -912,13 +912,13 @@ struct iPhoneFileRow: View {
 
     private func formatFileSize(_ size: Int64) -> String {
         if size < 1024 {
-            return "\(size) B"
+            return "\(size) b"
         } else if size < 1024 * 1024 {
-            return String(format: "%.1f KB", Double(size) / 1024)
+            return String(format: "%.1f kb", Double(size) / 1024)
         } else if size < 1024 * 1024 * 1024 {
-            return String(format: "%.1f MB", Double(size) / (1024 * 1024))
+            return String(format: "%.1f mb", Double(size) / (1024 * 1024))
         } else {
-            return String(format: "%.1f GB", Double(size) / (1024 * 1024 * 1024))
+            return String(format: "%.1f gb", Double(size) / (1024 * 1024 * 1024))
         }
     }
 

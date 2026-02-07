@@ -177,7 +177,7 @@ struct AncestorRow: View {
 
             if isCurrent && manager.hiddenCount > 0 {
                 Text("+\(manager.hiddenCount) hidden")
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary.opacity(0.6))
             }
 
@@ -193,9 +193,9 @@ struct AncestorRow: View {
                 }) {
                     HStack(spacing: 3) {
                         Image(systemName: isPinned ? "pin.fill" : "pin")
-                            .font(.system(size: 10))
+                            .font(.system(size: 12))
                         Text(isPinned ? "unpin" : "pin folder")
-                            .font(.system(size: 10))
+                            .font(.system(size: 12))
                     }
                     .foregroundColor(isPinned ? .orange : .secondary.opacity(0.5))
                     .contentShape(Rectangle())
@@ -282,7 +282,7 @@ struct FileTreeRow: View {
 
     private var fileSizeDisplay: String {
         if isDirectory { return "" }
-        return ByteCountFormatter.string(fromByteCount: fileInfo.size, countStyle: .file)
+        return compactTreeFileSize(fileInfo.size)
     }
 
     var body: some View {
@@ -313,15 +313,15 @@ struct FileTreeRow: View {
 
             Spacer()
 
-            if !humanReadableDate.isEmpty {
+            if manager.sortMode == .modified && !humanReadableDate.isEmpty {
                 Text(humanReadableDate)
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
             }
 
             if !fileSizeDisplay.isEmpty {
                 Text(fileSizeDisplay)
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
                     .frame(width: 60, alignment: .trailing)
             }
@@ -361,28 +361,42 @@ struct FileTreeRow: View {
         .opacity(isHidden ? 0.5 : 1.0)
         .contextMenu {
             Button(action: { showingDetails = true }) {
-                Label("View Details", systemImage: "info.circle")
+                Label("View Details", systemImage: "info.circle").font(.system(size: 15))
             }
             Button(action: { manager.toggleFileSelection(url) }) {
                 Label(manager.isInSelection(url) ? "Remove from Selection" : "Add to Selection",
-                      systemImage: manager.isInSelection(url) ? "minus.circle" : "checkmark.circle")
+                      systemImage: manager.isInSelection(url) ? "minus.circle" : "checkmark.circle").font(.system(size: 15))
             }
-            Divider()
-            ColorTagMenu(url: url, tagManager: tagManager)
+            Button(action: {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(url.path, forType: .string)
+            }) {
+                Label("Copy Path", systemImage: "doc.on.clipboard").font(.system(size: 15))
+            }
             Divider()
             Button(action: { manager.duplicateFile(url) }) {
-                Label("Duplicate", systemImage: "doc.on.doc")
+                Label("Duplicate", systemImage: "doc.on.doc").font(.system(size: 15))
             }
             Button(action: { manager.addToZip(url) }) {
-                Label("Add to Zip", systemImage: "doc.zipper")
+                Label("Add to Zip", systemImage: "doc.zipper").font(.system(size: 15))
             }
             Divider()
             Button(role: .destructive, action: { manager.moveToTrash(url) }) {
-                Label("Move to Trash", systemImage: "trash")
+                Label("Move to Trash", systemImage: "trash").font(.system(size: 15))
             }
+            Divider()
+            ColorTagMenuItems(url: url, tagManager: tagManager)
         }
         .sheet(isPresented: $showingDetails) {
             FileDetailsView(url: url, isDirectory: isDirectory)
         }
     }
+}
+
+private func compactTreeFileSize(_ bytes: Int64) -> String {
+    if bytes < 1024 { return "\(bytes) b" }
+    if bytes < 1024 * 1024 { return String(format: "%.1f kb", Double(bytes) / 1024) }
+    if bytes < 1024 * 1024 * 1024 { return String(format: "%.1f mb", Double(bytes) / (1024 * 1024)) }
+    return String(format: "%.1f gb", Double(bytes) / (1024 * 1024 * 1024))
 }

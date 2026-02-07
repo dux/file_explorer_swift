@@ -146,13 +146,15 @@ struct FileTableRow: View {
 
             Spacer()
 
-            Text(humanReadableDate)
-                .font(.system(size: 12))
-                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                .frame(width: 180, alignment: .leading)
+            if manager.sortMode == .modified {
+                Text(humanReadableDate)
+                    .font(.system(size: 14))
+                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                    .frame(width: 180, alignment: .leading)
+            }
 
             Text(fileSizeDisplay)
-                .font(.system(size: 12))
+                .font(.system(size: 14))
                 .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
                 .frame(width: 80, alignment: .trailing)
         }
@@ -188,25 +190,32 @@ struct FileTableRow: View {
         .opacity(isHidden ? 0.5 : 1.0)
         .contextMenu {
             Button(action: { showingDetails = true }) {
-                Label("View Details", systemImage: "info.circle")
+                Label("View Details", systemImage: "info.circle").font(.system(size: 15))
             }
             Button(action: { manager.toggleFileSelection(url) }) {
                 Label(manager.isInSelection(url) ? "Remove from Selection" : "Add to Selection",
-                      systemImage: manager.isInSelection(url) ? "minus.circle" : "checkmark.circle")
+                      systemImage: manager.isInSelection(url) ? "minus.circle" : "checkmark.circle").font(.system(size: 15))
             }
-            Divider()
-            ColorTagMenu(url: url, tagManager: tagManager)
+            Button(action: {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(url.path, forType: .string)
+            }) {
+                Label("Copy Path", systemImage: "doc.on.clipboard").font(.system(size: 15))
+            }
             Divider()
             Button(action: { manager.duplicateFile(url) }) {
-                Label("Duplicate", systemImage: "doc.on.doc")
+                Label("Duplicate", systemImage: "doc.on.doc").font(.system(size: 15))
             }
             Button(action: { manager.addToZip(url) }) {
-                Label("Add to Zip", systemImage: "doc.zipper")
+                Label("Add to Zip", systemImage: "doc.zipper").font(.system(size: 15))
             }
             Divider()
             Button(role: .destructive, action: { manager.moveToTrash(url) }) {
-                Label("Move to Trash", systemImage: "trash")
+                Label("Move to Trash", systemImage: "trash").font(.system(size: 15))
             }
+            Divider()
+            ColorTagMenuItems(url: url, tagManager: tagManager)
         }
         .sheet(isPresented: $showingDetails) {
             FileDetailsView(url: url, isDirectory: isDirectory)
@@ -246,6 +255,13 @@ struct FileTableRow: View {
 
     private var fileSizeDisplay: String {
         if isDirectory { return "--" }
-        return ByteCountFormatter.string(fromByteCount: fileInfo.size, countStyle: .file)
+        return compactFileSize(fileInfo.size)
     }
+}
+
+private func compactFileSize(_ bytes: Int64) -> String {
+    if bytes < 1024 { return "\(bytes) b" }
+    if bytes < 1024 * 1024 { return String(format: "%.1f kb", Double(bytes) / 1024) }
+    if bytes < 1024 * 1024 * 1024 { return String(format: "%.1f mb", Double(bytes) / (1024 * 1024)) }
+    return String(format: "%.1f gb", Double(bytes) / (1024 * 1024 * 1024))
 }
