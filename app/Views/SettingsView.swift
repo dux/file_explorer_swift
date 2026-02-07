@@ -111,8 +111,8 @@ struct APISettingsView: View {
                     Text("OMDB API key")
                     Spacer()
                     TextField("API key", text: $omdbKey)
+                        .styledInput()
                         .frame(width: 180)
-                        .textFieldStyle(.roundedBorder)
                 }
 
                 Button("Save key") {

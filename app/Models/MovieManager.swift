@@ -12,19 +12,10 @@ struct MovieInfo: Codable, Sendable {
     let posterURL: String
     let imdbRating: String
     let imdbID: String
-    let rottenTomatoesRating: String
-    let metacriticRating: String
     let type: String
 
     var imdbURL: String {
         "https://www.imdb.com/title/\(imdbID)/"
-    }
-
-    var rottenTomatoesURL: String {
-        let slug = title.lowercased()
-            .replacingOccurrences(of: " ", with: "_")
-            .filter { $0.isLetter || $0.isNumber || $0 == "_" }
-        return "https://www.rottentomatoes.com/m/\(slug)"
     }
 
     var topActors: [String] {
@@ -179,14 +170,14 @@ class MovieManager {
 
         let title = detected.title
         let year = detected.year
-        let apiKey = omdbKey
 
-        let task = Task.detached(priority: .utility) {
-            let info = await Self.fetchFromOMDB(title: title, year: year, apiKey: apiKey)
-            if let info {
+        let task = Task.detached(priority: .utility) { () -> MovieInfo? in
+            let searchTerm = year.isEmpty ? title : "\(title) \(year)"
+            if let info = await Self.lookupMovie(searchTerm) {
                 Self.saveCache(info, to: cf)
+                return info
             }
-            return info
+            return nil
         }
 
         inFlightTasks[taskKey] = task
@@ -271,16 +262,13 @@ class MovieManager {
 
     // Fetch movie info by IMDB ID and cache it for the given folder/file URL
     func getMovieInfoByIMDB(id imdbID: String, for url: URL) async -> MovieInfo? {
-        let apiKey = omdbKey
-        guard !apiKey.isEmpty else { return nil }
-
         var isDir: ObjCBool = false
         FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
         let cacheFile = Self.cacheFileURL(for: url, isDir: isDir.boolValue)
         let cf = cacheFile
 
         let info = await Task.detached(priority: .utility) {
-            await Self.fetchFromOMDB(imdbID: imdbID, apiKey: apiKey)
+            await Self.scrapeIMDB(id: imdbID)
         }.value
 
         if let info {
@@ -290,6 +278,173 @@ class MovieManager {
             }
         }
         return info
+    }
+
+    // Pure lookup: search term -> MovieInfo
+    // Try OMDB API first (fast) if key is configured, then fall back to DuckDuckGo -> IMDB scraping
+    nonisolated static func lookupMovie(_ searchTerm: String) async -> MovieInfo? {
+        let detected = detectMovie(folderName: searchTerm)
+        let title = detected?.title ?? searchTerm
+        let year = detected?.year ?? ""
+
+        // Try OMDB API first if key is available (much faster)
+        let apiKey = await MainActor.run { AppSettings.shared.omdbAPIKey }
+        if !apiKey.isEmpty {
+            if let info = await fetchFromOMDB(title: title, year: year, apiKey: apiKey) {
+                return info
+            }
+        }
+
+        // Fall back to DuckDuckGo -> IMDB scraping
+        guard let imdbID = await searchForIMDBID(title: title, year: year) else { return nil }
+        return await scrapeIMDB(id: imdbID)
+    }
+
+    // Scrape IMDB page JSON-LD structured data
+    nonisolated static func scrapeIMDB(id imdbID: String) async -> MovieInfo? {
+        guard let url = URL(string: "https://www.imdb.com/title/\(imdbID)/") else { return nil }
+
+        var request = URLRequest(url: url)
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 15
+
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+            guard let html = String(data: data, encoding: .utf8) else { return nil }
+            return parseIMDBPage(html: html, imdbID: imdbID)
+        } catch {
+            return nil
+        }
+    }
+
+    nonisolated private static func parseIMDBPage(html: String, imdbID: String) -> MovieInfo? {
+        // Extract JSON-LD block
+        let ldPattern = /<script type="application\/ld\+json">(.*?)<\/script>/
+        guard let match = try? ldPattern.firstMatch(in: html) else { return nil }
+        let jsonStr = String(match.1)
+        guard let jsonData = jsonStr.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let title = json["name"] as? String else {
+            return nil
+        }
+
+        // Year from datePublished "2012-02-11"
+        let year: String
+        if let dateStr = json["datePublished"] as? String, dateStr.count >= 4 {
+            year = String(dateStr.prefix(4))
+        } else {
+            year = "N/A"
+        }
+
+        // Runtime from ISO 8601 duration "PT2H15M"
+        let runtime: String
+        if let dur = json["duration"] as? String {
+            runtime = parseISO8601Duration(dur)
+        } else {
+            runtime = "N/A"
+        }
+
+        // Genre
+        let genre: String
+        if let arr = json["genre"] as? [String] {
+            genre = arr.joined(separator: ", ")
+        } else if let str = json["genre"] as? String {
+            genre = str
+        } else {
+            genre = "N/A"
+        }
+
+        // Director
+        let director: String
+        if let arr = json["director"] as? [[String: Any]] {
+            director = arr.compactMap { $0["name"] as? String }.joined(separator: ", ")
+        } else {
+            director = "N/A"
+        }
+
+        // Actors
+        let actors: String
+        if let arr = json["actor"] as? [[String: Any]] {
+            actors = arr.compactMap { $0["name"] as? String }.joined(separator: ", ")
+        } else {
+            actors = "N/A"
+        }
+
+        // Plot
+        let plot = json["description"] as? String ?? "N/A"
+
+        // Poster
+        let posterURL = json["image"] as? String ?? "N/A"
+
+        // Rating
+        let imdbRating: String
+        if let agg = json["aggregateRating"] as? [String: Any],
+           let val = agg["ratingValue"] {
+            imdbRating = "\(val)"
+        } else {
+            imdbRating = "N/A"
+        }
+
+        // Content rating
+        let rated = json["contentRating"] as? String ?? "N/A"
+
+        // Type
+        let type = (json["@type"] as? String ?? "Movie").lowercased()
+
+        return MovieInfo(
+            title: title,
+            year: year,
+            rated: rated,
+            runtime: runtime,
+            genre: genre,
+            director: director,
+            actors: actors,
+            plot: plot,
+            posterURL: posterURL,
+            imdbRating: imdbRating,
+            imdbID: imdbID,
+            type: type
+        )
+    }
+
+    // Parse ISO 8601 duration like "PT2H15M" -> "2h 15min"
+    nonisolated private static func parseISO8601Duration(_ dur: String) -> String {
+        var result = ""
+        let hPattern = /(\d+)H/
+        let mPattern = /(\d+)M/
+        if let hMatch = try? hPattern.firstMatch(in: dur) {
+            result += "\(hMatch.1)h "
+        }
+        if let mMatch = try? mPattern.firstMatch(in: dur) {
+            result += "\(mMatch.1) min"
+        }
+        let trimmed = result.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? "N/A" : trimmed
+    }
+
+    // Search DuckDuckGo for "imdb TITLE YEAR" and extract the first tt\d+ IMDB ID from results
+    nonisolated private static func searchForIMDBID(title: String, year: String) async -> String? {
+        let query = "imdb \(title) \(year)".trimmingCharacters(in: .whitespaces)
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://html.duckduckgo.com/html/?q=\(encoded)") else {
+            return nil
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 10
+
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+            guard let html = String(data: data, encoding: .utf8) else { return nil }
+            let pattern = /tt\d{7,}/
+            if let match = try? pattern.firstMatch(in: html) {
+                return String(match.0)
+            }
+        } catch {
+            // Ignore — fallback failed
+        }
+        return nil
     }
 
     nonisolated private static func fetchFromOMDB(titleOnly title: String, apiKey: String) async -> MovieInfo? {
@@ -320,17 +475,6 @@ class MovieManager {
             return nil
         }
 
-        // Extract Rotten Tomatoes rating from Ratings array
-        var rtRating = "N/A"
-        if let ratings = json["Ratings"] as? [[String: String]] {
-            for rating in ratings {
-                if rating["Source"] == "Rotten Tomatoes" {
-                    rtRating = rating["Value"] ?? "N/A"
-                    break
-                }
-            }
-        }
-
         return MovieInfo(
             title: title,
             year: json["Year"] as? String ?? "N/A",
@@ -343,8 +487,6 @@ class MovieManager {
             posterURL: json["Poster"] as? String ?? "N/A",
             imdbRating: json["imdbRating"] as? String ?? "N/A",
             imdbID: imdbID,
-            rottenTomatoesRating: rtRating,
-            metacriticRating: json["Metascore"] as? String ?? "N/A",
             type: json["Type"] as? String ?? "movie"
         )
     }

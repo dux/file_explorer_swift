@@ -219,7 +219,7 @@ struct RenameDialog: View {
             }
 
             TextField("Name", text: $manager.renameText)
-                .textFieldStyle(.roundedBorder)
+                .styledInput()
                 .onSubmit {
                     if !manager.renameText.isEmpty {
                         manager.confirmRename()
@@ -245,7 +245,7 @@ struct RenameDialog: View {
             }
         }
         .padding(20)
-        .frame(width: 300)
+        .frame(width: 600)
     }
 }
 
@@ -356,6 +356,94 @@ class KeyCaptureView: NSView {
                 break
             }
             return
+        }
+
+        // Cmd+O - open selected item with preferred app
+        if event.keyCode == 31 && event.modifierFlags.contains(.command) {
+            if manager.isSearching {
+                if manager.listCursorIndex >= 0 && manager.listCursorIndex < manager.searchResults.count {
+                    let item = manager.searchResults[manager.listCursorIndex]
+                    manager.listActivateItem(url: item.url, isDirectory: item.isDirectory)
+                }
+            } else if case .colorTag(let tagColor) = manager.currentPane {
+                let files = ColorTagManager.shared.list(tagColor)
+                if manager.listCursorIndex >= 0 && manager.listCursorIndex < files.count {
+                    let file = files[manager.listCursorIndex]
+                    guard file.exists else { return }
+                    manager.listActivateItem(url: file.url, isDirectory: file.isDirectory)
+                }
+            } else if let item = manager.selectedItem {
+                var isDirectory: ObjCBool = false
+                FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory)
+                if isDirectory.boolValue {
+                    manager.navigateTo(item)
+                } else {
+                    manager.openFileWithPreferredApp(item)
+                }
+            }
+            return
+        }
+
+        // Search results or color tag list navigation
+        if manager.isSearching {
+            switch event.keyCode {
+            case 125: // Down
+                manager.listSelectNext(count: manager.searchResults.count)
+                if manager.listCursorIndex >= 0 && manager.listCursorIndex < manager.searchResults.count {
+                    let item = manager.searchResults[manager.listCursorIndex]
+                    manager.selectItem(at: -1, url: item.url)
+                }
+                return
+            case 126: // Up
+                manager.listSelectPrevious(count: manager.searchResults.count)
+                if manager.listCursorIndex >= 0 && manager.listCursorIndex < manager.searchResults.count {
+                    let item = manager.searchResults[manager.listCursorIndex]
+                    manager.selectItem(at: -1, url: item.url)
+                }
+                return
+            case 36: // Enter - go there
+                if manager.listCursorIndex >= 0 && manager.listCursorIndex < manager.searchResults.count {
+                    let item = manager.searchResults[manager.listCursorIndex]
+                    manager.listActivateItem(url: item.url, isDirectory: item.isDirectory)
+                }
+                return
+            case 53: // Escape
+                manager.cancelSearch()
+                return
+            default:
+                break
+            }
+        }
+
+        if case .colorTag(let tagColor) = manager.currentPane {
+            let files = ColorTagManager.shared.list(tagColor)
+            switch event.keyCode {
+            case 125: // Down
+                manager.listSelectNext(count: files.count)
+                if manager.listCursorIndex >= 0 && manager.listCursorIndex < files.count {
+                    manager.selectItem(at: -1, url: files[manager.listCursorIndex].url)
+                }
+                return
+            case 126: // Up
+                manager.listSelectPrevious(count: files.count)
+                if manager.listCursorIndex >= 0 && manager.listCursorIndex < files.count {
+                    manager.selectItem(at: -1, url: files[manager.listCursorIndex].url)
+                }
+                return
+            case 36: // Enter - go there
+                if manager.listCursorIndex >= 0 && manager.listCursorIndex < files.count {
+                    let file = files[manager.listCursorIndex]
+                    guard file.exists else { return }
+                    manager.listActivateItem(url: file.url, isDirectory: file.isDirectory)
+                }
+                return
+            case 53: // Escape
+                manager.currentPane = .browser
+                manager.listCursorIndex = -1
+                return
+            default:
+                break
+            }
         }
 
         // Normal mode - Finder-like behavior
@@ -700,7 +788,7 @@ struct NewFolderDialog: View {
             }
 
             TextField("Folder name", text: $folderName)
-                .textFieldStyle(.roundedBorder)
+                .styledInput()
                 .onSubmit {
                     if !folderName.isEmpty {
                         onCreate()

@@ -1,6 +1,93 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Global Input Style
+
+struct StyledInput: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 15))
+            .padding(2)
+            .textFieldStyle(.roundedBorder)
+    }
+}
+
+extension View {
+    func styledInput() -> some View {
+        modifier(StyledInput())
+    }
+}
+
+// MARK: - Reusable File List Row (one-liner: icon + name + path)
+
+struct FileListRow: View {
+    let url: URL
+    let isDirectory: Bool
+    let exists: Bool
+    let parentPath: String
+    let isSelected: Bool
+    var showRemove: Bool = false
+    var onRemove: (() -> Void)? = nil
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // Icon
+            if !exists {
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 18))
+                    .foregroundColor(.secondary.opacity(0.5))
+                    .frame(width: 22, height: 22)
+            } else if isDirectory {
+                FolderIconView(url: url, size: 22)
+            } else {
+                Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: false))
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 22, height: 22)
+            }
+
+            // Name
+            Text(url.lastPathComponent)
+                .font(.system(size: 14))
+                .foregroundColor(exists ? .primary : .secondary.opacity(0.5))
+                .strikethrough(!exists)
+                .lineLimit(1)
+
+            // Parent path
+            Text(parentPath)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.head)
+
+            Spacer(minLength: 4)
+
+            if showRemove && isHovered {
+                if let onRemove = onRemove {
+                    Button(action: onRemove) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background(
+            isSelected ? Color.accentColor.opacity(0.2) :
+            isHovered ? Color.gray.opacity(0.08) : Color.clear
+        )
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - File Details
+
 struct FileDetailsView: View {
     let url: URL
     let isDirectory: Bool

@@ -49,6 +49,7 @@ class FileExplorerManager: ObservableObject {
     @Published var hiddenCount: Int = 0
     @Published var hasImages: Bool = false
     @Published var showItemDialog: Bool = false
+    @Published var showAppSelectorForURL: URL? = nil
 
     // Sidebar focus
     @Published var sidebarFocused: Bool = false
@@ -66,6 +67,7 @@ class FileExplorerManager: ObservableObject {
     @Published var searchQuery: String = ""
     @Published var searchResults: [CachedFileInfo] = []
     @Published var isSearchRunning: Bool = false
+    @Published var listCursorIndex: Int = -1
     private var searchTask: Process?
     private var searchDebounceTask: Task<Void, Never>?
 
@@ -675,6 +677,19 @@ class FileExplorerManager: ObservableObject {
         }
     }
 
+    func openFileWithPreferredApp(_ url: URL) {
+        let ext = url.pathExtension.lowercased()
+        let fileType = ext.isEmpty ? "__empty__" : ext
+        let apps = AppSettings.shared.getPreferredApps(for: fileType)
+        if let firstPath = apps.first,
+           FileManager.default.fileExists(atPath: firstPath) {
+            let appURL = URL(fileURLWithPath: firstPath)
+            NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
+        } else {
+            showAppSelectorForURL = url
+        }
+    }
+
     func selectFirst() {
         guard !allItems.isEmpty else { return }
         selectedIndex = 0
@@ -756,6 +771,7 @@ class FileExplorerManager: ObservableObject {
         isSearching = true
         searchQuery = ""
         searchResults = []
+        listCursorIndex = -1
     }
 
     func cancelSearch() {
@@ -765,6 +781,37 @@ class FileExplorerManager: ObservableObject {
         searchQuery = ""
         searchResults = []
         isSearchRunning = false
+        listCursorIndex = -1
+    }
+
+    // MARK: - List cursor navigation (search results / color tags)
+
+    func listSelectNext(count: Int) {
+        guard count > 0 else { return }
+        if listCursorIndex < count - 1 {
+            listCursorIndex += 1
+        } else {
+            listCursorIndex = 0
+        }
+    }
+
+    func listSelectPrevious(count: Int) {
+        guard count > 0 else { return }
+        if listCursorIndex > 0 {
+            listCursorIndex -= 1
+        } else {
+            listCursorIndex = count - 1
+        }
+    }
+
+    func listActivateItem(url: URL, isDirectory: Bool) {
+        if isDirectory {
+            if isSearching { cancelSearch() }
+            currentPane = .browser
+            navigateTo(url)
+        } else {
+            openFileWithPreferredApp(url)
+        }
     }
 
     func performSearch(_ query: String) {
@@ -843,10 +890,16 @@ class FileExplorerManager: ObservableObject {
                     return CachedFileInfo(url: url, isDirectory: isDir, size: size, modDate: modDate, isHidden: hidden)
                 }
 
+                // Sort: directories first, then by name
+                let sorted = results.sorted { a, b in
+                    if a.isDirectory != b.isDirectory { return a.isDirectory }
+                    return a.name.localizedStandardCompare(b.name) == .orderedAscending
+                }
+
                 await MainActor.run { [weak self] in
                     // Only update if query still matches
                     if self?.searchQuery == query {
-                        self?.searchResults = results
+                        self?.searchResults = sorted
                         self?.isSearchRunning = false
                     }
                 }

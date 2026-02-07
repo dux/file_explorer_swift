@@ -536,6 +536,7 @@ struct ColorTagBox: View {
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .onTapGesture {
+            manager.listCursorIndex = -1
             manager.currentPane = .colorTag(color)
         }
     }

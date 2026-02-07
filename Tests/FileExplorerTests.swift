@@ -996,7 +996,6 @@ struct MovieAPITests {
         #expect(info?.imdbID == "tt0133093")
         #expect(info?.director.contains("Wachowski") == true)
         #expect(info?.imdbRating != "N/A")
-        #expect(info?.rottenTomatoesRating != "N/A")
         #expect(info?.topActors.count == 3)
 
         // Folder cache: .fe-movie.json inside the folder

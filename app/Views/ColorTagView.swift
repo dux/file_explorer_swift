@@ -65,9 +65,10 @@ struct ColorTagView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(files) { file in
+                        ForEach(Array(files.enumerated()), id: \.element.id) { index, file in
                             ColorTagFileRow(
                                 file: file,
+                                index: index,
                                 color: color,
                                 manager: manager,
                                 tagManager: tagManager
@@ -83,73 +84,25 @@ struct ColorTagView: View {
 
 struct ColorTagFileRow: View {
     let file: TaggedFile
+    let index: Int
     let color: TagColor
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject var tagManager: ColorTagManager
-    @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            if file.exists {
-                if file.isDirectory {
-                    FolderIconView(url: file.url, size: 22)
-                } else {
-                    Image(nsImage: IconProvider.shared.icon(for: file.url, isDirectory: false))
-                        .resizable()
-                        .interpolation(.high)
-                        .frame(width: 22, height: 22)
-                }
-            } else {
-                Image(systemName: "questionmark.circle")
-                    .font(.system(size: 18))
-                    .foregroundColor(.secondary.opacity(0.5))
-                    .frame(width: 22, height: 22)
-            }
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(file.name)
-                    .font(.system(size: 14, weight: file.exists ? .regular : .regular))
-                    .foregroundColor(file.exists ? .primary : .secondary.opacity(0.5))
-                    .strikethrough(!file.exists)
-                    .lineLimit(1)
-
-                Text(file.parentPath)
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-
-            Spacer()
-
-            if isHovered {
-                Button(action: {
-                    tagManager.untagFile(file.url, color: color)
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Remove tag")
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-        .background(isHovered ? Color.gray.opacity(0.08) : Color.clear)
-        .contentShape(Rectangle())
-        .onHover { isHovered = $0 }
+        FileListRow(
+            url: file.url,
+            isDirectory: file.isDirectory,
+            exists: file.exists,
+            parentPath: file.parentPath,
+            isSelected: manager.selectedItem == file.url,
+            showRemove: true,
+            onRemove: { tagManager.untagFile(file.url, color: color) }
+        )
         .onTapGesture {
             guard file.exists else { return }
-            // Navigate to file's parent and select it
-            manager.currentPane = .browser
-            let parent = file.url.deletingLastPathComponent()
-            manager.navigateTo(parent)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                if let index = manager.allItems.firstIndex(where: { $0.url == file.url }) {
-                    manager.selectItem(at: index, url: file.url)
-                }
-            }
+            manager.listCursorIndex = index
+            manager.selectItem(at: -1, url: file.url)
         }
     }
 }

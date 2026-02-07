@@ -3,26 +3,18 @@ import AppKit
 
 struct MoviePreviewView: View {
     let folderURL: URL
-    @ObservedObject private var settings = AppSettings.shared
     @State private var movieInfo: MovieInfo?
     @State private var posterImage: NSImage?
     @State private var isLoading = true
-    @State private var loadFailed = false
     @State private var imdbInput: String = ""
     @State private var isLookingUp = false
-
-    private var hasAPIKey: Bool {
-        !settings.omdbAPIKey.trimmingCharacters(in: .whitespaces).isEmpty
-    }
 
     var body: some View {
         VStack(spacing: 0) {
             PreviewHeader(title: "Movie", icon: "film.fill", color: .orange)
             Divider()
 
-            if !hasAPIKey {
-                missingKeyView
-            } else if isLoading {
+            if isLoading {
                 VStack(spacing: 12) {
                     ProgressView()
                         .scaleEffect(0.8)
@@ -38,20 +30,16 @@ struct MoviePreviewView: View {
             }
         }
         .task(id: folderURL) {
-            guard hasAPIKey else { return }
             isLoading = true
-            loadFailed = false
             posterImage = nil
+            movieInfo = nil
 
             let info = await MovieManager.shared.getMovieInfo(for: folderURL)
             movieInfo = info
             isLoading = false
 
             if let info, info.posterURL != "N/A" {
-                let hiRes = info.posterURL.replacingOccurrences(of: "SX300", with: "SX800")
-                if let url = URL(string: hiRes) {
-                    await loadPoster(from: url)
-                }
+                await loadPoster(from: info.posterURL)
             }
         }
     }
@@ -82,8 +70,7 @@ struct MoviePreviewView: View {
                     .foregroundColor(.secondary)
                 HStack(spacing: 6) {
                     TextField("https://imdb.com/title/tt...", text: $imdbInput)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 12))
+                        .styledInput()
                         .onSubmit { lookupIMDB() }
                     Button(action: lookupIMDB) {
                         if isLookingUp {
@@ -112,54 +99,9 @@ struct MoviePreviewView: View {
             isLookingUp = false
             imdbInput = ""
             if let info, info.posterURL != "N/A" {
-                let hiRes = info.posterURL.replacingOccurrences(of: "SX300", with: "SX800")
-                if let url = URL(string: hiRes) {
-                    await loadPoster(from: url)
-                }
+                await loadPoster(from: info.posterURL)
             }
         }
-    }
-
-    private var missingKeyView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "key.fill")
-                .font(.system(size: 28))
-                .foregroundColor(.secondary)
-
-            Text("OMDB API key required")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.primary)
-
-            Text("Set your free API key in Settings to enable movie previews.")
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 16)
-
-            HStack(spacing: 12) {
-                if #available(macOS 14, *) {
-                    SettingsLink {
-                        Text("Open Settings")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                } else {
-                    Button("Open Settings") {
-                        NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                }
-
-                Button("Get free key") {
-                    if let url = URL(string: "https://www.omdbapi.com/apikey.aspx") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }
-                .controlSize(.small)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
@@ -199,29 +141,14 @@ struct MoviePreviewView: View {
                         }
                     }
 
-                    // Ratings row — clickable
+                    // IMDB rating + search links
                     HStack(spacing: 14) {
-                        // IMDB
                         if info.imdbRating != "N/A" {
                             ratingBadge(label: "IMDb", value: info.imdbRating, badgeColor: .yellow, textColor: .black, url: info.imdbURL)
                         }
 
-                        // Rotten Tomatoes
-                        if info.rottenTomatoesRating != "N/A" {
-                            ratingBadge(label: "RT", value: info.rottenTomatoesRating, badgeColor: .red, textColor: .white, url: info.rottenTomatoesURL)
-                        }
-
-                        // Metacritic
-                        if info.metacriticRating != "N/A" {
-                            let encodedTitle = info.title.addingPercentEncoding(
-                                withAllowedCharacters: .urlQueryAllowed
-                            ) ?? info.title
-                            ratingBadge(
-                                label: "MC", value: info.metacriticRating,
-                                badgeColor: .green, textColor: .white,
-                                url: "https://www.metacritic.com/search/\(encodedTitle)/"
-                            )
-                        }
+                        searchButton(label: "RT", color: .red, query: "site:rottentomatoes.com/m \(info.title) \(info.year)")
+                        searchButton(label: "MC", color: .green, query: "site:metacritic.com \(info.title) \(info.year)")
                     }
 
                     // Genre
@@ -318,7 +245,29 @@ struct MoviePreviewView: View {
         }
     }
 
-    private func loadPoster(from url: URL) async {
+    private func searchButton(label: String, color: Color, query: String) -> some View {
+        Button(action: {
+            let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+            if let url = URL(string: "https://duckduckgo.com/?q=\(encoded)") {
+                NSWorkspace.shared.open(url)
+            }
+        }) {
+            Text(label)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 3)
+                .background(color)
+                .cornerRadius(3)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+    }
+
+    private func loadPoster(from urlString: String) async {
+        guard let url = URL(string: urlString) else { return }
         let data: Data? = await Task.detached(priority: .utility) {
             guard let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
             return data

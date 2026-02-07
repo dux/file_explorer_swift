@@ -193,7 +193,7 @@ struct ImageResizeSheet: View {
 
                     HStack(spacing: 8) {
                         TextField("Width", text: $newWidth)
-                            .textFieldStyle(.roundedBorder)
+                            .styledInput()
                             .frame(width: 80)
                             .onChange(of: newWidth) { _ in
                                 if keepAspectRatio, let w = Double(newWidth) {
@@ -207,7 +207,7 @@ struct ImageResizeSheet: View {
                             .onTapGesture { keepAspectRatio.toggle() }
 
                         TextField("Height", text: $newHeight)
-                            .textFieldStyle(.roundedBorder)
+                            .styledInput()
                             .frame(width: 80)
                             .onChange(of: newHeight) { _ in
                                 if keepAspectRatio, let h = Double(newHeight) {

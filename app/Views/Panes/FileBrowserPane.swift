@@ -112,10 +112,10 @@ struct SearchResultsView: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(manager.searchResults) { item in
+                    ForEach(Array(manager.searchResults.enumerated()), id: \.element.id) { index, item in
                         SearchResultRow(
                             item: item,
-                            relativePath: relativePath(item.url),
+                            index: index,
                             manager: manager
                         )
                     }
@@ -127,64 +127,31 @@ struct SearchResultsView: View {
 
 struct SearchResultRow: View {
     let item: CachedFileInfo
-    let relativePath: String
+    let index: Int
     @ObservedObject var manager: FileExplorerManager
-    @State private var isHovered = false
+
+    private var parentPath: String {
+        let parent = item.url.deletingLastPathComponent().path
+        let base = manager.currentPath.path
+        if parent == base { return "" }
+        if parent.hasPrefix(base) {
+            let rel = String(parent.dropFirst(base.count))
+            return rel.hasPrefix("/") ? String(rel.dropFirst()) : rel
+        }
+        return parent
+    }
 
     var body: some View {
-        HStack(spacing: 6) {
-            if item.isDirectory {
-                FolderIconView(url: item.url, size: 22)
-            } else {
-                Image(nsImage: IconProvider.shared.icon(for: item.url, isDirectory: false))
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 22, height: 22)
-            }
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(item.name)
-                    .font(.system(size: 14))
-                    .lineLimit(1)
-                Text(relativePath)
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-
-            Spacer()
-
-            if manager.isInSelection(item.url) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(.green)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 5)
-        .background(
-            manager.selectedItem == item.url ? Color.accentColor :
-            isHovered ? Color.gray.opacity(0.1) : Color.clear
+        FileListRow(
+            url: item.url,
+            isDirectory: item.isDirectory,
+            exists: true,
+            parentPath: parentPath,
+            isSelected: manager.selectedItem == item.url
         )
-        .contentShape(Rectangle())
-        .onHover { isHovered = $0 }
         .onTapGesture {
-            if item.isDirectory {
-                manager.cancelSearch()
-                manager.navigateTo(item.url)
-            } else {
-                // Select file and navigate to its parent
-                let parent = item.url.deletingLastPathComponent()
-                manager.cancelSearch()
-                manager.navigateTo(parent)
-                // Select the file after navigation
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    if let index = manager.allItems.firstIndex(where: { $0.url == item.url }) {
-                        manager.selectItem(at: index, url: item.url)
-                    }
-                }
-            }
+            manager.listCursorIndex = index
+            manager.selectItem(at: -1, url: item.url)
         }
     }
 }
