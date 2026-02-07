@@ -26,7 +26,7 @@ struct iPhoneFile: Identifiable, Hashable {
         hasher.combine(path)
     }
 
-    static func == (lhs: iPhoneFile, rhs: iPhoneFile) -> Bool {
+    static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.path == rhs.path
     }
 }
@@ -136,7 +136,7 @@ class iPhoneManager: ObservableObject {
         lastError = nil
     }
 
-    private nonisolated func getDeviceNameSync(udid: String) -> String {
+    nonisolated private func getDeviceNameSync(udid: String) -> String {
         var device: idevice_t?
         var lockdown: lockdownd_client_t?
 

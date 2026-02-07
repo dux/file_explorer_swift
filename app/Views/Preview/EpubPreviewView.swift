@@ -30,7 +30,7 @@ struct EpubPreviewView: View {
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let htmlPath = htmlPath {
+            } else if let htmlPath {
                 EpubWebView(fileURL: htmlPath)
             }
         }

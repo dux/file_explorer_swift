@@ -252,7 +252,7 @@ class VideoPlayerManager: ObservableObject {
         // Add time observer
         timeObserver = player?.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { [weak self] time in
             Task { @MainActor in
-                guard let self = self, !self.isSeeking else { return }
+                guard let self, !self.isSeeking else { return }
                 self.currentTime = CMTimeGetSeconds(time)
             }
         }
@@ -268,7 +268,7 @@ class VideoPlayerManager: ObservableObject {
     }
 
     func togglePlayPause() {
-        guard let player = player else { return }
+        guard let player else { return }
 
         if isPlaying {
             player.pause()

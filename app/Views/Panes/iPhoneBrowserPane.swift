@@ -39,7 +39,7 @@ struct iPhoneBrowserPane: View {
     private func loadPreview(for file: iPhoneFile?) async {
         previewURL = nil
 
-        guard let file = file, !file.isDirectory else { return }
+        guard let file, !file.isDirectory else { return }
 
         // Check if file type is previewable
         let ext = (file.name as NSString).pathExtension.lowercased()
@@ -531,7 +531,7 @@ struct iPhoneBreadcrumbView: View {
     var body: some View {
         HStack(spacing: 4) {
             // Back to local files button (only if manager available)
-            if let manager = manager {
+            if let manager {
                 Button(action: {
                     deviceManager.currentDevice = nil
                     manager.currentPane = .browser
@@ -923,7 +923,7 @@ struct iPhoneFileRow: View {
     }
 
     private func formatDate(_ date: Date?) -> String {
-        guard let date = date else { return "--" }
+        guard let date else { return "--" }
 
         let now = Date()
         let interval = now.timeIntervalSince(date)

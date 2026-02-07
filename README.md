@@ -2,19 +2,21 @@
 
 Native macOS Finder replacement built with Swift and SwiftUI. Fast, keyboard-driven, with rich file previews and iPhone file management.
 
+[Demo page](https://dux.github.io/file_explorer_swift/web-demo/)
+
 ## Install
 
 ```
 curl -fsSL https://raw.githubusercontent.com/dux/file_explorer_swift/main/install.sh?v=7e11ef4 | bash
 ```
 
-![PLain](assets/plain.png)
+![PLain](web-demo/assets/plain.png)
 
-![File preview](assets/file-preview.png)
+![File preview](web-demo/assets/file-preview.png)
 
-![Movie info](assets/movie.jpg)
+![Movie info](web-demo/assets/movie.jpg)
 
-![Install](assets/install.png)
+![Install](web-demo/assets/install.png)
 
 ## Features
 

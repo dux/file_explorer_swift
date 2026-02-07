@@ -286,7 +286,7 @@ class KeyCaptureView: NSView {
     override var acceptsFirstResponder: Bool { true }
 
     override func keyDown(with event: NSEvent) {
-        guard let manager = manager else {
+        guard let manager else {
             super.keyDown(with: event)
             return
         }
@@ -731,8 +731,6 @@ struct NewFolderDialog: View {
         .frame(width: 300)
     }
 }
-
-
 
 struct TableHeaderView: View {
     var showModified: Bool = true

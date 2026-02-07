@@ -24,7 +24,7 @@ if ! command -v brew &>/dev/null; then
 fi
 
 # install dependencies one by one
-for pkg in libimobiledevice fd ffmpeg; do
+for pkg in libimobiledevice fd ffmpeg duti; do
   brew list "$pkg" &>/dev/null || brew install "$pkg"
 done
 
@@ -43,4 +43,11 @@ cp -R "$TMP_DIR/$APP_NAME.app" "$INSTALL_DIR/"
 rm -rf "$TMP_DIR"
 
 info "Installed to $INSTALL_DIR/$APP_NAME.app"
+
+# set as default folder handler
+if command -v duti &>/dev/null; then
+  info "Setting as default folder handler..."
+  duti -s com.dux.file-explorer public.folder all
+fi
+
 open "$INSTALL_DIR/$APP_NAME.app"

@@ -179,7 +179,8 @@ struct iPhoneActionsPane: View {
         panel.prompt = "Download Here"
         panel.message = "Choose destination folder for \(file.name)"
 
-        let response = await panel.beginSheetModal(for: NSApp.keyWindow!)
+        guard let keyWindow = NSApp.keyWindow else { return }
+        let response = await panel.beginSheetModal(for: keyWindow)
         guard response == .OK, let url = panel.url else { return }
 
         let destinationPath = url.appendingPathComponent(file.name)

@@ -295,7 +295,7 @@ class AudioPlayerManager: ObservableObject {
     }
 
     func togglePlayPause() {
-        guard let player = player else { return }
+        guard let player else { return }
 
         if isPlaying {
             player.pause()
@@ -319,14 +319,14 @@ class AudioPlayerManager: ObservableObject {
     }
 
     func skipForward() {
-        guard let player = player else { return }
+        guard let player else { return }
         let newTime = min(player.currentTime + 10, player.duration)
         player.currentTime = newTime
         currentTime = newTime
     }
 
     func skipBackward() {
-        guard let player = player else { return }
+        guard let player else { return }
         let newTime = max(player.currentTime - 10, 0)
         player.currentTime = newTime
         currentTime = newTime
@@ -335,7 +335,7 @@ class AudioPlayerManager: ObservableObject {
     private func startTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self = self, let player = self.player else { return }
+                guard let self, let player = self.player else { return }
                 self.currentTime = player.currentTime
 
                 // Check if playback finished

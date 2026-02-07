@@ -64,7 +64,7 @@ struct ShortcutsView: View {
                 .padding(.vertical, 4)
             }
         }
-        .background(Color(red: 0xfa/255.0, green: 0xf9/255.0, blue: 0xf5/255.0))
+        .background(Color(red: 0xfa / 255.0, green: 0xf9 / 255.0, blue: 0xf5 / 255.0))
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers: providers)
             return true
@@ -73,7 +73,7 @@ struct ShortcutsView: View {
 
     private func handleDrop(providers: [NSItemProvider]) {
         for provider in providers {
-            provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, error in
+            provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
                 guard let data = item as? Data,
                       let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
 
@@ -121,7 +121,6 @@ func formatPath(_ path: String, full: Bool) -> String {
     }
     return path
 }
-
 
 struct ShortcutRow: View {
     let item: ShortcutItem
@@ -541,4 +540,3 @@ struct ColorTagBox: View {
         }
     }
 }
-

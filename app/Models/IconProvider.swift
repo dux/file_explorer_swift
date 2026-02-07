@@ -206,7 +206,7 @@ final class IconProvider {
         "gitmodules": "git",
 
         // Log
-        "log": "log",
+        "log": "log"
     ]
 
     // Filename (lowercase) to icon name
@@ -259,7 +259,7 @@ final class IconProvider {
         "postcss.config.mjs": "postcss",
         "vite.config.ts": "config",
         "vite.config.js": "config",
-        "prisma": "prisma",
+        "prisma": "prisma"
     ]
 
     // MARK: - Public API
@@ -364,7 +364,7 @@ final class IconProvider {
         }
 
         // Replace all stroke/fill colors with white
-        let colorPattern = try! NSRegularExpression(pattern: "#[0-9a-fA-F]{6}")
+        guard let colorPattern = try? NSRegularExpression(pattern: "#[0-9a-fA-F]{6}") else { return nil }
         svgString = colorPattern.stringByReplacingMatches(
             in: svgString,
             range: NSRange(svgString.startIndex..., in: svgString),

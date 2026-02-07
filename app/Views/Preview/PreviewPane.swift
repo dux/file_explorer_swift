@@ -16,7 +16,7 @@ enum PreviewType {
     case dmg
     case none
 
-    static func detect(for url: URL) -> PreviewType {
+    static func detect(for url: URL) -> Self {
         let ext = url.pathExtension.lowercased()
         let filename = url.lastPathComponent.lowercased()
 
@@ -145,7 +145,7 @@ struct PreviewPane: View {
         case .makefile:
             MakefilePreviewView(url: url)
         case .archive:
-            if let manager = manager {
+            if let manager {
                 ArchivePreviewView(url: url, manager: manager)
             } else {
                 ArchivePreviewView(url: url, manager: FileExplorerManager())

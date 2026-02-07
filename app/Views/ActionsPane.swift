@@ -294,7 +294,7 @@ struct ActionsPane: View {
                 }
 
                 if !preferredApps.isEmpty {
-                    ForEach(Array(preferredApps.enumerated()), id: \.element.url.path) { idx, app in
+                    ForEach(Array(preferredApps.enumerated()), id: \.element.url.path) { _, app in
                         let appIdx = paneItems.firstIndex(where: { $0.id == "app-\(app.url.path)" }) ?? -1
                         PreferredAppButton(
                             icon: app.icon,

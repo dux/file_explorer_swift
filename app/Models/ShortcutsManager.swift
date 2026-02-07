@@ -19,6 +19,14 @@ class ShortcutsManager: ObservableObject {
         loadCustomFolders()
     }
 
+    /// Test-only initializer with custom config path
+    internal init(configDir: URL) {
+        configDirectory = configDir
+        foldersFile = configDir.appendingPathComponent("folders.txt")
+        createConfigDirectoryIfNeeded()
+        loadCustomFolders()
+    }
+
     private func migrateOldConfig() {
         let oldDir = fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".dux-file-explorer")
         let oldFile = oldDir.appendingPathComponent("folders.txt")

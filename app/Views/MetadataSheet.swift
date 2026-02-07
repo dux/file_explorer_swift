@@ -112,7 +112,7 @@ nonisolated func readExifMetadata(from url: URL) -> [(key: String, value: String
             if exposure >= 1 {
                 result.append((key: "Exposure", value: String(format: "%.1f sec", exposure)))
             } else {
-                result.append((key: "Exposure", value: "1/\(Int(1/exposure)) sec"))
+                result.append((key: "Exposure", value: "1/\(Int(1 / exposure)) sec"))
             }
         }
 
@@ -253,7 +253,7 @@ private func parseOfficeXML(_ xml: String) -> [(key: String, value: String)] {
         ("cp:category", "Category"),
         ("dcterms:created", "Created"),
         ("dcterms:modified", "Modified"),
-        ("cp:revision", "Revision"),
+        ("cp:revision", "Revision")
     ]
 
     for (tag, label) in mappings {
@@ -283,7 +283,7 @@ private func parseAppXML(_ xml: String) -> [(key: String, value: String)] {
         ("Characters", "Characters"),
         ("Paragraphs", "Paragraphs"),
         ("Slides", "Slides"),
-        ("Notes", "Notes"),
+        ("Notes", "Notes")
     ]
 
     for (tag, label) in mappings {
@@ -317,7 +317,7 @@ private func parseMdlsOutput(_ output: String) -> [(key: String, value: String)]
         "kMDItemKeywords": "Keywords",
         "kMDItemNumberOfPages": "Pages",
         "kMDItemContentCreationDate": "Created",
-        "kMDItemContentModificationDate": "Modified",
+        "kMDItemContentModificationDate": "Modified"
     ]
 
     for line in lines {

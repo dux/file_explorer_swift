@@ -37,7 +37,7 @@ struct FileItem: Identifiable, Hashable {
     }
 
     // Create from local URL
-    static func fromLocal(_ url: URL) -> FileItem? {
+    static func fromLocal(_ url: URL) -> Self? {
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else { return nil }
 
@@ -49,7 +49,7 @@ struct FileItem: Identifiable, Hashable {
             modDate = attrs[.modificationDate] as? Date
         }
 
-        return FileItem(
+        return Self(
             id: url.path,
             name: url.lastPathComponent,
             path: url.path,
@@ -61,8 +61,8 @@ struct FileItem: Identifiable, Hashable {
     }
 
     // Create from iPhone file
-    static func fromIPhone(_ file: iPhoneFile, deviceId: String, appId: String, appName: String) -> FileItem {
-        return FileItem(
+    static func fromIPhone(_ file: iPhoneFile, deviceId: String, appId: String, appName: String) -> Self {
+        return Self(
             id: "iphone:\(deviceId):\(appId):\(file.path)",
             name: file.name,
             path: file.path,
@@ -77,7 +77,7 @@ struct FileItem: Identifiable, Hashable {
         hasher.combine(id)
     }
 
-    static func == (lhs: FileItem, rhs: FileItem) -> Bool {
+    static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.id == rhs.id
     }
 }

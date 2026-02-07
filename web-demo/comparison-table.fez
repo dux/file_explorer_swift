@@ -1,0 +1,102 @@
+<script>
+  class {
+    FAST = true
+
+    init() {
+      this.state.rows = [
+        { feature: 'Tree view with ancestors', finder: false, fe: true },
+        { feature: 'Full keyboard navigation', finder: false, fe: true },
+        { feature: 'Code syntax highlighting', finder: false, fe: true },
+        { feature: 'JSON tree viewer', finder: false, fe: true },
+        { feature: 'Archive browsing', finder: false, fe: true },
+        { feature: 'Audio/video trim', finder: false, fe: true },
+        { feature: 'EPUB/comic reader', finder: false, fe: true },
+        { feature: 'Movie info from OMDB', finder: false, fe: true },
+        { feature: 'Image resize/crop/convert', finder: false, fe: true },
+        { feature: 'iPhone file management', finder: false, fe: true },
+        { feature: 'App uninstaller', finder: false, fe: true },
+        { feature: 'Custom folder emoji icons', finder: false, fe: true },
+        { feature: 'Inline preview pane', finder: false, fe: true },
+        { feature: 'Color tags per file', finder: true, fe: true },
+        { feature: 'Multi-file batch operations', finder: true, fe: true },
+        { feature: 'Fast recursive search', finder: true, fe: true }
+      ]
+    }
+  }
+</script>
+
+<style>
+  :fez {
+    display: block;
+    overflow-x: auto;
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    thead {
+      th {
+        padding: 12px 16px;
+        text-align: left;
+        font-weight: 600;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b7280;
+        border-bottom: 2px solid #e5e7eb;
+
+        &:not(:first-child) {
+          text-align: center;
+        }
+      }
+    }
+
+    tbody {
+      tr {
+        border-bottom: 1px solid #f3f4f6;
+
+        &:hover {
+          background: #f9fafb;
+        }
+      }
+
+      td {
+        padding: 10px 16px;
+
+        &:not(:first-child) {
+          text-align: center;
+          font-size: 16px;
+        }
+      }
+    }
+
+    .yes {
+      color: #10b981;
+    }
+
+    .no {
+      color: #d1d5db;
+    }
+  }
+</style>
+
+<table>
+  <thead>
+    <tr>
+      <th>Feature</th>
+      <th>Finder</th>
+      <th>FileExplorer</th>
+    </tr>
+  </thead>
+  <tbody>
+    {#each state.rows as row}
+    <tr>
+      <td>{row.feature}</td>
+      <td class={row.finder ? 'yes' : 'no'}>{row.finder ? '\u2713' : '\u2717'}</td>
+      <td class="yes">{'\u2713'}</td>
+    </tr>
+    {/each}
+  </tbody>
+</table>

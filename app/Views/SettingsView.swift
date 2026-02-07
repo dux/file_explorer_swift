@@ -40,6 +40,24 @@ struct GeneralSettingsView: View {
                 }
 
                 Toggle("Show preview pane", isOn: $settings.showPreviewPane)
+
+                Toggle("Default folder app", isOn: Binding(
+                    get: { settings.defaultFolderHandler },
+                    set: { newValue in
+                        settings.defaultFolderHandler = newValue
+                        applyDefaultFolderHandler(newValue)
+                    }
+                ))
+                if hasDuti {
+                    let bundleID = settings.defaultFolderHandler ? "com.dux.file-explorer" : "com.apple.finder"
+                    Text("duti -s \(bundleID) public.folder all")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("Requires duti: brew install duti")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
             }
 
             Section {
@@ -58,6 +76,27 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .padding(10)
+    }
+
+    private var hasDuti: Bool {
+        findDuti() != nil
+    }
+
+    private func findDuti() -> String? {
+        for dir in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"] {
+            let path = "\(dir)/duti"
+            if FileManager.default.fileExists(atPath: path) { return path }
+        }
+        return nil
+    }
+
+    private func applyDefaultFolderHandler(_ enable: Bool) {
+        guard let dutiPath = findDuti() else { return }
+        let bundleID = enable ? "com.dux.file-explorer" : "com.apple.finder"
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: dutiPath)
+        process.arguments = ["-s", bundleID, "public.folder", "all"]
+        try? process.run()
     }
 }
 

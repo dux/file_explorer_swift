@@ -505,7 +505,12 @@ struct SelectedFilesView: View {
                 }
             }
         } message: {
-            Text("Are you sure you want to \(isPermanentDelete ? "permanently delete" : "move to trash") \(localItems.count) file\(localItems.count == 1 ? "" : "s")?\(isPermanentDelete ? " This cannot be undone." : "")")
+            Text({
+                let action = isPermanentDelete ? "permanently delete" : "move to trash"
+                let suffix = localItems.count == 1 ? "" : "s"
+                let warning = isPermanentDelete ? " This cannot be undone." : ""
+                return "Are you sure you want to \(action) \(localItems.count) file\(suffix)?\(warning)"
+            }())
         }
     }
 

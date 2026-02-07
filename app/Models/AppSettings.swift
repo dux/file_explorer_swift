@@ -57,6 +57,11 @@ class AppSettings: ObservableObject {
         didSet { saveAsync() }
     }
 
+    // Default folder handler (use this app instead of Finder)
+    @Published var defaultFolderHandler: Bool {
+        didSet { saveAsync() }
+    }
+
     // OMDB API key for movie preview
     @Published var omdbAPIKey: String {
         didSet { saveAsync() }
@@ -77,6 +82,7 @@ class AppSettings: ObservableObject {
         windowWidth = nil
         windowHeight = nil
         preferredApps = [:]
+        defaultFolderHandler = false
         omdbAPIKey = ""
 
         // Migrate from old config path
@@ -153,6 +159,9 @@ class AppSettings: ObservableObject {
         if let h = json["windowHeight"] as? CGFloat {
             windowHeight = h
         }
+        if let folderHandler = json["defaultFolderHandler"] as? Bool {
+            defaultFolderHandler = folderHandler
+        }
         if let key = json["omdbAPIKey"] as? String {
             omdbAPIKey = key
         }
@@ -178,6 +187,7 @@ class AppSettings: ObservableObject {
             winW: windowWidth,
             winH: windowHeight,
             apps: preferredApps,
+            folderHandler: defaultFolderHandler,
             omdbKey: omdbAPIKey
         )
 
@@ -202,10 +212,11 @@ class AppSettings: ObservableObject {
         let winW: CGFloat?
         let winH: CGFloat?
         let apps: [String: [String]]
+        let folderHandler: Bool
         let omdbKey: String
     }
 
-    private nonisolated static func writeToDisk(_ s: SettingsSnapshot) {
+    nonisolated private static func writeToDisk(_ s: SettingsSnapshot) {
         try? FileManager.default.createDirectory(at: s.configDir, withIntermediateDirectories: true)
 
         var json: [String: Any] = [
@@ -223,6 +234,7 @@ class AppSettings: ObservableObject {
         if let w = s.winW { json["windowWidth"] = w }
         if let h = s.winH { json["windowHeight"] = h }
 
+        json["defaultFolderHandler"] = s.folderHandler
         json["omdbAPIKey"] = s.omdbKey
 
         if let data = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted) {

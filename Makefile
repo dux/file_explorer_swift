@@ -1,4 +1,4 @@
-.PHONY: help all clean build run app install watch gh-pub
+.PHONY: help all clean build run app install watch gh-pub lint test demo
 
 APP_NAME = FileExplorerByDux
 
@@ -15,6 +15,9 @@ help:
 	@echo "  make install      - Install to /Applications"
 	@echo "  make run          - Run the installed app"
 	@echo "  make clean        - Remove build artifacts"
+	@echo "  make lint         - Run SwiftLint"
+	@echo "  make test         - Run tests"
+	@echo "  make demo         - Start web server and open demo page"
 	@echo "  make gh-pub       - Build release, tag and publish to GitHub"
 	@echo "  make help         - Show this help message"
 	@echo ""
@@ -25,7 +28,7 @@ clean:
 	@rm -rf .build
 	@echo "Clean complete"
 
-build:
+build: lint
 	@echo "Building $(APP_NAME)..."
 	@swift build
 	@echo "Creating app bundle..."
@@ -64,6 +67,17 @@ gh-pub: build
 		--latest; \
 	rm -f $(APP_NAME).app.tar.gz; \
 	echo "Published"
+
+lint:
+	@swiftlint lint --quiet
+
+test:
+	@swift test
+
+demo:
+	@echo "Starting web server for demo..."
+	@open http://localhost:8000/web-demo/
+	@python3 -m http.server 8000
 
 watch:
 	@echo "Watching for Swift file changes..."

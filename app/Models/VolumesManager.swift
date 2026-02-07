@@ -60,7 +60,7 @@ class VolumesManager: ObservableObject {
             .volumeIsEjectableKey,
             .volumeTotalCapacityKey,
             .volumeAvailableCapacityKey,
-            .volumeURLForRemountingKey,
+            .volumeURLForRemountingKey
         ]
 
         guard let urls = FileManager.default.mountedVolumeURLs(

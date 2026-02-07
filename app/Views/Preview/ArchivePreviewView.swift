@@ -184,7 +184,7 @@ struct ArchivePreviewView: View {
             var inFileList = false
             for line in lines {
                 if line.contains("--------") {
-                    inFileList = !inFileList
+                    inFileList.toggle()
                     continue
                 }
                 if inFileList && !line.isEmpty {

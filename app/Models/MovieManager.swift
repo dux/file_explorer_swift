@@ -105,7 +105,7 @@ class MovieManager {
         return nil
     }
 
-    private nonisolated static func cleanTitle(_ raw: String) -> String {
+    nonisolated private static func cleanTitle(_ raw: String) -> String {
         var title = raw
         // Replace dots, underscores with spaces
         title = title.replacingOccurrences(of: ".", with: " ")
@@ -129,7 +129,7 @@ class MovieManager {
     }
 
     // Cache file name: .fe-FILENAME.json for files, .fe-movie.json for folders
-    private nonisolated static func cacheFileURL(for url: URL, isDir: Bool) -> URL {
+    nonisolated private static func cacheFileURL(for url: URL, isDir: Bool) -> URL {
         if isDir {
             return url.appendingPathComponent(".fe-movie.json")
         } else {
@@ -183,7 +183,7 @@ class MovieManager {
 
         let task = Task.detached(priority: .utility) {
             let info = await Self.fetchFromOMDB(title: title, year: year, apiKey: apiKey)
-            if let info = info {
+            if let info {
                 Self.saveCache(info, to: cf)
             }
             return info
@@ -195,7 +195,7 @@ class MovieManager {
         return result
     }
 
-    private nonisolated static func loadCache(from url: URL) -> MovieInfo? {
+    nonisolated private static func loadCache(from url: URL) -> MovieInfo? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         if let info = try? JSONDecoder().decode(MovieInfo.self, from: data) {
             return info
@@ -205,14 +205,14 @@ class MovieManager {
         return nil
     }
 
-    private nonisolated static func saveCache(_ info: MovieInfo, to url: URL) {
+    nonisolated private static func saveCache(_ info: MovieInfo, to url: URL) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(info) else { return }
         try? data.write(to: url, options: .atomic)
     }
 
-    private nonisolated static func fetchFromOMDB(title: String, year: String, apiKey: String) async -> MovieInfo? {
+    nonisolated private static func fetchFromOMDB(title: String, year: String, apiKey: String) async -> MovieInfo? {
         guard let encodedTitle = title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
             return nil
         }
@@ -242,7 +242,57 @@ class MovieManager {
         }
     }
 
-    private nonisolated static func fetchFromOMDB(titleOnly title: String, apiKey: String) async -> MovieInfo? {
+    nonisolated private static func fetchFromOMDB(imdbID: String, apiKey: String) async -> MovieInfo? {
+        let urlString = "https://www.omdbapi.com/?i=\(imdbID)&plot=short&apikey=\(apiKey)"
+        guard let url = URL(string: urlString) else { return nil }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return nil
+            }
+            if let responseStr = json["Response"] as? String, responseStr == "False" {
+                return nil
+            }
+            return parseOMDBResponse(json)
+        } catch {
+            return nil
+        }
+    }
+
+    // Extract IMDB ID from URL like https://www.imdb.com/title/tt0133093/
+    nonisolated static func extractIMDBID(from input: String) -> String? {
+        let pattern = /tt\d{7,}/
+        if let match = try? pattern.firstMatch(in: input) {
+            return String(match.0)
+        }
+        return nil
+    }
+
+    // Fetch movie info by IMDB ID and cache it for the given folder/file URL
+    func getMovieInfoByIMDB(id imdbID: String, for url: URL) async -> MovieInfo? {
+        let apiKey = omdbKey
+        guard !apiKey.isEmpty else { return nil }
+
+        var isDir: ObjCBool = false
+        FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+        let cacheFile = Self.cacheFileURL(for: url, isDir: isDir.boolValue)
+        let cf = cacheFile
+
+        let info = await Task.detached(priority: .utility) {
+            await Self.fetchFromOMDB(imdbID: imdbID, apiKey: apiKey)
+        }.value
+
+        if let info {
+            let cacheDest = cf
+            Task.detached(priority: .utility) {
+                Self.saveCache(info, to: cacheDest)
+            }
+        }
+        return info
+    }
+
+    nonisolated private static func fetchFromOMDB(titleOnly title: String, apiKey: String) async -> MovieInfo? {
         guard let encodedTitle = title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
             return nil
         }
@@ -264,7 +314,7 @@ class MovieManager {
         }
     }
 
-    private nonisolated static func parseOMDBResponse(_ json: [String: Any]) -> MovieInfo? {
+    nonisolated private static func parseOMDBResponse(_ json: [String: Any]) -> MovieInfo? {
         guard let title = json["Title"] as? String,
               let imdbID = json["imdbID"] as? String else {
             return nil

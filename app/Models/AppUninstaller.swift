@@ -39,7 +39,7 @@ struct AppUninstaller {
                 ("WebKit", bid),
                 ("Saved Application State", "\(bid).savedState"),
                 ("Containers", bid),
-                ("Logs", bid),
+                ("Logs", bid)
             ]
 
             for (subdir, name) in bundleIdLocations {
@@ -58,7 +58,7 @@ struct AppUninstaller {
         // Search by app name
         let nameLocations = [
             "Application Support",
-            "Caches",
+            "Caches"
         ]
         for subdir in nameLocations {
             addIfExists(library.appendingPathComponent(subdir).appendingPathComponent(appName))

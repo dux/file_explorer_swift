@@ -99,8 +99,6 @@ class FileExplorerManager: ObservableObject {
         directories + files
     }
 
-
-
     init() {
         // Use initial path from command line argument if provided
         if let initialPath = FileExplorerApp.initialPath {
@@ -116,6 +114,47 @@ class FileExplorerManager: ObservableObject {
         loadContents()
         history.append(currentPath)
         historyIndex = 0
+
+        // If a file was passed, select it
+        if let initialFile = FileExplorerApp.initialFile {
+            selectedItem = initialFile
+            if let index = allItems.firstIndex(where: { $0.url.path == initialFile.path }) {
+                selectedIndex = index
+            }
+            FileExplorerApp.initialFile = nil
+        }
+
+        // Listen for open requests (when app is already running)
+        NotificationCenter.default.addObserver(
+            forName: .openPathRequest,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self, let url = notification.object as? URL else { return }
+            Task { @MainActor in
+                self.handleOpenRequest(url)
+            }
+        }
+    }
+
+    func handleOpenRequest(_ url: URL) {
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) else { return }
+
+        if isDirectory.boolValue {
+            navigateTo(url)
+        } else {
+            // Navigate to parent, then select the file
+            let parent = url.deletingLastPathComponent()
+            navigateTo(parent)
+            selectedItem = url
+            if let index = allItems.firstIndex(where: { $0.url.path == url.path }) {
+                selectedIndex = index
+            }
+        }
+
+        // Bring window to front
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 
     func loadContents() {
@@ -161,7 +200,7 @@ class FileExplorerManager: ObservableObject {
             directories = sortItems(dirs)
             files = sortItems(fils)
             hiddenCount = hiddenSkipped
-            hasImages = fils.contains { FileExplorerManager.imageExtensions.contains($0.url.pathExtension.lowercased()) }
+            hasImages = fils.contains { Self.imageExtensions.contains($0.url.pathExtension.lowercased()) }
 
             selectedIndex = -1
             selectedItem = nil

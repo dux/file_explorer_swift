@@ -313,7 +313,7 @@ class AppSelectorKeyView: NSView {
         super.viewDidMoveToWindow()
         if window != nil && monitor == nil {
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                if let self = self, let handler = self.handler {
+                if let self, let handler = self.handler {
                     if handler.handleKey(event) {
                         return nil
                     }

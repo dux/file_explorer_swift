@@ -21,7 +21,7 @@ struct ComicPreviewView: View {
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let error = error {
+            } else if let error {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.system(size: 32))
@@ -82,7 +82,7 @@ struct ComicPageView: View {
 
     var body: some View {
         Group {
-            if let image = image {
+            if let image {
                 let aspect = image.size.height / max(image.size.width, 1)
                 Image(nsImage: image)
                     .resizable()
@@ -100,7 +100,7 @@ struct ComicPageView: View {
             let data = await Task.detached(priority: .userInitiated) {
                 try? Data(contentsOf: pageURL)
             }.value
-            if let data = data {
+            if let data {
                 image = NSImage(data: data)
             }
         }

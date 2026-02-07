@@ -355,7 +355,8 @@ struct DMGPreviewView: View {
 
     private func mountDMG() async {
         let dmgURL = url
-        let mountId = dmgURL.path.data(using: .utf8)!.base64EncodedString()
+        guard let pathData = dmgURL.path.data(using: .utf8) else { return }
+        let mountId = pathData.base64EncodedString()
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "+", with: "-")
             .prefix(32)

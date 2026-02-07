@@ -8,6 +8,8 @@ struct MoviePreviewView: View {
     @State private var posterImage: NSImage?
     @State private var isLoading = true
     @State private var loadFailed = false
+    @State private var imdbInput: String = ""
+    @State private var isLookingUp = false
 
     private var hasAPIKey: Bool {
         !settings.omdbAPIKey.trimmingCharacters(in: .whitespaces).isEmpty
@@ -32,15 +34,7 @@ struct MoviePreviewView: View {
             } else if let info = movieInfo {
                 movieContent(info)
             } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "film")
-                        .font(.system(size: 32))
-                        .foregroundColor(.secondary)
-                    Text("Movie not found")
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                notFoundView
             }
         }
         .task(id: folderURL) {
@@ -53,7 +47,71 @@ struct MoviePreviewView: View {
             movieInfo = info
             isLoading = false
 
-            if let info = info, info.posterURL != "N/A" {
+            if let info, info.posterURL != "N/A" {
+                let hiRes = info.posterURL.replacingOccurrences(of: "SX300", with: "SX800")
+                if let url = URL(string: hiRes) {
+                    await loadPoster(from: url)
+                }
+            }
+        }
+    }
+
+    private var notFoundView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "film")
+                .font(.system(size: 32))
+                .foregroundColor(.secondary)
+            Text("Movie not found")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+
+            Button("Search IMDB") {
+                let name = folderURL.lastPathComponent
+                let detected = MovieManager.detectMovie(folderName: name)
+                let query = detected.map { "\($0.title) \($0.year)" } ?? name
+                let encoded = "imdb \(query)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+                if let url = URL(string: "https://www.google.com/search?q=\(encoded)") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            .controlSize(.small)
+
+            VStack(spacing: 8) {
+                Text("Paste IMDB URL")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                HStack(spacing: 6) {
+                    TextField("https://imdb.com/title/tt...", text: $imdbInput)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 12))
+                        .onSubmit { lookupIMDB() }
+                    Button(action: lookupIMDB) {
+                        if isLookingUp {
+                            ProgressView()
+                                .scaleEffect(0.5)
+                                .frame(width: 14, height: 14)
+                        } else {
+                            Image(systemName: "arrow.right.circle.fill")
+                        }
+                    }
+                    .disabled(imdbInput.isEmpty || isLookingUp)
+                    .buttonStyle(.borderless)
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func lookupIMDB() {
+        guard let imdbID = MovieManager.extractIMDBID(from: imdbInput) else { return }
+        isLookingUp = true
+        Task {
+            let info = await MovieManager.shared.getMovieInfoByIMDB(id: imdbID, for: folderURL)
+            movieInfo = info
+            isLookingUp = false
+            imdbInput = ""
+            if let info, info.posterURL != "N/A" {
                 let hiRes = info.posterURL.replacingOccurrences(of: "SX300", with: "SX800")
                 if let url = URL(string: hiRes) {
                     await loadPoster(from: url)
@@ -79,11 +137,19 @@ struct MoviePreviewView: View {
                 .padding(.horizontal, 16)
 
             HStack(spacing: 12) {
-                Button("Open Settings") {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                if #available(macOS 14, *) {
+                    SettingsLink {
+                        Text("Open Settings")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                } else {
+                    Button("Open Settings") {
+                        NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
 
                 Button("Get free key") {
                     if let url = URL(string: "https://www.omdbapi.com/apikey.aspx") {
@@ -147,7 +213,14 @@ struct MoviePreviewView: View {
 
                         // Metacritic
                         if info.metacriticRating != "N/A" {
-                            ratingBadge(label: "MC", value: info.metacriticRating, badgeColor: .green, textColor: .white, url: "https://www.metacritic.com/search/\(info.title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? info.title)/")
+                            let encodedTitle = info.title.addingPercentEncoding(
+                                withAllowedCharacters: .urlQueryAllowed
+                            ) ?? info.title
+                            ratingBadge(
+                                label: "MC", value: info.metacriticRating,
+                                badgeColor: .green, textColor: .white,
+                                url: "https://www.metacritic.com/search/\(encodedTitle)/"
+                            )
                         }
                     }
 

@@ -91,7 +91,6 @@ struct FileTableRow: View {
     @State private var showingDetails = false
     @State private var lastClickTime: Date = .distantPast
 
-
     private var url: URL { fileInfo.url }
     private var isDirectory: Bool { fileInfo.isDirectory }
 

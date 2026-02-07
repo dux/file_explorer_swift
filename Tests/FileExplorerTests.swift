@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Testing
 import Foundation
 @testable import FileExplorer
@@ -50,11 +51,17 @@ struct EnumTests {
 
     @Test("MainPaneType equality")
     func mainPaneTypeEquality() {
-        #expect(MainPaneType.browser == MainPaneType.browser)
-        #expect(MainPaneType.iphone == MainPaneType.iphone)
-        #expect(MainPaneType.colorTag(.red) == MainPaneType.colorTag(.red))
-        #expect(MainPaneType.colorTag(.red) != MainPaneType.colorTag(.blue))
-        #expect(MainPaneType.browser != MainPaneType.selection)
+        let browser1 = MainPaneType.browser
+        let browser2 = MainPaneType.browser
+        let iphone1 = MainPaneType.iphone
+        let iphone2 = MainPaneType.iphone
+        #expect(browser1 == browser2)
+        #expect(iphone1 == iphone2)
+        let tagRed1 = MainPaneType.colorTag(.red)
+        let tagRed2 = MainPaneType.colorTag(.red)
+        #expect(tagRed1 == tagRed2)
+        #expect(tagRed1 != MainPaneType.colorTag(.blue))
+        #expect(browser1 != MainPaneType.selection)
     }
 
     @Test("TagColor has all four cases")
@@ -197,7 +204,7 @@ struct SelectionManagerTests {
         #expect(sel.count == 1)
         #expect(sel.contains(item))
         sel.remove(item)
-        #expect(sel.count == 0)
+        #expect(sel.isEmpty)
         #expect(!sel.contains(item))
     }
 
@@ -209,7 +216,7 @@ struct SelectionManagerTests {
         sel.add(makeLocalItem("b", path: "/tmp/b"))
         #expect(sel.count == 2)
         sel.clear()
-        #expect(sel.count == 0)
+        #expect(sel.isEmpty)
     }
 
     @Test("toggle adds then removes")
@@ -250,7 +257,7 @@ struct SelectionManagerTests {
         sel.clear()
         sel.add(makeLocalItem("x", path: "/tmp/x"))
         sel.removeByPath("/tmp/x")
-        #expect(sel.count == 0)
+        #expect(sel.isEmpty)
     }
 }
 
@@ -397,7 +404,7 @@ struct AppUninstallerTests {
         let safari = URL(fileURLWithPath: "/Applications/Safari.app")
         let paths = AppUninstaller.findAppData(for: safari)
         // Safari should have at least some data dirs (Caches, Preferences, etc.)
-        #expect(paths.count > 0)
+        #expect(!paths.isEmpty)
     }
 }
 
@@ -699,7 +706,7 @@ struct ColorTagManagerTests {
 
         mgr.remove(url, color: .orange)
         #expect(mgr.count(for: .orange) == 0)
-        #expect(mgr.list(.orange).count == 0)
+        #expect(mgr.list(.orange).isEmpty)
     }
 
     @Test("remove all colors")
@@ -717,7 +724,7 @@ struct ColorTagManagerTests {
         mgr.remove(url)
         for color in TagColor.allCases {
             #expect(mgr.count(for: color) == 0)
-            #expect(mgr.list(color).count == 0)
+            #expect(mgr.list(color).isEmpty)
         }
     }
 
@@ -1055,5 +1062,132 @@ struct SearchDebounceTests {
         manager.performSearch("   ")
         #expect(manager.searchResults.isEmpty)
         #expect(!manager.isSearchRunning)
+    }
+}
+
+// MARK: - ShortcutsManager Pin/Unpin Tests
+
+@Suite("ShortcutsManager Pin")
+struct ShortcutsManagerPinTests {
+    @MainActor private func makeTempManager() -> (ShortcutsManager, URL) {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("shortcuts-test-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        let mgr = ShortcutsManager(configDir: tmpDir)
+        return (mgr, tmpDir)
+    }
+
+    private func cleanup(_ dir: URL) {
+        try? FileManager.default.removeItem(at: dir)
+    }
+
+    @Test("addFolder pins a directory and it appears in customFolders")
+    @MainActor func pinFolder() {
+        let (mgr, dir) = makeTempManager()
+        defer { cleanup(dir) }
+
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pin-target-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        mgr.addFolder(folder)
+        #expect(mgr.customFolders.contains(where: { $0.path == folder.path }))
+    }
+
+    @Test("pinned folder appears in allShortcuts as non-built-in")
+    @MainActor func pinnedInAllShortcuts() {
+        let (mgr, dir) = makeTempManager()
+        defer { cleanup(dir) }
+
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pin-shortcut-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        mgr.addFolder(folder)
+        let match = mgr.allShortcuts.first(where: { $0.url.path == folder.path })
+        #expect(match != nil)
+        #expect(match?.isBuiltIn == false)
+        #expect(match?.name == folder.lastPathComponent)
+    }
+
+    @Test("duplicate addFolder does not create duplicates")
+    @MainActor func noDuplicatePin() {
+        let (mgr, dir) = makeTempManager()
+        defer { cleanup(dir) }
+
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("dup-pin-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        mgr.addFolder(folder)
+        mgr.addFolder(folder)
+        let count = mgr.customFolders.filter { $0.path == folder.path }.count
+        #expect(count == 1)
+    }
+
+    @Test("removeFolder unpins a directory")
+    @MainActor func unpinFolder() {
+        let (mgr, dir) = makeTempManager()
+        defer { cleanup(dir) }
+
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("unpin-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        mgr.addFolder(folder)
+        #expect(mgr.customFolders.contains(where: { $0.path == folder.path }))
+
+        mgr.removeFolder(folder)
+        #expect(!mgr.customFolders.contains(where: { $0.path == folder.path }))
+    }
+
+    @Test("pinned folders persist to disk and reload")
+    @MainActor func persistAndReload() {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("shortcuts-persist-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("persist-pin-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        // Pin and save
+        let mgr1 = ShortcutsManager(configDir: tmpDir)
+        mgr1.addFolder(folder)
+
+        // Reload from same config dir
+        let mgr2 = ShortcutsManager(configDir: tmpDir)
+        #expect(mgr2.customFolders.contains(where: { $0.path == folder.path }))
+    }
+
+    @Test("moveFolder reorders pinned folders")
+    @MainActor func reorderFolders() {
+        let (mgr, dir) = makeTempManager()
+        defer { cleanup(dir) }
+
+        let a = FileManager.default.temporaryDirectory.appendingPathComponent("order-a-\(UUID().uuidString)")
+        let b = FileManager.default.temporaryDirectory.appendingPathComponent("order-b-\(UUID().uuidString)")
+        let c = FileManager.default.temporaryDirectory.appendingPathComponent("order-c-\(UUID().uuidString)")
+        for f in [a, b, c] {
+            try? FileManager.default.createDirectory(at: f, withIntermediateDirectories: true)
+        }
+        defer { for f in [a, b, c] { try? FileManager.default.removeItem(at: f) } }
+
+        mgr.addFolder(a)
+        mgr.addFolder(b)
+        mgr.addFolder(c)
+        #expect(mgr.customFolders[0].path == a.path)
+
+        // Move last to first
+        mgr.moveFolder(from: IndexSet(integer: 2), to: 0)
+        #expect(mgr.customFolders[0].path == c.path)
+        #expect(mgr.customFolders[1].path == a.path)
+        #expect(mgr.customFolders[2].path == b.path)
     }
 }
