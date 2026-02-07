@@ -64,11 +64,10 @@ struct FileTreeView: View {
                         // Children rows
                         let childDepth = ancestorList.count
                         ForEach(Array(manager.allItems.enumerated()), id: \.element.id) { index, fileInfo in
-                            let actualIndex = manager.allItems.firstIndex(where: { $0.url == fileInfo.url }) ?? -1
                             FileTreeRow(
                                 fileInfo: fileInfo,
                                 manager: manager,
-                                index: actualIndex,
+                                index: index,
                                 depth: childDepth,
                                 indentStep: indentStep
                             )
@@ -157,6 +156,7 @@ struct AncestorRow: View {
     let indentStep: CGFloat
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject var shortcutsManager = ShortcutsManager.shared
+    @ObservedObject var folderIconManager = FolderIconManager.shared
 
     private var isSelected: Bool {
         manager.selectedItem == url
@@ -168,10 +168,7 @@ struct AncestorRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: true, selected: isSelected))
-                .resizable()
-                .interpolation(.high)
-                .frame(width: 20, height: 20)
+            FolderIconView(url: url, size: 20, selected: isSelected)
 
             Text(name)
                 .font(.system(size: 14, weight: isCurrent ? .semibold : .regular))
@@ -201,8 +198,9 @@ struct AncestorRow: View {
                             .font(.system(size: 10))
                     }
                     .foregroundColor(isPinned ? .orange : .secondary.opacity(0.5))
+                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
             }
         }
         .padding(.leading, CGFloat(depth) * indentStep + 12)
@@ -236,7 +234,6 @@ struct FileTreeRow: View {
     let indentStep: CGFloat
     @State private var showingDetails = false
     @State private var lastClickTime: Date = .distantPast
-    @FocusState private var isRenameFieldFocused: Bool
 
     private var url: URL { fileInfo.url }
     private var isDirectory: Bool { fileInfo.isDirectory }
@@ -290,24 +287,19 @@ struct FileTreeRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: isDirectory, selected: isSelected))
-                .resizable()
-                .interpolation(.high)
-                .frame(width: 22, height: 22)
-
-            if isRenaming {
-                RenameTextField(text: $manager.renameText, onCommit: {
-                    manager.confirmRename()
-                }, onCancel: {
-                    manager.cancelRename()
-                })
-                .frame(height: 20)
+            if isDirectory {
+                FolderIconView(url: url, size: 22, selected: isSelected)
             } else {
-                Text(url.lastPathComponent)
-                    .font(.system(size: 14))
-                    .lineLimit(1)
-                    .foregroundColor(isSelected ? .white : .primary)
+                Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: false, selected: isSelected))
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 22, height: 22)
             }
+
+            Text(url.lastPathComponent)
+                .font(.system(size: 14))
+                .lineLimit(1)
+                .foregroundColor(isSelected ? .white : .primary)
 
             if !fileColors.isEmpty {
                 HStack(spacing: 2) {
@@ -343,8 +335,6 @@ struct FileTreeRow: View {
         )
         .contentShape(Rectangle())
         .onDrag {
-            manager.selectedItem = nil
-            manager.selectedIndex = -1
             return NSItemProvider(object: url as NSURL)
         }
         .onTapGesture {

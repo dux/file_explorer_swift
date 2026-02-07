@@ -90,9 +90,11 @@ struct DMGPreviewView: View {
             } else {
                 // Volume name header
                 if let volName = volumeName {
-                    HStack {
+                    HStack(spacing: 8) {
                         Image(systemName: "internaldrive")
+                            .font(.system(size: 14))
                             .foregroundColor(.purple)
+                            .frame(width: 22)
                         Text(volName)
                             .font(.system(size: 13, weight: .medium))
                         Spacer()
@@ -132,37 +134,55 @@ struct DMGPreviewView: View {
 
                                     Spacer()
                                 }
-                                .padding(.horizontal, 16)
+                                .padding(.horizontal, 12)
                                 .padding(.top, 12)
 
-                                Button(action: {
-                                    installApp(app)
-                                }) {
-                                    HStack(spacing: 6) {
-                                        if isInstalling {
-                                            ProgressView()
-                                                .scaleEffect(0.6)
-                                                .frame(width: 16, height: 16)
-                                        } else if isInstalled {
-                                            Image(systemName: "checkmark.circle.fill")
+                                if isInstalled {
+                                    Button(action: {
+                                        uninstallApp(app)
+                                    }) {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "trash")
                                                 .foregroundColor(.white)
-                                        } else {
-                                            Image(systemName: "arrow.down.to.line")
-                                                .foregroundColor(.white)
+                                            Text("Uninstall \(appName)")
+                                                .font(.system(size: 13, weight: .medium))
                                         }
-                                        Text(isInstalled ? "\(appName) installed" : "Install \(appName) to Applications")
-                                            .font(.system(size: 13, weight: .medium))
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 8)
+                                        .background(Color.red.opacity(0.85))
+                                        .foregroundColor(.white)
+                                        .cornerRadius(8)
                                     }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 8)
-                                    .background(isInstalled ? Color.green : Color.accentColor)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(8)
+                                    .buttonStyle(.plain)
+                                    .padding(.horizontal, 12)
+                                    .padding(.bottom, 12)
+                                } else {
+                                    Button(action: {
+                                        installApp(app)
+                                    }) {
+                                        HStack(spacing: 6) {
+                                            if isInstalling {
+                                                ProgressView()
+                                                    .scaleEffect(0.6)
+                                                    .frame(width: 16, height: 16)
+                                            } else {
+                                                Image(systemName: "arrow.down.to.line")
+                                                    .foregroundColor(.white)
+                                            }
+                                            Text("Install \(appName) to Applications")
+                                                .font(.system(size: 13, weight: .medium))
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 8)
+                                        .background(Color.accentColor)
+                                        .foregroundColor(.white)
+                                        .cornerRadius(8)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(isInstalling)
+                                    .padding(.horizontal, 12)
+                                    .padding(.bottom, 12)
                                 }
-                                .buttonStyle(.plain)
-                                .disabled(isInstalling || isInstalled)
-                                .padding(.horizontal, 16)
-                                .padding(.bottom, 12)
                             }
 
                             Divider()
@@ -260,6 +280,28 @@ struct DMGPreviewView: View {
                 await MainActor.run {
                     installingApp = nil
                     ToastManager.shared.showError("Install failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func uninstallApp(_ app: DMGEntry) {
+        let appName = app.name
+        let destURL = URL(fileURLWithPath: "/Applications/\(appName)")
+
+        Task.detached {
+            let fm = FileManager.default
+            do {
+                if fm.fileExists(atPath: destURL.path) {
+                    try fm.removeItem(at: destURL)
+                }
+                await MainActor.run {
+                    installedApps.remove(appName)
+                    ToastManager.shared.show("Uninstalled \(appName.replacingOccurrences(of: ".app", with: "")) from Applications")
+                }
+            } catch {
+                await MainActor.run {
+                    ToastManager.shared.showError("Uninstall failed: \(error.localizedDescription)")
                 }
             }
         }
@@ -365,8 +407,8 @@ struct DMGPreviewView: View {
             if let plist = try? PropertyListSerialization.propertyList(from: result.data, format: nil) as? [String: Any],
                let entities = plist["system-entities"] as? [[String: Any]] {
                 for entity in entities {
-                    if let mountPointFromPlist = entity["mount-point"] as? String {
-                        volName = URL(fileURLWithPath: mountPointFromPlist).lastPathComponent
+                    if let name = entity["volume-name"] as? String, !name.isEmpty {
+                        volName = name
                         break
                     }
                 }
@@ -408,6 +450,15 @@ struct DMGPreviewView: View {
                 // Skip hidden files
                 let name = fileURL.lastPathComponent
                 if name.hasPrefix(".") { continue }
+
+                // Skip Applications shortcut (symlink or alias common in DMGs)
+                if name == "Applications" || name == " " {
+                    continue
+                }
+                if let dest = try? FileManager.default.destinationOfSymbolicLink(atPath: fileURL.path),
+                   dest == "/Applications" || dest.hasSuffix("/Applications") {
+                    continue
+                }
 
                 let resourceValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey, .totalFileSizeKey])
                 let isDirectory = resourceValues?.isDirectory ?? false

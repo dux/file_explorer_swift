@@ -1,6 +1,6 @@
 import AppKit
 
-struct AppInfo: Sendable {
+struct AppInfo: @unchecked Sendable {
     let url: URL
     let name: String
     let icon: NSImage
@@ -35,9 +35,9 @@ final class AppSearcher {
         guard !isLoading else { return }
         isLoading = true
 
-        DispatchQueue.global(qos: .userInitiated).async {
+        Task.detached(priority: .userInitiated) {
             let apps = Self.scanApps()
-            DispatchQueue.main.async {
+            await MainActor.run {
                 self.allApps = apps
                 self.isLoaded = true
                 self.isLoading = false

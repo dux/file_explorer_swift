@@ -1,8 +1,7 @@
 import Foundation
 import SwiftUI
-import CryptoKit
 
-enum TagColor: String, CaseIterable, Identifiable {
+enum TagColor: String, CaseIterable, Identifiable, Codable {
     case red
     case blue
     case green
@@ -43,118 +42,162 @@ struct TaggedFile: Identifiable {
     }
 }
 
+// JSON storage: { "red": ["/path/to/file", ...], "blue": [...], ... }
+private typealias ColorTagStore = [String: [String]]
+
 @MainActor
 class ColorTagManager: ObservableObject {
     static let shared = ColorTagManager()
 
-    @Published var counts: [TagColor: Int] = [:]
+    // Single source of truth: color -> ordered list of file paths
+    @Published private(set) var store: [TagColor: [String]] = [:]
+
     @Published var version: Int = 0
 
-    var totalCount: Int {
-        counts.values.reduce(0, +)
-    }
-
-    private let colorsDir: URL
+    private let filePath: URL
     private let fm = FileManager.default
+    private var saveTask: Task<Void, Never>?
 
-    private init() {
-        colorsDir = AppSettings.configBase.appendingPathComponent("colors")
-        ensureDirectories()
-        reloadCounts()
-    }
-
-    private func ensureDirectories() {
-        for color in TagColor.allCases {
-            let dir = colorsDir.appendingPathComponent(color.rawValue)
-            if !fm.fileExists(atPath: dir.path) {
-                try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-            }
+    // Public init for testing with custom path
+    init(filePath: URL? = nil) {
+        self.filePath = filePath ?? AppSettings.configBase.appendingPathComponent("color-labels.json")
+        load()
+        if filePath == nil {
+            migrateFromSymlinks()
         }
     }
 
-    private func sha1(_ string: String) -> String {
-        let data = Data(string.utf8)
-        let digest = Insecure.SHA1.hash(data: data)
-        return digest.map { String(format: "%02x", $0) }.joined()
+    // MARK: - Unified Public API
+
+    func add(_ url: URL, color: TagColor) {
+        let path = url.path
+        if store[color] == nil { store[color] = [] }
+        guard !(store[color]?.contains(path) ?? false) else { return }
+        store[color]?.append(path)
+        didChange()
     }
 
-    private func linkPath(for url: URL, color: TagColor) -> URL {
-        let hash = sha1(url.path)
-        return colorsDir
-            .appendingPathComponent(color.rawValue)
-            .appendingPathComponent(hash)
+    func remove(_ url: URL, color: TagColor) {
+        store[color]?.removeAll { $0 == url.path }
+        didChange()
     }
 
-    func tagFile(_ url: URL, color: TagColor) {
-        let link = linkPath(for: url, color: color)
-        // Remove existing if any
-        try? fm.removeItem(at: link)
-        try? fm.createSymbolicLink(atPath: link.path, withDestinationPath: url.path)
-        reloadCounts()
-    }
-
-    func untagFile(_ url: URL, color: TagColor) {
-        let link = linkPath(for: url, color: color)
-        try? fm.removeItem(at: link)
-        reloadCounts()
-    }
-
-    func untagFile(_ url: URL) {
+    func remove(_ url: URL) {
         for color in TagColor.allCases {
-            untagFile(url, color: color)
+            store[color]?.removeAll { $0 == url.path }
         }
+        didChange()
     }
 
-    func colorsForFile(_ url: URL) -> [TagColor] {
-        var result: [TagColor] = []
-        for color in TagColor.allCases {
-            let link = linkPath(for: url, color: color)
-            if fm.fileExists(atPath: link.path) {
-                result.append(color)
-            }
+    func toggle(_ url: URL, color: TagColor) {
+        if isTagged(url, color: color) {
+            remove(url, color: color)
+        } else {
+            add(url, color: color)
         }
-        return result
     }
 
     func isTagged(_ url: URL, color: TagColor) -> Bool {
-        let link = linkPath(for: url, color: color)
-        // fileExists follows symlinks, so we use attributesOfItem to check symlink itself
-        return (try? fm.attributesOfItem(atPath: link.path)) != nil
+        store[color]?.contains(url.path) ?? false
     }
 
-    func filesForColor(_ color: TagColor) -> [TaggedFile] {
-        let dir = colorsDir.appendingPathComponent(color.rawValue)
-        guard let entries = try? fm.contentsOfDirectory(atPath: dir.path) else { return [] }
+    func colorsForFile(_ url: URL) -> [TagColor] {
+        let path = url.path
+        return TagColor.allCases.filter { store[$0]?.contains(path) ?? false }
+    }
 
-        var files: [TaggedFile] = []
-        for entry in entries {
-            let linkURL = dir.appendingPathComponent(entry)
-            guard let target = try? fm.destinationOfSymbolicLink(atPath: linkURL.path) else { continue }
-            let targetURL = URL(fileURLWithPath: target)
+    func count(for color: TagColor) -> Int {
+        store[color]?.count ?? 0
+    }
+
+    var totalCount: Int {
+        store.values.reduce(0) { $0 + $1.count }
+    }
+
+    func list(_ color: TagColor) -> [TaggedFile] {
+        guard let paths = store[color] else { return [] }
+        return paths.map { path in
+            let url = URL(fileURLWithPath: path)
             var isDir: ObjCBool = false
-            let exists = fm.fileExists(atPath: target, isDirectory: &isDir)
-            files.append(TaggedFile(url: targetURL, exists: exists, isDirectory: isDir.boolValue))
+            let exists = fm.fileExists(atPath: path, isDirectory: &isDir)
+            return TaggedFile(url: url, exists: exists, isDirectory: isDir.boolValue)
         }
-
-        return files.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    func reloadCounts() {
-        var newCounts: [TagColor: Int] = [:]
+    // Legacy API - delegates to unified methods
+    func tagFile(_ url: URL, color: TagColor) { add(url, color: color) }
+    func untagFile(_ url: URL, color: TagColor) { remove(url, color: color) }
+    func untagFile(_ url: URL) { remove(url) }
+    func toggleTag(_ url: URL, color: TagColor) { toggle(url, color: color) }
+    func filesForColor(_ color: TagColor) -> [TaggedFile] { list(color) }
+
+    // MARK: - Persistence
+
+    private func didChange() {
+        version += 1
+        scheduleSave()
+    }
+
+    private func load() {
+        guard let data = try? Data(contentsOf: filePath),
+              let json = try? JSONDecoder().decode(ColorTagStore.self, from: data) else {
+            return
+        }
+        for color in TagColor.allCases {
+            if let paths = json[color.rawValue] {
+                store[color] = paths
+            }
+        }
+    }
+
+    private func scheduleSave() {
+        saveTask?.cancel()
+        saveTask = Task.detached(priority: .utility) {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            await self.save()
+        }
+    }
+
+    func save() {
+        var json: ColorTagStore = [:]
+        for color in TagColor.allCases {
+            if let paths = store[color], !paths.isEmpty {
+                json[color.rawValue] = paths
+            }
+        }
+        guard let data = try? JSONEncoder().encode(json) else { return }
+        try? data.write(to: filePath, options: .atomic)
+    }
+
+    // MARK: - Migration from symlinks
+
+    private func migrateFromSymlinks() {
+        let colorsDir = AppSettings.configBase.appendingPathComponent("colors")
+        guard fm.fileExists(atPath: colorsDir.path) else { return }
+
+        var migrated = false
         for color in TagColor.allCases {
             let dir = colorsDir.appendingPathComponent(color.rawValue)
-            let entries = (try? fm.contentsOfDirectory(atPath: dir.path)) ?? []
-            newCounts[color] = entries.count
+            guard let entries = try? fm.contentsOfDirectory(atPath: dir.path) else { continue }
+            for entry in entries {
+                let linkPath = dir.appendingPathComponent(entry).path
+                guard let target = try? fm.destinationOfSymbolicLink(atPath: linkPath) else { continue }
+                add(target, color: color)
+                migrated = true
+            }
         }
-        counts = newCounts
-        version += 1
+
+        if migrated {
+            save()
+            try? fm.removeItem(at: colorsDir)
+        }
     }
 
-    func toggleTag(_ url: URL, color: TagColor) {
-        if isTagged(url, color: color) {
-            untagFile(url, color: color)
-        } else {
-            tagFile(url, color: color)
-        }
+    // Helper for migration - add by path string directly
+    private func add(_ path: String, color: TagColor) {
+        if store[color] == nil { store[color] = [] }
+        guard !(store[color]?.contains(path) ?? false) else { return }
+        store[color]?.append(path)
     }
 }

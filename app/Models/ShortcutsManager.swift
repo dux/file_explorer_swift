@@ -96,7 +96,7 @@ class ShortcutsManager: ObservableObject {
 }
 
 struct ShortcutItem: Identifiable {
-    let id = UUID()
+    var id: String { url.path }
     let url: URL
     let name: String
     let isBuiltIn: Bool

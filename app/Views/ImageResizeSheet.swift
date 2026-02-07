@@ -21,6 +21,7 @@ struct ImageResizeSheet: View {
     @State private var cropEnd: CGPoint = .zero
     @State private var isDragging = false
     @State private var imageViewSize: CGSize = .zero
+    @State private var containerSize: CGSize = .zero
 
     enum ResizePreset: String, CaseIterable {
         case half = "50%"
@@ -127,6 +128,10 @@ struct ImageResizeSheet: View {
                         )
                         .onAppear {
                             imageViewSize = imageSize
+                            containerSize = geo.size
+                        }
+                        .onChange(of: geo.size) { newSize in
+                            containerSize = newSize
                         }
                     }
                 }
@@ -348,8 +353,8 @@ struct ImageResizeSheet: View {
         let scale = originalSize.width / imageViewSize.width
         let rect = normalizedCropRect(in: imageViewSize, offset: .zero)
 
-        let imageOffsetX = (600 - imageViewSize.width) / 2
-        let imageOffsetY = (350 - imageViewSize.height) / 2
+        let imageOffsetX = (containerSize.width - imageViewSize.width) / 2
+        let imageOffsetY = (containerSize.height - imageViewSize.height) / 2
 
         let cropX = max(0, (rect.minX - imageOffsetX) * scale)
         let cropY = max(0, (rect.minY - imageOffsetY) * scale)

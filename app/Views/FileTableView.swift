@@ -17,17 +17,16 @@ struct FileTableView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(manager.allItems.enumerated()), id: \.element.id) { index, fileInfo in
-                            let actualIndex = manager.allItems.firstIndex(where: { $0.url == fileInfo.url }) ?? -1
-                            FileTableRow(fileInfo: fileInfo, manager: manager, index: actualIndex)
+                            FileTableRow(fileInfo: fileInfo, manager: manager, index: index)
                                 .id(fileInfo.id)
                         }
                     }
                 }
                 .id(manager.currentPath.absoluteString)
                 .onChange(of: manager.selectedIndex) { newIndex in
-                    if newIndex >= 0 {
+                    if newIndex >= 0, let item = manager.allItems[safe: newIndex] {
                         withAnimation(.easeInOut(duration: 0.15)) {
-                            proxy.scrollTo(newIndex, anchor: .center)
+                            proxy.scrollTo(item.id, anchor: .center)
                         }
                     }
                 }
@@ -91,7 +90,7 @@ struct FileTableRow: View {
     let index: Int
     @State private var showingDetails = false
     @State private var lastClickTime: Date = .distantPast
-    @FocusState private var isRenameFieldFocused: Bool
+
 
     private var url: URL { fileInfo.url }
     private var isDirectory: Bool { fileInfo.isDirectory }
@@ -119,24 +118,19 @@ struct FileTableRow: View {
     var body: some View {
         HStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: isDirectory, selected: isSelected))
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 24, height: 24)
-
-                if isRenaming {
-                    RenameTextField(text: $manager.renameText, onCommit: {
-                        manager.confirmRename()
-                    }, onCancel: {
-                        manager.cancelRename()
-                    })
-                    .frame(height: 20)
+                if isDirectory {
+                    FolderIconView(url: url, size: 24, selected: isSelected)
                 } else {
-                    Text(url.lastPathComponent)
-                        .font(.system(size: 14))
-                        .lineLimit(1)
-                        .foregroundColor(isSelected ? .white : .primary)
+                    Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: false, selected: isSelected))
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 24, height: 24)
                 }
+
+                Text(url.lastPathComponent)
+                    .font(.system(size: 14))
+                    .lineLimit(1)
+                    .foregroundColor(isSelected ? .white : .primary)
 
                 if !fileColors.isEmpty {
                     HStack(spacing: 2) {
@@ -170,11 +164,8 @@ struct FileTableRow: View {
         )
         .contentShape(Rectangle())
         .onDrag {
-            manager.selectedItem = nil
-            manager.selectedIndex = -1
             return NSItemProvider(object: url as NSURL)
         }
-        .onAppear { }
         .onTapGesture {
             let now = Date()
             if now.timeIntervalSince(lastClickTime) < 0.3 {
@@ -219,58 +210,6 @@ struct FileTableRow: View {
         }
         .sheet(isPresented: $showingDetails) {
             FileDetailsView(url: url, isDirectory: isDirectory)
-        }
-    }
-
-    private var iconForItem: String {
-        if isDirectory { return "folder.fill" }
-        switch url.pathExtension.lowercased() {
-        case "jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "tiff", "svg", "ico", "raw", "avif": return "photo.fill"
-        case "pdf": return "doc.text.fill"
-        case "txt", "rtf": return "doc.plaintext.fill"
-        case "md", "markdown": return "text.document.fill"
-        case "doc", "docx", "odt", "pages": return "doc.richtext.fill"
-        case "xls", "xlsx", "csv", "numbers", "ods": return "tablecells.fill"
-        case "ppt", "pptx", "key", "odp": return "slider.horizontal.below.rectangle"
-        case "zip", "tar", "gz", "rar", "7z", "bz2", "xz", "dmg", "iso": return "doc.zipper"
-        case "mp3", "wav", "m4a", "aac", "flac", "ogg", "wma", "aiff": return "waveform"
-        case "mp4", "mov", "avi", "mkv", "webm", "wmv", "flv", "m4v": return "film.fill"
-        case "swift": return "swift"
-        case "py", "js", "ts", "jsx", "tsx", "c", "cpp", "h", "hpp", "m", "mm",
-             "java", "kt", "scala", "rb", "php", "pl", "go", "rs", "zig": return "chevron.left.forwardslash.chevron.right"
-        case "sh", "bash", "zsh", "fish": return "terminal.fill"
-        case "html", "htm": return "globe"
-        case "css", "scss", "sass", "less": return "paintbrush.fill"
-        case "json", "xml", "yaml", "yml", "toml", "ini", "conf", "config": return "gearshape.fill"
-        case "sql", "db", "sqlite": return "cylinder.fill"
-        case "ttf", "otf", "woff", "woff2": return "textformat"
-        case "app", "exe", "bin": return "app.fill"
-        case "pkg", "deb", "rpm": return "shippingbox.fill"
-        case "psd", "ai", "sketch", "fig", "xd": return "paintpalette.fill"
-        case "obj", "fbx", "blend", "3ds", "dae": return "cube.fill"
-        default: return "doc.fill"
-        }
-    }
-
-    private var iconColor: Color {
-        if isDirectory { return Color(red: 0.35, green: 0.67, blue: 0.95) }
-        switch url.pathExtension.lowercased() {
-        case "jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "tiff", "svg", "ico", "raw", "avif": return Color(red: 0.69, green: 0.42, blue: 0.87)
-        case "pdf": return Color(red: 0.92, green: 0.26, blue: 0.24)
-        case "doc", "docx", "odt", "pages", "txt", "rtf", "md", "markdown": return Color(red: 0.26, green: 0.52, blue: 0.96)
-        case "xls", "xlsx", "csv", "numbers", "ods": return Color(red: 0.21, green: 0.71, blue: 0.35)
-        case "ppt", "pptx", "key", "odp": return Color(red: 0.96, green: 0.58, blue: 0.12)
-        case "zip", "tar", "gz", "rar", "7z", "bz2", "xz", "dmg", "iso": return Color(red: 0.6, green: 0.5, blue: 0.4)
-        case "mp3", "wav", "m4a", "aac", "flac", "ogg", "wma", "aiff": return Color(red: 0.95, green: 0.35, blue: 0.55)
-        case "mp4", "mov", "avi", "mkv", "webm", "wmv", "flv", "m4v": return Color(red: 0.96, green: 0.42, blue: 0.32)
-        case "swift", "py", "js", "ts", "jsx", "tsx", "c", "cpp", "h", "hpp", "m", "mm",
-             "java", "kt", "scala", "rb", "php", "pl", "go", "rs", "zig", "sh", "bash", "zsh", "fish": return Color(red: 0.2, green: 0.75, blue: 0.75)
-        case "html", "htm": return Color(red: 0.9, green: 0.45, blue: 0.2)
-        case "css", "scss", "sass", "less": return Color(red: 0.26, green: 0.52, blue: 0.96)
-        case "json", "xml", "yaml", "yml", "toml", "ini", "conf", "config": return Color(red: 0.55, green: 0.55, blue: 0.58)
-        case "sql", "db", "sqlite": return Color(red: 0.55, green: 0.35, blue: 0.75)
-        case "psd", "ai", "sketch", "fig", "xd": return Color(red: 0.85, green: 0.25, blue: 0.55)
-        default: return .secondary
         }
     }
 

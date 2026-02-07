@@ -99,10 +99,14 @@ struct FileItemDialog: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header with icon and name
             HStack(spacing: 10) {
-                Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: isDirectory))
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 36, height: 36)
+                if isDirectory {
+                    FolderIconView(url: url, size: 36)
+                } else {
+                    Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: false))
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 36, height: 36)
+                }
 
                 if isRenaming {
                     RenameTextField(text: $renameText, onCommit: {
@@ -447,6 +451,15 @@ struct RenameTextField: NSViewRepresentable {
                 return true
             }
             return false
+        }
+
+        func controlTextDidEndEditing(_ obj: Notification) {
+            // Check if ended by Return/Tab (already handled) vs actual blur
+            if let movement = obj.userInfo?["NSTextMovement"] as? Int,
+               movement == NSReturnTextMovement || movement == NSTabTextMovement {
+                return
+            }
+            parent.onCancel()
         }
     }
 }

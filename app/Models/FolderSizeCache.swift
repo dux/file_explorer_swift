@@ -7,6 +7,7 @@ final class FolderSizeCache: @unchecked Sendable {
     private let cacheFile: URL
     private let fileManager = FileManager.default
     private let queue = DispatchQueue(label: "com.dux.file-explorer.cache", attributes: .concurrent)
+    private var saveWorkItem: DispatchWorkItem?
 
     struct CacheEntry: Codable {
         let size: UInt64
@@ -52,6 +53,15 @@ final class FolderSizeCache: @unchecked Sendable {
         return result
     }
 
+    private func scheduleSave() {
+        saveWorkItem?.cancel()
+        let item = DispatchWorkItem { [self] in
+            saveCacheSync()
+        }
+        saveWorkItem = item
+        queue.asyncAfter(deadline: .now() + 1.0, flags: .barrier) { item.perform() }
+    }
+
     func setCachedSize(for url: URL, size: UInt64) {
         queue.async(flags: .barrier) { [self] in
             guard let attrs = try? fileManager.attributesOfItem(atPath: url.path),
@@ -60,14 +70,14 @@ final class FolderSizeCache: @unchecked Sendable {
             }
 
             cache[url.path] = CacheEntry(size: size, modificationDate: modDate)
-            saveCacheSync()
+            scheduleSave()
         }
     }
 
     func invalidate(for url: URL) {
         queue.async(flags: .barrier) { [self] in
             cache.removeValue(forKey: url.path)
-            saveCacheSync()
+            scheduleSave()
         }
     }
 

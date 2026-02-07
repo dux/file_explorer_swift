@@ -6,6 +6,7 @@ struct ShortcutsView: View {
     @ObservedObject var deviceManager = iPhoneManager.shared
     @ObservedObject var volumesManager = VolumesManager.shared
     @ObservedObject var tagManager = ColorTagManager.shared
+    @ObservedObject var folderIconManager = FolderIconManager.shared
     @ObservedObject var manager: FileExplorerManager
 
     var body: some View {
@@ -23,7 +24,7 @@ struct ShortcutsView: View {
                     }
 
                     if tagManager.totalCount > 0 {
-                        SidebarSectionTitle(title: "Colors")
+                        SidebarSectionTitle(title: "Color Labels")
                         ColorTagBoxes(manager: manager, tagManager: tagManager)
                     }
 
@@ -40,13 +41,14 @@ struct ShortcutsView: View {
 
                         ForEach(Array(shortcutsManager.customFolders.enumerated()), id: \.element) { index, folder in
                             let item = ShortcutItem(url: folder, name: folder.lastPathComponent, isBuiltIn: false)
-                            DraggableShortcutRow(
-                                item: item,
-                                index: index,
-                                manager: manager,
-                                shortcutsManager: shortcutsManager,
-                                flatIndex: builtInCount + index
-                            )
+                        DraggableShortcutRow(
+                            item: item,
+                            index: index,
+                            manager: manager,
+                            shortcutsManager: shortcutsManager,
+                            folderIconManager: folderIconManager,
+                            flatIndex: builtInCount + index
+                        )
                         }
                     }
 
@@ -123,7 +125,7 @@ func formatPath(_ path: String, full: Bool) -> String {
 
 struct ShortcutRow: View {
     let item: ShortcutItem
-    let manager: FileExplorerManager
+    @ObservedObject var manager: FileExplorerManager
     let shortcutsManager: ShortcutsManager
     var flatIndex: Int = -1
     @State private var isHovered = false
@@ -154,10 +156,7 @@ struct ShortcutRow: View {
                     .foregroundColor(.accentColor)
                     .frame(width: 26, height: 26)
             } else {
-                Image(nsImage: IconProvider.shared.icon(for: item.url, isDirectory: true))
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 26, height: 26)
+                FolderIconView(url: item.url, size: 26)
             }
 
             Text(formatPath(item.url.path, full: !item.isBuiltIn))
@@ -215,9 +214,11 @@ struct ShortcutRow: View {
             isHovered = hovering
         }
         .onTapGesture {
-            // Switch to local browser if in iPhone mode
-            if manager.currentPane == .iphone {
-                iPhoneManager.shared.currentDevice = nil
+            // Switch to browser if in non-browser mode
+            if manager.currentPane != .browser {
+                if manager.currentPane == .iphone {
+                    iPhoneManager.shared.currentDevice = nil
+                }
                 manager.currentPane = .browser
             }
             manager.navigateTo(item.url)
@@ -229,11 +230,13 @@ struct ShortcutRow: View {
 struct DraggableShortcutRow: View {
     let item: ShortcutItem
     let index: Int
-    let manager: FileExplorerManager
+    @ObservedObject var manager: FileExplorerManager
     let shortcutsManager: ShortcutsManager
+    @ObservedObject var folderIconManager: FolderIconManager
     var flatIndex: Int = -1
     @State private var isHovered = false
     @State private var isDragTarget = false
+    @State private var showEmojiPicker = false
 
     private var isSelected: Bool {
         manager.currentPath.path == item.url.path
@@ -243,9 +246,18 @@ struct DraggableShortcutRow: View {
         manager.sidebarFocused && manager.sidebarIndex == flatIndex
     }
 
+    private var customEmoji: String? {
+        folderIconManager.emoji(for: item.url)
+    }
+
     var body: some View {
         HStack(spacing: 8) {
-            if let icon = item.icon {
+            // Icon: custom emoji > SF Symbol > system icon
+            if let emoji = customEmoji {
+                Text(emoji)
+                    .font(.system(size: 16))
+                    .frame(width: 22, height: 22)
+            } else if let icon = item.icon {
                 Image(systemName: icon)
                     .font(.system(size: 14))
                     .foregroundColor(.accentColor)
@@ -269,7 +281,33 @@ struct DraggableShortcutRow: View {
 
             Spacer()
 
-            if isHovered {
+            if isHovered || showEmojiPicker {
+                Button(action: { showEmojiPicker = true }) {
+                    Text("Icon")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.gray.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showEmojiPicker, arrowEdge: .trailing) {
+                    EmojiPickerView(
+                        folderURL: item.url,
+                        onSelect: { emoji in
+                            folderIconManager.setEmoji(emoji, for: item.url)
+                        },
+                        onRemove: {
+                            folderIconManager.removeEmoji(for: item.url)
+                        },
+                        onDismiss: {
+                            showEmojiPicker = false
+                        },
+                        hasExisting: customEmoji != nil
+                    )
+                    .interactiveDismissDisabled()
+                }
+
                 Button(action: { shortcutsManager.removeFolder(item.url) }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 12))
@@ -295,8 +333,10 @@ struct DraggableShortcutRow: View {
             isHovered = hovering
         }
         .onTapGesture {
-            if manager.currentPane == .iphone {
-                iPhoneManager.shared.currentDevice = nil
+            if manager.currentPane != .browser {
+                if manager.currentPane == .iphone {
+                    iPhoneManager.shared.currentDevice = nil
+                }
                 manager.currentPane = .browser
             }
             manager.navigateTo(item.url)
@@ -326,8 +366,8 @@ struct DraggableShortcutRow: View {
 
 struct iPhoneRow: View {
     let device: iPhoneDevice
-    let manager: FileExplorerManager
-    let deviceManager: iPhoneManager
+    @ObservedObject var manager: FileExplorerManager
+    @ObservedObject var deviceManager: iPhoneManager
     @State private var isHovered = false
     @State private var isLoading = false
 
@@ -378,7 +418,7 @@ struct iPhoneRow: View {
 
 struct VolumeRow: View {
     let volume: VolumeInfo
-    let manager: FileExplorerManager
+    @ObservedObject var manager: FileExplorerManager
     let volumesManager: VolumesManager
     var flatIndex: Int = -1
     @State private var isHovered = false
@@ -398,21 +438,19 @@ struct VolumeRow: View {
                 .foregroundColor(Color(volume.iconColor))
                 .frame(width: 20)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(volume.name)
-                    .font(.system(size: 13))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
-                if !volume.capacityText.isEmpty {
-                    Text(volume.capacityText)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-            }
+            Text(volume.name)
+                .font(.system(size: 13))
+                .lineLimit(1)
+                .truncationMode(.middle)
 
             Spacer()
+
+            if !volume.capacityText.isEmpty {
+                Text(volume.capacityText)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
 
             if isHovered && volume.isEjectable {
                 Button(action: { volumesManager.eject(volume) }) {
@@ -438,8 +476,10 @@ struct VolumeRow: View {
             isHovered = hovering
         }
         .onTapGesture {
-            if manager.currentPane == .iphone {
-                iPhoneManager.shared.currentDevice = nil
+            if manager.currentPane != .browser {
+                if manager.currentPane == .iphone {
+                    iPhoneManager.shared.currentDevice = nil
+                }
                 manager.currentPane = .browser
             }
             manager.navigateTo(volume.url)
@@ -453,16 +493,15 @@ struct ColorTagBoxes: View {
     @ObservedObject var tagManager: ColorTagManager
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 5) {
             ForEach(TagColor.allCases) { color in
                 ColorTagBox(
                     color: color,
-                    count: tagManager.counts[color] ?? 0,
+                    count: tagManager.count(for: color),
                     isActive: isActive(color),
                     manager: manager
                 )
             }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
@@ -485,15 +524,16 @@ struct ColorTagBox: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: 6)
                 .fill(color.color.opacity(isActive ? 1.0 : (isHovered ? 0.85 : 0.7)))
-                .shadow(color: isActive ? color.color.opacity(0.4) : .clear, radius: 4, y: 2)
+                .shadow(color: isActive ? color.color.opacity(0.4) : .clear, radius: 3, y: 1)
 
             Text("\(count)")
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
-        .frame(width: 44, height: 44)
+        .frame(maxWidth: .infinity)
+        .frame(height: 28)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .onTapGesture {

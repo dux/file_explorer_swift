@@ -199,6 +199,7 @@ struct PreviewHeader: View {
             Image(systemName: icon)
                 .font(.system(size: 14))
                 .foregroundColor(color)
+                .frame(width: 22)
 
             Text(title)
                 .font(.system(size: 13, weight: .medium))
@@ -206,7 +207,7 @@ struct PreviewHeader: View {
 
             Spacer()
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
         .padding(.vertical, 10)
     }
 }

@@ -5,6 +5,7 @@ struct ContentView: View {
     @StateObject private var manager = FileExplorerManager()
     @ObservedObject private var settings = AppSettings.shared
     @State private var isDraggingLeftPane = false
+    @State private var leftPaneDragStartWidth: CGFloat = 0
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -31,8 +32,11 @@ struct ContentView: View {
                     .gesture(
                         DragGesture()
                             .onChanged { value in
-                                isDraggingLeftPane = true
-                                let newWidth = settings.leftPaneWidth + value.translation.width
+                                if !isDraggingLeftPane {
+                                    isDraggingLeftPane = true
+                                    leftPaneDragStartWidth = settings.leftPaneWidth
+                                }
+                                let newWidth = leftPaneDragStartWidth + value.translation.width
                                 settings.leftPaneWidth = min(400, max(150, newWidth))
                             }
                             .onEnded { _ in

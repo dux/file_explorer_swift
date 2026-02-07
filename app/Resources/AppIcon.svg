@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="folderBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5B9BD5"/>
+      <stop offset="100%" stop-color="#2E75B6"/>
+    </linearGradient>
+    <linearGradient id="folderTab" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6CAEE0"/>
+      <stop offset="100%" stop-color="#4A90C4"/>
+    </linearGradient>
+    <linearGradient id="folderFront" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7EC4F0"/>
+      <stop offset="100%" stop-color="#4A9AD8"/>
+    </linearGradient>
+    <linearGradient id="arrowGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FF6B35"/>
+      <stop offset="100%" stop-color="#E04520"/>
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="115%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+    <filter id="arrowShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="2" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <!-- Folder back -->
+  <g filter="url(#shadow)">
+    <!-- Tab -->
+    <path d="M140 260 L140 210 Q140 180 170 180 L380 180 Q400 180 415 200 L460 260 Z" fill="url(#folderTab)"/>
+    <!-- Body back -->
+    <rect x="140" y="260" width="744" height="520" rx="30" fill="url(#folderBody)"/>
+    <!-- Body front (slightly raised) -->
+    <rect x="140" y="310" width="744" height="480" rx="28" fill="url(#folderFront)"/>
+    <!-- Subtle shine -->
+    <rect x="160" y="320" width="704" height="60" rx="16" fill="white" opacity="0.12"/>
+  </g>
+  <!-- Arrow striking through folder diagonally -->
+  <g filter="url(#arrowShadow)">
+    <!-- Arrow shaft -->
+    <line x1="680" y1="140" x2="340" y2="680" stroke="url(#arrowGrad)" stroke-width="52" stroke-linecap="round"/>
+    <!-- Arrow head -->
+    <polygon points="310,720 280,580 420,650" fill="#E04520"/>
+    <!-- Arrow tail feathers -->
+    <line x1="710" y1="100" x2="740" y2="190" stroke="#FF6B35" stroke-width="28" stroke-linecap="round"/>
+    <line x1="710" y1="100" x2="630" y2="120" stroke="#FF6B35" stroke-width="28" stroke-linecap="round"/>
+  </g>
+</svg>

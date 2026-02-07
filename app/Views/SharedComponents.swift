@@ -42,11 +42,15 @@ private final class URLCollector: @unchecked Sendable {
 
 // MARK: - Shared Utility Functions
 
-func formatDateShort(_ date: Date) -> String {
+private let sharedDateFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateStyle = .medium
     formatter.timeStyle = .short
-    return formatter.string(from: date)
+    return formatter
+}()
+
+func formatDateShort(_ date: Date) -> String {
+    sharedDateFormatter.string(from: date)
 }
 
 func calculateFileSize(url: URL, isDirectory: Bool, completion: @MainActor @escaping (String, Int?) -> Void) {

@@ -67,6 +67,7 @@ class FileExplorerManager: ObservableObject {
     @Published var searchResults: [CachedFileInfo] = []
     @Published var isSearchRunning: Bool = false
     private var searchTask: Process?
+    private var searchDebounceTask: Task<Void, Never>?
 
     // Remember selected item per folder
     private var selectionMemory: [String: URL] = [:]
@@ -75,9 +76,12 @@ class FileExplorerManager: ObservableObject {
             AppSettings.shared.browserViewMode = browserViewMode.rawValue.lowercased()
         }
     }
+    private var suppressSortDidSet = false
     @Published var sortMode: SortMode = .name {
         didSet {
-            loadContents()
+            if !suppressSortDidSet {
+                loadContents()
+            }
         }
     }
 
@@ -455,7 +459,9 @@ class FileExplorerManager: ObservableObject {
             }
 
             currentPath = targetURL
+            suppressSortDidSet = true
             sortMode = defaultSortMode(for: targetURL)
+            suppressSortDidSet = false
             loadContents()
             restoreSelection()
         } else {
@@ -519,24 +525,19 @@ class FileExplorerManager: ObservableObject {
         savedSelectedItem = selectedItem
         savedSelectedIndex = selectedIndex
         sidebarFocused = true
-        // Try to highlight the item matching the current path
+        // Clamp saved index to valid range, only re-lookup if out of bounds
         let items = sidebarItems
-        if let idx = items.firstIndex(where: { $0.path == currentPath.path }) {
-            sidebarIndex = idx
-        } else {
-            sidebarIndex = min(sidebarIndex, max(items.count - 1, 0))
+        if sidebarIndex < 0 || sidebarIndex >= items.count {
+            if let idx = items.firstIndex(where: { $0.path == currentPath.path }) {
+                sidebarIndex = idx
+            } else {
+                sidebarIndex = min(sidebarIndex, max(items.count - 1, 0))
+            }
         }
     }
 
     func unfocusSidebar() {
         sidebarFocused = false
-        // Restore main selection if it still exists in current directory
-        if let saved = savedSelectedItem,
-           let idx = allItems.firstIndex(where: { $0.url == saved }) {
-            selectItem(at: idx, url: saved)
-        } else if !allItems.isEmpty {
-            selectItem(at: 0, url: allItems[0].url)
-        }
     }
 
     // MARK: - Right pane navigation
@@ -593,11 +594,8 @@ class FileExplorerManager: ObservableObject {
     // MARK: - Selection (Single item only)
 
     func selectItem(at index: Int, url: URL) {
-        // Clear any previous selection and set new one
         selectedIndex = index
         selectedItem = url
-        // Show preview pane when selecting a file
-        AppSettings.shared.showPreviewPane = true
     }
 
     // MARK: - Keyboard Navigation
@@ -734,6 +732,7 @@ class FileExplorerManager: ObservableObject {
         searchQuery = query
 
         // Cancel previous search
+        searchDebounceTask?.cancel()
         searchTask?.terminate()
         searchTask = nil
 
@@ -750,6 +749,15 @@ class FileExplorerManager: ObservableObject {
         }
 
         isSearchRunning = true
+
+        searchDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms debounce
+            guard !Task.isCancelled else { return }
+            await self.executeSearch(query: query, trimmed: trimmed, fdPath: fdPath)
+        }
+    }
+
+    private func executeSearch(query: String, trimmed: String, fdPath: String) {
         let searchDir = currentPath.path
         let showAll = showHidden
 

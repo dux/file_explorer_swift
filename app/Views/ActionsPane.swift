@@ -14,6 +14,8 @@ struct ActionsPane: View {
     @State private var showImageConvertSheet = false
     @State private var showUninstallConfirm = false
     @State private var appDataPaths: [URL] = []
+    @State private var showEmojiPicker = false
+    @ObservedObject private var folderIconManager = FolderIconManager.shared
 
     private var targetURL: URL {
         manager.selectedItem ?? manager.currentPath
@@ -129,10 +131,14 @@ struct ActionsPane: View {
         VStack(alignment: .leading, spacing: 0) {
             // File/Folder header with icon + name
             HStack(spacing: 8) {
-                Image(nsImage: IconProvider.shared.icon(for: targetURL, isDirectory: isDirectory))
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 20, height: 20)
+                if isDirectory {
+                    FolderIconView(url: targetURL, size: 20)
+                } else {
+                    Image(nsImage: IconProvider.shared.icon(for: targetURL, isDirectory: false))
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 20, height: 20)
+                }
 
                 Text(targetName)
                     .font(.system(size: 14))
@@ -146,7 +152,7 @@ struct ActionsPane: View {
 
             Divider()
 
-            VStack(spacing: 2) {
+            VStack(spacing: 4) {
                 ActionButton(
                     icon: selection.containsLocal(targetURL) ? "minus.circle" : "checkmark.circle",
                     title: selection.containsLocal(targetURL) ? "Remove from selection" : "Add to selection",
@@ -175,6 +181,32 @@ struct ActionsPane: View {
                     manager: manager
                 ) {
                     manager.startRename()
+                }
+
+                if isDirectory && !isAppBundle {
+                    ActionButton(
+                        icon: "face.smiling",
+                        title: "Assign icon",
+                        color: .purple,
+                        flatIndex: 3,
+                        manager: manager
+                    ) {
+                        showEmojiPicker = true
+                    }
+                    .popover(isPresented: $showEmojiPicker, arrowEdge: .leading) {
+                        EmojiPickerView(
+                            folderURL: targetURL,
+                            onSelect: { emoji in
+                                folderIconManager.setEmoji(emoji, for: targetURL)
+                            },
+                            onRemove: {
+                                folderIconManager.removeEmoji(for: targetURL)
+                            },
+                            onDismiss: { showEmojiPicker = false },
+                            hasExisting: folderIconManager.emoji(for: targetURL) != nil
+                        )
+                        .interactiveDismissDisabled()
+                    }
                 }
 
                 if isAppBundle {
@@ -402,15 +434,6 @@ struct ActionsPane: View {
         ToastManager.shared.show("Path copied to clipboard")
     }
 
-    private func moveToTrash() {
-        do {
-            try FileManager.default.trashItem(at: targetURL, resultingItemURL: nil)
-            manager.refresh()
-        } catch {
-            ToastManager.shared.showError("Error moving to trash: \(error.localizedDescription)")
-        }
-    }
-
     private func loadApps(for url: URL) {
         allApps = AppSearcher.shared.appsForFile(url)
     }
@@ -448,7 +471,7 @@ struct ActionButton: View {
                 Spacer()
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isFocused ? Color.accentColor : (isHovered ? Color.gray.opacity(0.15) : Color.clear))

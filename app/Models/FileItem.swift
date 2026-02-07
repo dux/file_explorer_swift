@@ -264,6 +264,23 @@ class SelectionManager: ObservableObject {
         return count
     }
 
+    /// Find a unique destination URL, appending " 2", " 3", etc. if needed
+    private func uniqueDestination(for name: String, in destination: URL) -> URL {
+        let fm = FileManager.default
+        var destURL = destination.appendingPathComponent(name)
+        guard fm.fileExists(atPath: destURL.path) else { return destURL }
+
+        let baseName = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        var counter = 2
+        repeat {
+            let newName = ext.isEmpty ? "\(baseName) \(counter)" : "\(baseName) \(counter).\(ext)"
+            destURL = destination.appendingPathComponent(newName)
+            counter += 1
+        } while fm.fileExists(atPath: destURL.path)
+        return destURL
+    }
+
     /// Move local items to local destination
     func moveLocalItems(to destination: URL) -> Int {
         var count = 0
@@ -271,7 +288,7 @@ class SelectionManager: ObservableObject {
 
         for item in localItems {
             guard let url = item.localURL else { continue }
-            let destPath = destination.appendingPathComponent(item.name)
+            let destPath = uniqueDestination(for: item.name, in: destination)
 
             do {
                 try fm.moveItem(at: url, to: destPath)
@@ -292,7 +309,7 @@ class SelectionManager: ObservableObject {
 
         for item in localItems {
             guard let url = item.localURL else { continue }
-            let destPath = destination.appendingPathComponent(item.name)
+            let destPath = uniqueDestination(for: item.name, in: destination)
 
             do {
                 try fm.copyItem(at: url, to: destPath)

@@ -428,3 +428,448 @@ struct HelperTests {
         #expect(formatPath("/tmp/test", full: true) == "/tmp/test")
     }
 }
+
+// MARK: - SuppressSortDidSet Tests
+
+@Suite("NavigateTo SortMode")
+struct NavigateToSortModeTests {
+    @Test("navigating to Downloads sets sortMode to modified")
+    @MainActor func downloadsUsesModifiedSort() {
+        let manager = FileExplorerManager()
+        let downloads = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
+        manager.navigateTo(downloads)
+        #expect(manager.sortMode == .modified)
+    }
+
+    @Test("navigating to Documents keeps sortMode as name")
+    @MainActor func documentsUsesNameSort() {
+        let manager = FileExplorerManager()
+        let docs = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents")
+        manager.navigateTo(docs)
+        #expect(manager.sortMode == .name)
+    }
+
+    @Test("navigating from Downloads to Documents changes sortMode back to name")
+    @MainActor func sortModeChangesOnNavigation() {
+        let manager = FileExplorerManager()
+        let downloads = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
+        let docs = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents")
+        manager.navigateTo(downloads)
+        #expect(manager.sortMode == .modified)
+        manager.navigateTo(docs)
+        #expect(manager.sortMode == .name)
+    }
+}
+
+// MARK: - UniqueDestination (via copyLocalItems) Tests
+
+@Suite("UniqueDestination")
+struct UniqueDestinationTests {
+    @Test("copyLocalItems creates numbered copy when name conflicts")
+    @MainActor func copyWithConflict() throws {
+        let fm = FileManager.default
+        let tmpDir = fm.temporaryDirectory.appendingPathComponent("unique-dest-\(UUID().uuidString)")
+        try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: tmpDir) }
+
+        // Create source file
+        let srcDir = tmpDir.appendingPathComponent("src")
+        try fm.createDirectory(at: srcDir, withIntermediateDirectories: true)
+        let srcFile = srcDir.appendingPathComponent("file.txt")
+        try "original".write(to: srcFile, atomically: true, encoding: .utf8)
+
+        // Create conflicting file in destination
+        let destDir = tmpDir.appendingPathComponent("dest")
+        try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
+        let conflicting = destDir.appendingPathComponent("file.txt")
+        try "existing".write(to: conflicting, atomically: true, encoding: .utf8)
+
+        // Add source file to selection and copy
+        let sel = SelectionManager.shared
+        sel.clear()
+        sel.addLocal(srcFile)
+        let count = sel.copyLocalItems(to: destDir)
+        #expect(count == 1)
+
+        // The copy should be named "file 2.txt"
+        let copied = destDir.appendingPathComponent("file 2.txt")
+        #expect(fm.fileExists(atPath: copied.path))
+
+        // Original conflicting file should still be there
+        #expect(try String(contentsOf: conflicting, encoding: .utf8) == "existing")
+        #expect(try String(contentsOf: copied, encoding: .utf8) == "original")
+
+        sel.clear()
+    }
+
+    @Test("copyLocalItems uses original name when no conflict")
+    @MainActor func copyNoConflict() throws {
+        let fm = FileManager.default
+        let tmpDir = fm.temporaryDirectory.appendingPathComponent("unique-dest-nc-\(UUID().uuidString)")
+        try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: tmpDir) }
+
+        let srcDir = tmpDir.appendingPathComponent("src")
+        try fm.createDirectory(at: srcDir, withIntermediateDirectories: true)
+        let srcFile = srcDir.appendingPathComponent("noconflict.txt")
+        try "data".write(to: srcFile, atomically: true, encoding: .utf8)
+
+        let destDir = tmpDir.appendingPathComponent("dest")
+        try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
+
+        let sel = SelectionManager.shared
+        sel.clear()
+        sel.addLocal(srcFile)
+        let count = sel.copyLocalItems(to: destDir)
+        #expect(count == 1)
+
+        let copied = destDir.appendingPathComponent("noconflict.txt")
+        #expect(fm.fileExists(atPath: copied.path))
+
+        sel.clear()
+    }
+
+    @Test("copyLocalItems handles multiple conflicts with incrementing numbers")
+    @MainActor func copyMultipleConflicts() throws {
+        let fm = FileManager.default
+        let tmpDir = fm.temporaryDirectory.appendingPathComponent("unique-dest-mc-\(UUID().uuidString)")
+        try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: tmpDir) }
+
+        let srcDir = tmpDir.appendingPathComponent("src")
+        try fm.createDirectory(at: srcDir, withIntermediateDirectories: true)
+        let srcFile = srcDir.appendingPathComponent("doc.pdf")
+        try "pdf-data".write(to: srcFile, atomically: true, encoding: .utf8)
+
+        let destDir = tmpDir.appendingPathComponent("dest")
+        try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
+        // Create "doc.pdf" and "doc 2.pdf" already in dest
+        try "v1".write(to: destDir.appendingPathComponent("doc.pdf"), atomically: true, encoding: .utf8)
+        try "v2".write(to: destDir.appendingPathComponent("doc 2.pdf"), atomically: true, encoding: .utf8)
+
+        let sel = SelectionManager.shared
+        sel.clear()
+        sel.addLocal(srcFile)
+        let count = sel.copyLocalItems(to: destDir)
+        #expect(count == 1)
+
+        // Should get "doc 3.pdf"
+        let copied = destDir.appendingPathComponent("doc 3.pdf")
+        #expect(fm.fileExists(atPath: copied.path))
+
+        sel.clear()
+    }
+}
+
+// MARK: - ShortcutItem Stable ID Tests
+
+@Suite("ShortcutItem")
+struct ShortcutItemTests {
+    @Test("id is derived from URL path")
+    func idFromPath() {
+        let item = ShortcutItem(url: URL(fileURLWithPath: "/Users/test/Desktop"), name: "Desktop", isBuiltIn: true)
+        #expect(item.id == "/Users/test/Desktop")
+    }
+
+    @Test("same URL produces same id")
+    func stableId() {
+        let url = URL(fileURLWithPath: "/Applications")
+        let a = ShortcutItem(url: url, name: "Apps", isBuiltIn: true)
+        let b = ShortcutItem(url: url, name: "Applications", isBuiltIn: false)
+        #expect(a.id == b.id)
+    }
+
+    @Test("different URLs produce different ids")
+    func differentIds() {
+        let a = ShortcutItem(url: URL(fileURLWithPath: "/tmp/a"), name: "A", isBuiltIn: false)
+        let b = ShortcutItem(url: URL(fileURLWithPath: "/tmp/b"), name: "B", isBuiltIn: false)
+        #expect(a.id != b.id)
+    }
+}
+
+// MARK: - ContainsLocal Tests
+
+@Suite("SelectionManager ContainsLocal")
+struct ContainsLocalTests {
+    @Test("containsLocal returns true for added local URL")
+    @MainActor func containsLocalTrue() {
+        let sel = SelectionManager.shared
+        sel.clear()
+        let item = makeLocalItem("test.txt", path: "/tmp/contains-local-test")
+        sel.add(item)
+        #expect(sel.containsLocal(URL(fileURLWithPath: "/tmp/contains-local-test")))
+        sel.clear()
+    }
+
+    @Test("containsLocal returns false for non-existent URL")
+    @MainActor func containsLocalFalse() {
+        let sel = SelectionManager.shared
+        sel.clear()
+        #expect(!sel.containsLocal(URL(fileURLWithPath: "/tmp/not-added")))
+    }
+
+    @Test("containsLocal returns false for iPhone items with same path")
+    @MainActor func containsLocalNotIPhone() {
+        let sel = SelectionManager.shared
+        sel.clear()
+        let item = makeIPhoneItem("phone.txt", path: "/tmp/phone-path")
+        sel.add(item)
+        #expect(!sel.containsLocal(URL(fileURLWithPath: "/tmp/phone-path")))
+        sel.clear()
+    }
+}
+
+// MARK: - ColorTagManager Tests
+
+@Suite("ColorTagManager")
+struct ColorTagManagerTests {
+    @MainActor private func makeTempManager() -> (ColorTagManager, URL) {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("color-tag-test-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        let jsonPath = tmpDir.appendingPathComponent("color-labels.json")
+        let mgr = ColorTagManager(filePath: jsonPath)
+        return (mgr, tmpDir)
+    }
+
+    private func cleanup(_ dir: URL) {
+        try? FileManager.default.removeItem(at: dir)
+    }
+
+    @Test("add and count are consistent")
+    @MainActor func addAndCount() {
+        let (mgr, dir) = makeTempManager()
+        defer { cleanup(dir) }
+
+        let url1 = URL(fileURLWithPath: "/tmp/file1.txt")
+        let url2 = URL(fileURLWithPath: "/tmp/file2.txt")
+
+        mgr.add(url1, color: .red)
+        mgr.add(url2, color: .red)
+
+        #expect(mgr.count(for: .red) == 2)
+        #expect(mgr.list(.red).count == 2)
+    }
+
+    @Test("count matches list count always")
+    @MainActor func countMatchesList() {
+        let (mgr, dir) = makeTempManager()
+        defer { cleanup(dir) }
+
+        let urls = (1...5).map { URL(fileURLWithPath: "/tmp/test-\($0).txt") }
+        for url in urls {
+            mgr.add(url, color: .blue)
+        }
+
+        #expect(mgr.count(for: .blue) == mgr.list(.blue).count)
+        #expect(mgr.count(for: .blue) == 5)
+
+        mgr.remove(urls[0], color: .blue)
+        #expect(mgr.count(for: .blue) == mgr.list(.blue).count)
+        #expect(mgr.count(for: .blue) == 4)
+
+        mgr.remove(urls[1], color: .blue)
+        mgr.remove(urls[2], color: .blue)
+        #expect(mgr.count(for: .blue) == mgr.list(.blue).count)
+        #expect(mgr.count(for: .blue) == 2)
+    }
+
+    @Test("duplicate add does not increase count")
+    @MainActor func duplicateAdd() {
+        let (mgr, dir) = makeTempManager()
+        defer { cleanup(dir) }
+
+        let url = URL(fileURLWithPath: "/tmp/dup.txt")
+        mgr.add(url, color: .green)
+        mgr.add(url, color: .green)
+        mgr.add(url, color: .green)
+
+        #expect(mgr.count(for: .green) == 1)
+        #expect(mgr.list(.green).count == 1)
+    }
+
+    @Test("remove reduces count")
+    @MainActor func removeReducesCount() {
+        let (mgr, dir) = makeTempManager()
+        defer { cleanup(dir) }
+
+        let url = URL(fileURLWithPath: "/tmp/rm.txt")
+        mgr.add(url, color: .orange)
+        #expect(mgr.count(for: .orange) == 1)
+
+        mgr.remove(url, color: .orange)
+        #expect(mgr.count(for: .orange) == 0)
+        #expect(mgr.list(.orange).count == 0)
+    }
+
+    @Test("remove all colors")
+    @MainActor func removeAllColors() {
+        let (mgr, dir) = makeTempManager()
+        defer { cleanup(dir) }
+
+        let url = URL(fileURLWithPath: "/tmp/multi.txt")
+        mgr.add(url, color: .red)
+        mgr.add(url, color: .blue)
+        mgr.add(url, color: .green)
+
+        #expect(mgr.colorsForFile(url).count == 3)
+
+        mgr.remove(url)
+        for color in TagColor.allCases {
+            #expect(mgr.count(for: color) == 0)
+            #expect(mgr.list(color).count == 0)
+        }
+    }
+
+    @Test("toggle adds then removes")
+    @MainActor func toggleAddRemove() {
+        let (mgr, dir) = makeTempManager()
+        defer { cleanup(dir) }
+
+        let url = URL(fileURLWithPath: "/tmp/toggle.txt")
+        mgr.toggle(url, color: .red)
+        #expect(mgr.count(for: .red) == 1)
+        #expect(mgr.isTagged(url, color: .red))
+
+        mgr.toggle(url, color: .red)
+        #expect(mgr.count(for: .red) == 0)
+        #expect(!mgr.isTagged(url, color: .red))
+    }
+
+    @Test("totalCount is sum of all colors")
+    @MainActor func totalCountSum() {
+        let (mgr, dir) = makeTempManager()
+        defer { cleanup(dir) }
+
+        mgr.add(URL(fileURLWithPath: "/tmp/a"), color: .red)
+        mgr.add(URL(fileURLWithPath: "/tmp/b"), color: .red)
+        mgr.add(URL(fileURLWithPath: "/tmp/c"), color: .blue)
+
+        #expect(mgr.totalCount == 3)
+    }
+
+    @Test("save and reload preserves data")
+    @MainActor func saveAndReload() {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("color-tag-persist-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let jsonPath = tmpDir.appendingPathComponent("color-labels.json")
+
+        // Create, add, save
+        let mgr1 = ColorTagManager(filePath: jsonPath)
+        mgr1.add(URL(fileURLWithPath: "/tmp/persist1.txt"), color: .red)
+        mgr1.add(URL(fileURLWithPath: "/tmp/persist2.txt"), color: .blue)
+        mgr1.save()
+
+        // Create new instance from same file
+        let mgr2 = ColorTagManager(filePath: jsonPath)
+        #expect(mgr2.count(for: .red) == 1)
+        #expect(mgr2.count(for: .blue) == 1)
+        #expect(mgr2.list(.red).count == 1)
+        #expect(mgr2.list(.blue).count == 1)
+    }
+
+    @Test("colorsForFile returns correct colors")
+    @MainActor func colorsForFile() {
+        let (mgr, dir) = makeTempManager()
+        defer { cleanup(dir) }
+
+        let url = URL(fileURLWithPath: "/tmp/multi-color.txt")
+        mgr.add(url, color: .red)
+        mgr.add(url, color: .orange)
+
+        let colors = mgr.colorsForFile(url)
+        #expect(colors.contains(.red))
+        #expect(colors.contains(.orange))
+        #expect(!colors.contains(.blue))
+        #expect(!colors.contains(.green))
+    }
+
+    @Test("version increments on every mutation")
+    @MainActor func versionIncrements() {
+        let (mgr, dir) = makeTempManager()
+        defer { cleanup(dir) }
+
+        let v0 = mgr.version
+        mgr.add(URL(fileURLWithPath: "/tmp/v1"), color: .red)
+        #expect(mgr.version == v0 + 1)
+
+        mgr.remove(URL(fileURLWithPath: "/tmp/v1"), color: .red)
+        #expect(mgr.version == v0 + 2)
+    }
+}
+
+// MARK: - AppSettings Tests
+
+@Suite("AppSettings")
+struct AppSettingsTests {
+    @Test("shared instance has valid defaults or loaded values")
+    @MainActor func sharedExists() {
+        let settings = AppSettings.shared
+        // Font size should be reasonable (either default 12 or loaded value)
+        #expect(settings.previewFontSize >= 8)
+        #expect(settings.previewFontSize <= 32)
+    }
+
+    @Test("font size clamped by increase/decrease")
+    @MainActor func fontSizeClamping() {
+        let settings = AppSettings.shared
+        let original = settings.previewFontSize
+
+        // Set to max and try to go higher
+        settings.previewFontSize = 32
+        settings.increaseFontSize()
+        #expect(settings.previewFontSize == 32)
+
+        // Set to min and try to go lower
+        settings.previewFontSize = 8
+        settings.decreaseFontSize()
+        #expect(settings.previewFontSize == 8)
+
+        // Restore original
+        settings.previewFontSize = original
+    }
+
+    @Test("preferred apps add and remove")
+    @MainActor func preferredApps() {
+        let settings = AppSettings.shared
+        let testKey = "__test_ext_\(UUID().uuidString)__"
+
+        settings.addPreferredApp(for: testKey, appPath: "/Applications/TextEdit.app")
+        #expect(settings.getPreferredApps(for: testKey).contains("/Applications/TextEdit.app"))
+
+        settings.removePreferredApp(for: testKey, appPath: "/Applications/TextEdit.app")
+        #expect(!settings.getPreferredApps(for: testKey).contains("/Applications/TextEdit.app"))
+    }
+
+    @Test("normalizes empty extension to __empty__")
+    @MainActor func emptyExtensionNormalized() {
+        let settings = AppSettings.shared
+        settings.addPreferredApp(for: "", appPath: "/tmp/test.app")
+        #expect(settings.getPreferredApps(for: "").contains("/tmp/test.app"))
+        settings.removePreferredApp(for: "", appPath: "/tmp/test.app")
+    }
+}
+
+// MARK: - Search Debounce Tests
+
+@Suite("Search Debounce")
+struct SearchDebounceTests {
+    @Test("empty search clears results")
+    @MainActor func emptySearchClears() {
+        let manager = FileExplorerManager()
+        manager.performSearch("")
+        #expect(manager.searchResults.isEmpty)
+        #expect(!manager.isSearchRunning)
+    }
+
+    @Test("whitespace-only search clears results")
+    @MainActor func whitespaceSearchClears() {
+        let manager = FileExplorerManager()
+        manager.performSearch("   ")
+        #expect(manager.searchResults.isEmpty)
+        #expect(!manager.isSearchRunning)
+    }
+}

@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import WebKit
 import UniformTypeIdentifiers
 
 struct ResizableSplitView<Top: View, Bottom: View>: View {
@@ -9,11 +8,13 @@ struct ResizableSplitView<Top: View, Bottom: View>: View {
     @ViewBuilder let bottom: () -> Bottom
 
     @State private var isDragging = false
+    @State private var dragSplit: CGFloat? = nil
 
     var body: some View {
         GeometryReader { geometry in
             let totalHeight = geometry.size.height
-            let topHeight = totalHeight * settings.previewPaneSplit
+            let activeSplit = dragSplit ?? settings.previewPaneSplit
+            let topHeight = totalHeight * activeSplit
             let bottomHeight = totalHeight - topHeight - 8 // 8 for divider
 
             VStack(spacing: 0) {
@@ -33,15 +34,18 @@ struct ResizableSplitView<Top: View, Bottom: View>: View {
                         }
                     }
                     .gesture(
-                        DragGesture()
+                        DragGesture(minimumDistance: 2)
                             .onChanged { value in
                                 isDragging = true
-                                let newTopHeight = topHeight + value.translation.height
+                                let newTopHeight = totalHeight * settings.previewPaneSplit + value.translation.height
                                 let newSplit = newTopHeight / totalHeight
-                                // Clamp between 20% and 80%
-                                settings.previewPaneSplit = min(0.8, max(0.2, newSplit))
+                                dragSplit = min(0.8, max(0.2, newSplit))
                             }
                             .onEnded { _ in
+                                if let s = dragSplit {
+                                    settings.previewPaneSplit = s
+                                }
+                                dragSplit = nil
                                 isDragging = false
                             }
                     )
@@ -57,6 +61,8 @@ struct MainContentView: View {
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject private var settings = AppSettings.shared
     @State private var isDraggingRightPane = false
+    @State private var rightPaneDragStartWidth: CGFloat = 0
+    @State private var dragRightPaneWidth: CGFloat? = nil
 
     private static let imageExtensionsCheck: Set<String> = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif", "tiff", "tif", "svg", "avif"]
 
@@ -86,14 +92,20 @@ struct MainContentView: View {
                         }
                     }
                     .gesture(
-                        DragGesture()
+                        DragGesture(minimumDistance: 2)
                             .onChanged { value in
-                                isDraggingRightPane = true
-                                // Dragging left increases width, right decreases
-                                let newWidth = settings.rightPaneWidth - value.translation.width
-                                settings.rightPaneWidth = min(900, max(200, newWidth))
+                                if !isDraggingRightPane {
+                                    isDraggingRightPane = true
+                                    rightPaneDragStartWidth = settings.rightPaneWidth
+                                }
+                                let newWidth = min(900, max(200, rightPaneDragStartWidth - value.translation.width))
+                                dragRightPaneWidth = newWidth
                             }
                             .onEnded { _ in
+                                if let w = dragRightPaneWidth {
+                                    settings.rightPaneWidth = w
+                                }
+                                dragRightPaneWidth = nil
                                 isDraggingRightPane = false
                             }
                     )
@@ -132,11 +144,69 @@ struct MainContentView: View {
                         Spacer()
                     }
                 }
-                .frame(width: settings.rightPaneWidth)
+                .frame(width: dragRightPaneWidth ?? settings.rightPaneWidth)
                 .background(Color(red: 0.98, green: 0.976, blue: 0.96))
         }
         .background(Color(NSColor.windowBackgroundColor))
         .background(KeyEventHandlingView(manager: manager))
+        .sheet(isPresented: Binding(
+            get: { manager.renamingItem != nil },
+            set: { if !$0 { manager.cancelRename() } }
+        )) {
+            RenameDialog(manager: manager)
+        }
+    }
+}
+
+struct RenameDialog: View {
+    @ObservedObject var manager: FileExplorerManager
+
+    private var isDirectory: Bool {
+        guard let item = manager.renamingItem else { return false }
+        var isDir: ObjCBool = false
+        FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir)
+        return isDir.boolValue
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Image(systemName: isDirectory ? "folder.fill" : "doc.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.blue)
+                Text("Rename")
+                    .font(.system(size: 16, weight: .semibold))
+                Spacer()
+            }
+
+            TextField("Name", text: $manager.renameText)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit {
+                    if !manager.renameText.isEmpty {
+                        manager.confirmRename()
+                    }
+                }
+
+            HStack {
+                Button("Cancel") {
+                    manager.cancelRename()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Rename") {
+                    if !manager.renameText.isEmpty {
+                        manager.confirmRename()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(manager.renameText.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 300)
     }
 }
 
@@ -154,10 +224,18 @@ struct KeyEventHandlingView: NSViewRepresentable {
 
     func updateNSView(_ nsView: KeyCaptureView, context: Context) {
         nsView.manager = manager
-        // Reclaim focus when not renaming or searching
-        if manager.renamingItem == nil && !manager.isSearching {
-            DispatchQueue.main.async {
-                nsView.window?.makeFirstResponder(nsView)
+        // Reclaim focus when no sheet/dialog is active and we don't have focus
+        if manager.renamingItem == nil && !manager.isSearching && !manager.showItemDialog {
+            if let window = nsView.window {
+                let responder = window.firstResponder
+                // Reclaim if focus is on the window itself (sheet just closed) or already on us
+                if responder === window || responder === nsView || responder is KeyCaptureView {
+                    if !(responder is KeyCaptureView) {
+                        DispatchQueue.main.async {
+                            window.makeFirstResponder(nsView)
+                        }
+                    }
+                }
             }
         }
     }
@@ -187,18 +265,18 @@ class KeyCaptureView: NSView {
             return
         }
 
-        // Tab - cycle panes: center -> left -> right -> center
+        // Tab - cycle panes: left -> center -> right -> left
         if event.keyCode == 48 { // Tab
             if manager.sidebarFocused {
-                // left -> right
+                // left -> center
                 manager.unfocusSidebar()
-                manager.focusRightPane()
             } else if manager.rightPaneFocused {
-                // right -> center
+                // right -> left
                 manager.unfocusRightPane()
-            } else {
-                // center -> left
                 manager.focusSidebar()
+            } else {
+                // center -> right
+                manager.focusRightPane()
             }
             return
         }
@@ -279,9 +357,9 @@ class KeyCaptureView: NSView {
             }
         case 49: // Space - quick look / toggle selection
             manager.toggleGlobalSelection()
-        case 36: // Return/Enter - open item dialog
+        case 36: // Return/Enter - rename selected item
             if manager.selectedItem != nil {
-                manager.showItemDialog = true
+                manager.startRename()
             }
         case 51: // Delete/Backspace - go back
             if event.modifierFlags.contains(.command) {
@@ -346,6 +424,8 @@ struct ToolbarView: View {
 struct BreadcrumbView: View {
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject var shortcutsManager = ShortcutsManager.shared
+    @ObservedObject var folderIconManager = FolderIconManager.shared
+    @State private var showEmojiPicker = false
 
     private var pathComponents: [(name: String, url: URL)] {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -387,6 +467,31 @@ struct BreadcrumbView: View {
             }
 
             Spacer()
+
+            // Icon button (only when pinned)
+            if isPinned {
+                Button(action: { showEmojiPicker = true }) {
+                    Image(systemName: "face.smiling")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Set folder icon")
+                .popover(isPresented: $showEmojiPicker, arrowEdge: .bottom) {
+                    EmojiPickerView(
+                        folderURL: manager.currentPath,
+                        onSelect: { emoji in
+                            folderIconManager.setEmoji(emoji, for: manager.currentPath)
+                        },
+                        onRemove: {
+                            folderIconManager.removeEmoji(for: manager.currentPath)
+                        },
+                        onDismiss: { showEmojiPicker = false },
+                        hasExisting: folderIconManager.emoji(for: manager.currentPath) != nil
+                    )
+                    .interactiveDismissDisabled()
+                }
+            }
 
             // Pin button
             Button(action: {

@@ -4,9 +4,14 @@ struct ColorTagView: View {
     let color: TagColor
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject var tagManager = ColorTagManager.shared
-    @State private var files: [TaggedFile] = []
+
+    private var files: [TaggedFile] {
+        tagManager.list(color)
+    }
 
     var body: some View {
+        let _ = tagManager.version
+        let fileCount = tagManager.count(for: color)
         VStack(spacing: 0) {
             // Header bar
             HStack(spacing: 10) {
@@ -17,7 +22,7 @@ struct ColorTagView: View {
                 Text(color.label)
                     .font(.system(size: 14, weight: .semibold))
 
-                Text("\(files.count) item\(files.count == 1 ? "" : "s")")
+                Text("\(fileCount) item\(fileCount == 1 ? "" : "s")")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
 
@@ -52,7 +57,7 @@ struct ColorTagView: View {
                     Text("No items tagged \(color.label.lowercased())")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
-                    Text("Right-click any file and choose Color Tag")
+                    Text("Right-click any file and choose Color Label")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary.opacity(0.7))
                 }
@@ -65,8 +70,7 @@ struct ColorTagView: View {
                                 file: file,
                                 color: color,
                                 manager: manager,
-                                tagManager: tagManager,
-                                onRemove: { reload() }
+                                tagManager: tagManager
                             )
                         }
                     }
@@ -74,12 +78,6 @@ struct ColorTagView: View {
             }
         }
         .background(Color(NSColor.textBackgroundColor))
-        .onAppear { reload() }
-        .onChange(of: tagManager.version) { _ in reload() }
-    }
-
-    private func reload() {
-        files = tagManager.filesForColor(color)
     }
 }
 
@@ -88,16 +86,19 @@ struct ColorTagFileRow: View {
     let color: TagColor
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject var tagManager: ColorTagManager
-    let onRemove: () -> Void
     @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 10) {
             if file.exists {
-                Image(nsImage: IconProvider.shared.icon(for: file.url, isDirectory: file.isDirectory))
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 22, height: 22)
+                if file.isDirectory {
+                    FolderIconView(url: file.url, size: 22)
+                } else {
+                    Image(nsImage: IconProvider.shared.icon(for: file.url, isDirectory: false))
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 22, height: 22)
+                }
             } else {
                 Image(systemName: "questionmark.circle")
                     .font(.system(size: 18))
@@ -124,7 +125,6 @@ struct ColorTagFileRow: View {
             if isHovered {
                 Button(action: {
                     tagManager.untagFile(file.url, color: color)
-                    onRemove()
                 }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 14))
@@ -179,7 +179,7 @@ struct ColorTagMenu: View {
                 }
             }
         } label: {
-            Label("Color Tag", systemImage: "tag")
+            Label("Color Label", systemImage: "tag")
         }
     }
 }

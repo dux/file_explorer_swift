@@ -1,5 +1,4 @@
 import SwiftUI
-import WebKit
 
 struct FileBrowserPane: View {
     @ObservedObject var manager: FileExplorerManager
@@ -134,10 +133,14 @@ struct SearchResultRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(nsImage: IconProvider.shared.icon(for: item.url, isDirectory: item.isDirectory))
-                .resizable()
-                .interpolation(.high)
-                .frame(width: 22, height: 22)
+            if item.isDirectory {
+                FolderIconView(url: item.url, size: 22)
+            } else {
+                Image(nsImage: IconProvider.shared.icon(for: item.url, isDirectory: false))
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 22, height: 22)
+            }
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.name)
@@ -412,16 +415,12 @@ struct SelectedFilesView: View {
                     .foregroundColor(.secondary)
                 Spacer()
                 if !selectedItems.isEmpty {
-                    Text("Clear All")
-                        .font(.system(size: 12))
-                        .foregroundColor(.red)
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onEnded { _ in
-                                    selection.clear()
-                                }
-                        )
+                    Button(action: { selection.clear() }) {
+                        Text("Clear All")
+                            .font(.system(size: 12))
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 12)

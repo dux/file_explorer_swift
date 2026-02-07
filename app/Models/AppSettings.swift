@@ -9,6 +9,8 @@ class AppSettings: ObservableObject {
         .appendingPathComponent(".config/dux-file-explorer")
     private let configDir = AppSettings.configBase
     private let configFile: URL
+    private var isLoading = false
+    private var saveTask: Task<Void, Never>?
 
     @Published var previewFontSize: CGFloat {
         didSet { saveAsync() }
@@ -75,7 +77,9 @@ class AppSettings: ObservableObject {
         migrateOldConfig()
 
         // Load saved settings
+        isLoading = true
         load()
+        isLoading = false
     }
 
     private func migrateOldConfig() {
@@ -146,43 +150,70 @@ class AppSettings: ObservableObject {
     }
 
     private func saveAsync() {
-        let configDir = self.configDir
-        let configFile = self.configFile
-        let fontSize = self.previewFontSize
-        let split = self.previewPaneSplit
-        let showPreview = self.showPreviewPane
-        let leftWidth = self.leftPaneWidth
-        let rightWidth = self.rightPaneWidth
-        let viewMode = self.browserViewMode
-        let winX = self.windowX
-        let winY = self.windowY
-        let winW = self.windowWidth
-        let winH = self.windowHeight
-        let apps = self.preferredApps
+        guard !isLoading else { return }
 
-        DispatchQueue.global(qos: .utility).async {
-            // Ensure config directory exists
-            try? FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+        // Cancel previous pending save (debounce)
+        saveTask?.cancel()
 
-            var json: [String: Any] = [
-                "previewFontSize": fontSize,
-                "previewPaneSplit": split,
-                "showPreviewPane": showPreview,
-                "leftPaneWidth": leftWidth,
-                "rightPaneWidth": rightWidth,
-                "browserViewMode": viewMode,
-                "preferredApps": apps
-            ]
+        let snapshot = SettingsSnapshot(
+            configDir: configDir,
+            configFile: configFile,
+            fontSize: previewFontSize,
+            split: previewPaneSplit,
+            showPreview: showPreviewPane,
+            leftWidth: leftPaneWidth,
+            rightWidth: rightPaneWidth,
+            viewMode: browserViewMode,
+            winX: windowX,
+            winY: windowY,
+            winW: windowWidth,
+            winH: windowHeight,
+            apps: preferredApps
+        )
 
-            // Add window position if set
-            if let x = winX { json["windowX"] = x }
-            if let y = winY { json["windowY"] = y }
-            if let w = winW { json["windowWidth"] = w }
-            if let h = winH { json["windowHeight"] = h }
+        saveTask = Task.detached(priority: .utility) {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            Self.writeToDisk(snapshot)
+        }
+    }
 
-            if let data = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted) {
-                try? data.write(to: configFile)
-            }
+    private struct SettingsSnapshot: Sendable {
+        let configDir: URL
+        let configFile: URL
+        let fontSize: CGFloat
+        let split: CGFloat
+        let showPreview: Bool
+        let leftWidth: CGFloat
+        let rightWidth: CGFloat
+        let viewMode: String
+        let winX: CGFloat?
+        let winY: CGFloat?
+        let winW: CGFloat?
+        let winH: CGFloat?
+        let apps: [String: [String]]
+    }
+
+    private nonisolated static func writeToDisk(_ s: SettingsSnapshot) {
+        try? FileManager.default.createDirectory(at: s.configDir, withIntermediateDirectories: true)
+
+        var json: [String: Any] = [
+            "previewFontSize": s.fontSize,
+            "previewPaneSplit": s.split,
+            "showPreviewPane": s.showPreview,
+            "leftPaneWidth": s.leftWidth,
+            "rightPaneWidth": s.rightWidth,
+            "browserViewMode": s.viewMode,
+            "preferredApps": s.apps
+        ]
+
+        if let x = s.winX { json["windowX"] = x }
+        if let y = s.winY { json["windowY"] = y }
+        if let w = s.winW { json["windowWidth"] = w }
+        if let h = s.winH { json["windowHeight"] = h }
+
+        if let data = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted) {
+            try? data.write(to: s.configFile)
         }
     }
 
