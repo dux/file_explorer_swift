@@ -1,5 +1,7 @@
 .PHONY: help all clean build run app install watch gh-pub
 
+APP_NAME = FileExplorerByDux
+
 default: build run
 
 help:
@@ -24,38 +26,39 @@ clean:
 	@echo "Clean complete"
 
 build:
-	@echo "Building FileExplorer..."
+	@echo "Building $(APP_NAME)..."
 	@swift build
 	@echo "Creating app bundle..."
-	@mkdir -p FileExplorer.app/Contents/MacOS
-	@mkdir -p FileExplorer.app/Contents/Resources
-	@cp app/Info.plist FileExplorer.app/Contents/
-	@cp .build/debug/FileExplorer FileExplorer.app/Contents/MacOS/
-	@cp app/Resources/AppIcon.icns FileExplorer.app/Contents/Resources/
-	@cp -R .build/debug/FileExplorer_FileExplorer.bundle FileExplorer.app/Contents/Resources/
-	@codesign --force --sign - --entitlements FileExplorer.entitlements FileExplorer.app/Contents/MacOS/FileExplorer 2>/dev/null || true
+	@mkdir -p $(APP_NAME).app/Contents/MacOS
+	@mkdir -p $(APP_NAME).app/Contents/Resources
+	@cp app/Info.plist $(APP_NAME).app/Contents/
+	@cp .build/debug/FileExplorer $(APP_NAME).app/Contents/MacOS/FileExplorer
+	@cp app/Resources/AppIcon.icns $(APP_NAME).app/Contents/Resources/
+	@cp -R .build/debug/FileExplorer_FileExplorer.bundle $(APP_NAME).app/Contents/Resources/
+	@cp -R .build/debug/FileExplorer_FileExplorer.bundle $(APP_NAME).app/
+	@codesign --force --sign - --entitlements FileExplorer.entitlements $(APP_NAME).app/Contents/MacOS/FileExplorer 2>/dev/null || true
 	@pkill -x "FileExplorer" 2>/dev/null || true
 	@sleep 0.3
-	@rm -rf /Applications/FileExplorer.app
-	@cp -R FileExplorer.app /Applications/
-	@rm -rf FileExplorer.app
-	@echo "Installed to /Applications/FileExplorer.app"
+	@rm -rf /Applications/$(APP_NAME).app
+	@cp -R $(APP_NAME).app /Applications/
+	@rm -rf $(APP_NAME).app
+	@echo "Installed to /Applications/$(APP_NAME).app"
 
 run:
-	@echo "Running FileExplorer..."
-	@open /Applications/FileExplorer.app
+	@echo "Running $(APP_NAME)..."
+	@open /Applications/$(APP_NAME).app
 
 gh-pub: build
 	@VERSION=$$(date +%Y.%m.%d-%H%M); \
 	echo "Publishing v$$VERSION to GitHub..."; \
-	tar -czf FileExplorer.app.tar.gz -C /Applications FileExplorer.app; \
+	tar -czf $(APP_NAME).app.tar.gz -C /Applications $(APP_NAME).app; \
 	git tag -f "v$$VERSION"; \
 	git push origin main --tags --force; \
-	gh release create "v$$VERSION" FileExplorer.app.tar.gz \
+	gh release create "v$$VERSION" $(APP_NAME).app.tar.gz \
 		--title "v$$VERSION" \
 		--notes "Release v$$VERSION" \
 		--latest; \
-	rm -f FileExplorer.app.tar.gz; \
+	rm -f $(APP_NAME).app.tar.gz; \
 	echo "Published v$$VERSION"
 
 watch:
@@ -64,7 +67,7 @@ watch:
 	@while true; do \
 		find app -name "*.swift" -newer .watch_timestamp 2>/dev/null | grep -q . && \
 		(echo "Changes detected, rebuilding..." && \
-		 pkill -x "File Explorer" 2>/dev/null; \
+		 pkill -x "FileExplorer" 2>/dev/null; \
 		 make build \
 		 touch .watch_timestamp); \
 		sleep 1; \
