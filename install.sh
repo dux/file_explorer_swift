@@ -1,9 +1,9 @@
 #!/bin/bash
 
-APP_NAME="FileExplorer"
+APP_NAME="FileExplorerByDux"
 REPO="dux/file_explorer_swift"
 INSTALL_DIR="/Applications"
-DOWNLOAD_URL="https://github.com/$REPO/releases/latest/download/FileExplorer.app.tar.gz"
+DOWNLOAD_URL="https://github.com/$REPO/releases/latest/download/$APP_NAME.app.tar.gz"
 
 info() { echo "* $1"; }
 fail() { echo "ERROR: $1"; exit 1; }
