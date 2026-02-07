@@ -374,6 +374,11 @@ struct FileTreeRow: View {
             }) {
                 Label("Copy Path", systemImage: "doc.on.clipboard").font(.system(size: 15))
             }
+            Button(action: {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }) {
+                Label("Show in Finder", systemImage: "folder").font(.system(size: 15))
+            }
             Divider()
             Button(action: { manager.duplicateFile(url) }) {
                 Label("Duplicate", systemImage: "doc.on.doc").font(.system(size: 15))

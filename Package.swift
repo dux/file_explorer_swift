@@ -27,7 +27,9 @@ let package = Package(
             path: "app",
             exclude: ["Info.plist"],
             resources: [
-                .copy("Resources/Icons")
+                .copy("Resources/Icons"),
+                .copy("Resources/AppIcon.icns"),
+                .copy("Resources/AppIcon.svg")
             ]
         ),
         .testTarget(

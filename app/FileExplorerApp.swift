@@ -1,10 +1,17 @@
 import SwiftUI
+import AppKit
 
 @main
 struct FileExplorerApp: App {
     static var initialPath: URL?
 
     init() {
+        // Set dock/cmd-tab icon from bundle
+        if let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+           let icon = NSImage(contentsOf: iconURL) {
+            NSApplication.shared.applicationIconImage = icon
+        }
+
         // Check command line arguments for initial folder
         let args = CommandLine.arguments
         if args.count > 1 {

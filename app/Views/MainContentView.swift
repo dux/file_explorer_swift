@@ -377,10 +377,28 @@ class KeyCaptureView: NSView {
                 manager.refresh()
                 return
             }
-        case 125: // Down arrow - select next
-            manager.selectNext()
-        case 126: // Up arrow - select previous
-            manager.selectPrevious()
+        case 125: // Down arrow
+            if event.modifierFlags.contains(.command) {
+                // Cmd+Down - enter folder (like Finder)
+                if let item = manager.selectedItem {
+                    var isDirectory: ObjCBool = false
+                    FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory)
+                    if isDirectory.boolValue {
+                        manager.navigateTo(item)
+                        if manager.selectedItem == nil && !manager.allItems.isEmpty {
+                            manager.selectItem(at: 0, url: manager.allItems[0].url)
+                        }
+                    }
+                }
+            } else {
+                manager.selectNext()
+            }
+        case 126: // Up arrow
+            if event.modifierFlags.contains(.command) {
+                manager.navigateUp() // Cmd+Up - go to parent (like Finder)
+            } else {
+                manager.selectPrevious()
+            }
         case 123: // Left arrow - go to parent folder
             manager.navigateUp()
         case 124: // Right arrow - enter folder

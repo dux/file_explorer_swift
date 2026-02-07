@@ -10,7 +10,7 @@ help:
 	@echo "  make all          - Same as default"
 	@echo "  make build        - Build the app"
 	@echo "  make app          - Create .app bundle"
-	@echo "  make install      - Install to ~/Applications"
+	@echo "  make install      - Install to /Applications"
 	@echo "  make run          - Run the installed app"
 	@echo "  make clean        - Remove build artifacts"
 	@echo "  make gh-pub       - Build release, tag and publish to GitHub"
@@ -32,22 +32,23 @@ build:
 	@cp app/Info.plist FileExplorer.app/Contents/
 	@cp .build/debug/FileExplorer FileExplorer.app/Contents/MacOS/
 	@cp app/Resources/AppIcon.icns FileExplorer.app/Contents/Resources/
+	@cp -R .build/debug/FileExplorer_FileExplorer.bundle FileExplorer.app/Contents/Resources/
 	@codesign --force --sign - --entitlements FileExplorer.entitlements FileExplorer.app/Contents/MacOS/FileExplorer 2>/dev/null || true
 	@pkill -x "FileExplorer" 2>/dev/null || true
 	@sleep 0.3
-	@rm -rf ~/Applications/FileExplorer.app
-	@cp -R FileExplorer.app ~/Applications/
+	@rm -rf /Applications/FileExplorer.app
+	@cp -R FileExplorer.app /Applications/
 	@rm -rf FileExplorer.app
-	@echo "Installed to ~/Applications/FileExplorer.app"
+	@echo "Installed to /Applications/FileExplorer.app"
 
 run:
 	@echo "Running FileExplorer..."
-	@open ~/Applications/FileExplorer.app
+	@open /Applications/FileExplorer.app
 
 gh-pub: build
 	@VERSION=$$(date +%Y.%m.%d-%H%M); \
 	echo "Publishing v$$VERSION to GitHub..."; \
-	tar -czf FileExplorer.app.tar.gz -C ~/Applications FileExplorer.app; \
+	tar -czf FileExplorer.app.tar.gz -C /Applications FileExplorer.app; \
 	git tag -f "v$$VERSION"; \
 	git push origin main --tags --force; \
 	gh release create "v$$VERSION" FileExplorer.app.tar.gz \
