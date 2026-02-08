@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct FileTreeView: View {
     @ObservedObject var manager: FileExplorerManager
+    @ObservedObject private var settings = AppSettings.shared
     @State private var isDragOver = false
 
     private static let home = FileManager.default.homeDirectoryForCurrentUser
@@ -47,35 +48,52 @@ struct FileTreeView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         Spacer().frame(height: 2)
-                        // Ancestor rows
-                        let ancestorList = ancestors
-                        ForEach(Array(ancestorList.enumerated()), id: \.element.url) { depth, ancestor in
-                            let isCurrent = ancestor.url.path == manager.currentPath.path
-                            AncestorRow(
-                                name: ancestor.name,
-                                url: ancestor.url,
-                                depth: depth,
-                                isCurrent: isCurrent,
-                                indentStep: indentStep,
-                                manager: manager
-                            )
-                        }
 
-                        // Children rows
-                        let childDepth = ancestorList.count
-                        ForEach(Array(manager.allItems.enumerated()), id: \.element.id) { index, fileInfo in
-                            FileTreeRow(
-                                fileInfo: fileInfo,
-                                manager: manager,
-                                index: index,
-                                depth: childDepth,
-                                indentStep: indentStep
-                            )
-                            .id(fileInfo.id)
+                        if settings.flatFolders {
+                            // Compact breadcrumb + flat list
+                            FlatBreadcrumbRow(ancestors: ancestors, manager: manager)
+
+                            ForEach(Array(manager.allItems.enumerated()), id: \.element.id) { index, fileInfo in
+                                FileTreeRow(
+                                    fileInfo: fileInfo,
+                                    manager: manager,
+                                    index: index,
+                                    depth: 1,
+                                    indentStep: indentStep
+                                )
+                                .id(fileInfo.id)
+                            }
+                        } else {
+                            // Ancestor rows
+                            let ancestorList = ancestors
+                            ForEach(Array(ancestorList.enumerated()), id: \.element.url) { depth, ancestor in
+                                let isCurrent = ancestor.url.path == manager.currentPath.path
+                                AncestorRow(
+                                    name: ancestor.name,
+                                    url: ancestor.url,
+                                    depth: depth,
+                                    isCurrent: isCurrent,
+                                    indentStep: indentStep,
+                                    manager: manager
+                                )
+                            }
+
+                            // Children rows
+                            let childDepth = ancestorList.count
+                            ForEach(Array(manager.allItems.enumerated()), id: \.element.id) { index, fileInfo in
+                                FileTreeRow(
+                                    fileInfo: fileInfo,
+                                    manager: manager,
+                                    index: index,
+                                    depth: childDepth,
+                                    indentStep: indentStep
+                                )
+                                .id(fileInfo.id)
+                            }
                         }
                     }
                 }
-                .id(manager.currentPath.absoluteString)
+                .id("\(manager.currentPath.absoluteString)_\(settings.flatFolders)")
                 .onChange(of: manager.selectedIndex) { newIndex in
                     if newIndex >= 0, let item = manager.allItems[safe: newIndex] {
                         withAnimation(.easeInOut(duration: 0.15)) {
@@ -145,6 +163,82 @@ struct FileTreeView: View {
 extension Array {
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
+    }
+}
+
+struct FlatBreadcrumbRow: View {
+    let ancestors: [(name: String, url: URL)]
+    @ObservedObject var manager: FileExplorerManager
+    @ObservedObject var shortcutsManager = ShortcutsManager.shared
+    @ObservedObject var folderIconManager = FolderIconManager.shared
+
+    private var isPinned: Bool {
+        shortcutsManager.customFolders.contains(where: { $0.path == manager.currentPath.path })
+    }
+
+    private var isSelected: Bool {
+        manager.selectedItem == manager.currentPath
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            FolderIconView(url: manager.currentPath, size: 20, selected: isSelected)
+
+            ForEach(Array(ancestors.enumerated()), id: \.element.url) { index, ancestor in
+                if index > 0 {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
+
+                let isCurrent = ancestor.url.path == manager.currentPath.path
+                Text(ancestor.name)
+                    .font(.system(size: 15, weight: isCurrent ? .semibold : .regular))
+                    .foregroundColor(isSelected ? .white : (isCurrent ? .primary : .secondary))
+                    .lineLimit(1)
+                    .onTapGesture {
+                        if !isCurrent {
+                            manager.navigateTo(ancestor.url)
+                        } else if isSelected {
+                            manager.selectedItem = nil
+                            manager.selectedIndex = -1
+                        } else {
+                            manager.selectedItem = ancestor.url
+                            manager.selectedIndex = -1
+                        }
+                    }
+            }
+
+            if manager.hiddenCount > 0 {
+                Text("+\(manager.hiddenCount) hidden")
+                    .font(.system(size: 12))
+                    .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary.opacity(0.6))
+            }
+
+            Spacer()
+
+            Button(action: {
+                if isPinned {
+                    shortcutsManager.removeFolder(manager.currentPath)
+                } else {
+                    shortcutsManager.addFolder(manager.currentPath)
+                }
+            }) {
+                HStack(spacing: 3) {
+                    Image(systemName: isPinned ? "pin.fill" : "pin")
+                        .font(.system(size: 12))
+                    Text(isPinned ? "unpin" : "pin folder")
+                        .font(.system(size: 12))
+                }
+                .foregroundColor(isPinned ? .orange : .secondary.opacity(0.5))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(isSelected ? Color.accentColor : Color.clear)
+        .contentShape(Rectangle())
     }
 }
 
@@ -344,7 +438,7 @@ struct FileTreeRow: View {
                 if isDirectory {
                     manager.navigateTo(url)
                 } else {
-                    manager.toggleFileSelection(url)
+                    manager.openItem(url)
                 }
                 lastClickTime = .distantPast
             } else {
@@ -385,6 +479,16 @@ struct FileTreeRow: View {
             }
             Button(action: { manager.addToZip(url) }) {
                 Label("Add to Zip", systemImage: "doc.zipper").font(.system(size: 15))
+            }
+            if ["zip", "tar", "tgz", "gz", "bz2", "xz", "rar", "7z"].contains(url.pathExtension.lowercased()) {
+                Button(action: { manager.extractArchive(url) }) {
+                    Label("Extract to folder", systemImage: "arrow.down.doc").font(.system(size: 15))
+                }
+            }
+            if url.pathExtension.lowercased() == "app" && isDirectory {
+                Button(action: { manager.enableUnsafeApp(url) }) {
+                    Label("Enable unsafe app", systemImage: "checkmark.shield").font(.system(size: 15))
+                }
             }
             Divider()
             Button(role: .destructive, action: { manager.moveToTrash(url) }) {

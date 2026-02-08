@@ -57,8 +57,19 @@ class AppSettings: ObservableObject {
         didSet { saveAsync() }
     }
 
+    // Recently used apps (global, across all file types)
+    // Ordered most-recent-first, capped at 10
+    @Published var recentlyUsedApps: [String] = [] {
+        didSet { saveAsync() }
+    }
+
     // Default folder handler (use this app instead of Finder)
     @Published var defaultFolderHandler: Bool {
+        didSet { saveAsync() }
+    }
+
+    // Flat folders mode (compact breadcrumb instead of ancestor tree)
+    @Published var flatFolders: Bool {
         didSet { saveAsync() }
     }
 
@@ -83,6 +94,7 @@ class AppSettings: ObservableObject {
         windowHeight = nil
         preferredApps = [:]
         defaultFolderHandler = false
+        flatFolders = false
         omdbAPIKey = ""
 
         // Migrate from old config path
@@ -162,8 +174,14 @@ class AppSettings: ObservableObject {
         if let folderHandler = json["defaultFolderHandler"] as? Bool {
             defaultFolderHandler = folderHandler
         }
+        if let flat = json["flatFolders"] as? Bool {
+            flatFolders = flat
+        }
         if let key = json["omdbAPIKey"] as? String {
             omdbAPIKey = key
+        }
+        if let recent = json["recentlyUsedApps"] as? [String] {
+            recentlyUsedApps = recent
         }
     }
 
@@ -188,7 +206,9 @@ class AppSettings: ObservableObject {
             winH: windowHeight,
             apps: preferredApps,
             folderHandler: defaultFolderHandler,
-            omdbKey: omdbAPIKey
+            flatFolders: flatFolders,
+            omdbKey: omdbAPIKey,
+            recentApps: recentlyUsedApps
         )
 
         saveTask = Task.detached(priority: .utility) {
@@ -213,7 +233,9 @@ class AppSettings: ObservableObject {
         let winH: CGFloat?
         let apps: [String: [String]]
         let folderHandler: Bool
+        let flatFolders: Bool
         let omdbKey: String
+        let recentApps: [String]
     }
 
     nonisolated private static func writeToDisk(_ s: SettingsSnapshot) {
@@ -235,7 +257,9 @@ class AppSettings: ObservableObject {
         if let h = s.winH { json["windowHeight"] = h }
 
         json["defaultFolderHandler"] = s.folderHandler
+        json["flatFolders"] = s.flatFolders
         json["omdbAPIKey"] = s.omdbKey
+        json["recentlyUsedApps"] = s.recentApps
 
         if let data = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted) {
             try? data.write(to: s.configFile)
@@ -268,9 +292,24 @@ class AppSettings: ObservableObject {
         }
     }
 
+    func movePreferredApp(for fileType: String, from source: IndexSet, to destination: Int) {
+        let key = normalizeFileType(fileType)
+        guard var apps = preferredApps[key], !apps.isEmpty else { return }
+        apps.move(fromOffsets: source, toOffset: destination)
+        preferredApps[key] = apps
+    }
+
     func getPreferredApps(for fileType: String) -> [String] {
         let key = normalizeFileType(fileType)
         return preferredApps[key] ?? []
+    }
+
+    func addRecentlyUsedApp(appPath: String) {
+        var apps = recentlyUsedApps
+        apps.removeAll { $0 == appPath }
+        apps.insert(appPath, at: 0)
+        if apps.count > 10 { apps = Array(apps.prefix(10)) }
+        if recentlyUsedApps != apps { recentlyUsedApps = apps }
     }
 
     func increaseFontSize() {

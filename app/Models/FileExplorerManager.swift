@@ -393,6 +393,46 @@ class FileExplorerManager: ObservableObject {
         }
     }
 
+    func enableUnsafeApp(_ url: URL) {
+        guard url.pathExtension.lowercased() == "app" else { return }
+        let appPath = url.path
+        ToastManager.shared.show("Enabling \(url.deletingPathExtension().lastPathComponent)...")
+        Task.detached {
+            // Remove quarantine attributes
+            let xattr = Process()
+            xattr.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
+            xattr.arguments = ["-cr", appPath]
+            try? xattr.run()
+            xattr.waitUntilExit()
+            // Remove ._ files
+            let findDot = Process()
+            findDot.executableURL = URL(fileURLWithPath: "/usr/bin/find")
+            findDot.arguments = [appPath, "-name", "._*", "-delete"]
+            try? findDot.run()
+            findDot.waitUntilExit()
+            // Remove .DS_Store files
+            let findDS = Process()
+            findDS.executableURL = URL(fileURLWithPath: "/usr/bin/find")
+            findDS.arguments = [appPath, "-name", ".DS_Store", "-delete"]
+            try? findDS.run()
+            findDS.waitUntilExit()
+            // Re-sign the app
+            let codesign = Process()
+            codesign.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+            codesign.arguments = ["--force", "--deep", "--sign", "-", appPath]
+            try? codesign.run()
+            codesign.waitUntilExit()
+            let success = codesign.terminationStatus == 0
+            await MainActor.run {
+                if success {
+                    ToastManager.shared.show("App enabled successfully")
+                } else {
+                    ToastManager.shared.showError("Failed to enable app")
+                }
+            }
+        }
+    }
+
     func moveToTrash(_ url: URL) {
         do {
             try fileManager.trashItem(at: url, resultingItemURL: nil)
@@ -666,6 +706,8 @@ class FileExplorerManager: ObservableObject {
         openItem(item)
     }
 
+    private static let archiveExtensions: Set<String> = ["zip", "tar", "tgz", "gz", "bz2", "xz", "rar", "7z"]
+
     func openItem(_ item: URL) {
         var isDirectory: ObjCBool = false
         fileManager.fileExists(atPath: item.path, isDirectory: &isDirectory)
@@ -673,7 +715,12 @@ class FileExplorerManager: ObservableObject {
         if isDirectory.boolValue {
             navigateTo(item)
         } else {
-            NSWorkspace.shared.open(item)
+            let ext = item.pathExtension.lowercased()
+            if Self.archiveExtensions.contains(ext) {
+                extractArchive(item)
+            } else {
+                openFileWithPreferredApp(item)
+            }
         }
     }
 
@@ -685,8 +732,104 @@ class FileExplorerManager: ObservableObject {
            FileManager.default.fileExists(atPath: firstPath) {
             let appURL = URL(fileURLWithPath: firstPath)
             NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
+            AppSettings.shared.addRecentlyUsedApp(appPath: firstPath)
         } else {
             showAppSelectorForURL = url
+        }
+    }
+
+    func extractArchive(_ url: URL) {
+        let parentDir = url.deletingLastPathComponent()
+        let baseName = url.deletingPathExtension().lastPathComponent
+        var destName = baseName
+        var counter = 1
+        var destURL = parentDir.appendingPathComponent(destName)
+
+        // Find unique folder name
+        while fileManager.fileExists(atPath: destURL.path) {
+            destName = "\(baseName)-\(counter)"
+            destURL = parentDir.appendingPathComponent(destName)
+            counter += 1
+        }
+
+        let ext = url.pathExtension.lowercased()
+        let srcPath = url.path
+        let destPath = destURL.path
+        let finalDestName = destName
+
+        ToastManager.shared.show("Extracting...")
+
+        Task.detached {
+            // Create destination folder
+            do {
+                try FileManager.default.createDirectory(atPath: destPath, withIntermediateDirectories: true)
+            } catch {
+                await MainActor.run {
+                    ToastManager.shared.show("Error creating folder: \(error.localizedDescription)")
+                }
+                return
+            }
+
+            let process = Process()
+            let errPipe = Pipe()
+            process.standardError = errPipe
+            process.standardOutput = Pipe() // discard stdout
+
+            switch ext {
+            case "zip":
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+                process.arguments = ["-o", srcPath, "-d", destPath]
+            case "tar", "tgz", "gz", "bz2", "xz":
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
+                process.arguments = ["-xf", srcPath, "-C", destPath]
+            case "rar":
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                process.arguments = ["unrar", "x", "-o+", srcPath, destPath + "/"]
+            case "7z":
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                process.arguments = ["7z", "x", srcPath, "-o" + destPath, "-y"]
+            default:
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+                process.arguments = ["-o", srcPath, "-d", destPath]
+            }
+
+            do {
+                try process.run()
+                let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+
+                let status = process.terminationStatus
+                await MainActor.run {
+                    if status == 0 {
+                        self.loadContents()
+                        ToastManager.shared.show("Extracted to \(finalDestName)/")
+                    } else {
+                        let errMsg = String(data: errData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Unknown error"
+                        // Clean up empty folder on failure
+                        try? FileManager.default.removeItem(atPath: destPath)
+                        ToastManager.shared.show("Extract failed: \(errMsg)")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    try? FileManager.default.removeItem(atPath: destPath)
+                    ToastManager.shared.show("Extract failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    func jumpToLetter(_ letter: Character) {
+        let lower = String(letter).lowercased()
+        let startFrom = selectedIndex + 1
+        // Search from after current selection, then wrap around
+        let afterCurrent = allItems[startFrom...].firstIndex(where: { $0.url.lastPathComponent.lowercased().hasPrefix(lower) })
+        let wrapped = afterCurrent ?? allItems[..<startFrom].firstIndex(where: { $0.url.lastPathComponent.lowercased().hasPrefix(lower) })
+        if let index = wrapped {
+            selectedIndex = index
+            selectedItem = allItems[index].url
+        } else {
+            ToastManager.shared.show("No item starting with '\(letter.uppercased())'")
         }
     }
 

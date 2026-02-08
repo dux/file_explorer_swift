@@ -173,7 +173,7 @@ struct FileTableRow: View {
                 if isDirectory {
                     manager.navigateTo(url)
                 } else {
-                    manager.toggleFileSelection(url)
+                    manager.openItem(url)
                 }
                 lastClickTime = .distantPast
             } else {
@@ -213,6 +213,16 @@ struct FileTableRow: View {
             }
             Button(action: { manager.addToZip(url) }) {
                 Label("Add to Zip", systemImage: "doc.zipper").font(.system(size: 15))
+            }
+            if ["zip", "tar", "tgz", "gz", "bz2", "xz", "rar", "7z"].contains(url.pathExtension.lowercased()) {
+                Button(action: { manager.extractArchive(url) }) {
+                    Label("Extract to folder", systemImage: "arrow.down.doc").font(.system(size: 15))
+                }
+            }
+            if url.pathExtension.lowercased() == "app" && isDirectory {
+                Button(action: { manager.enableUnsafeApp(url) }) {
+                    Label("Enable unsafe app", systemImage: "checkmark.shield").font(.system(size: 15))
+                }
             }
             Divider()
             Button(role: .destructive, action: { manager.moveToTrash(url) }) {

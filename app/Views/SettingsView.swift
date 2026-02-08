@@ -15,7 +15,7 @@ struct SettingsView: View {
                     Label("API Keys", systemImage: "key")
                 }
         }
-        .frame(width: 450, height: 280)
+        .frame(width: 450, height: 560)
     }
 }
 
@@ -39,9 +39,14 @@ struct GeneralSettingsView: View {
                     }
                 }
 
-                Toggle("Show preview pane", isOn: $settings.showPreviewPane)
+                Toggle("Hide previews", isOn: Binding(
+                    get: { !settings.showPreviewPane },
+                    set: { settings.showPreviewPane = !$0 }
+                ))
 
-                Toggle("Default folder app", isOn: Binding(
+                Toggle("Render folders on top in line", isOn: $settings.flatFolders)
+
+                Toggle("Promote to default folder app", isOn: Binding(
                     get: { settings.defaultFolderHandler },
                     set: { newValue in
                         settings.defaultFolderHandler = newValue

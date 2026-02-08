@@ -151,34 +151,38 @@ struct MainContentView: View {
                         ActionsPane(manager: manager)
                     }
 
-                    // Preview below actions
-                    if let selected = manager.selectedItem {
-                        if isMovieFolder(selected) {
+                    if settings.showPreviewPane {
+                        // Preview below actions
+                        if let selected = manager.selectedItem {
+                            if isMovieFolder(selected) {
+                                Divider()
+                                MoviePreviewView(folderURL: selected)
+                                    .id(selected)
+                                    .frame(maxHeight: .infinity)
+                                    .background(Color.white)
+                            } else if isDirectoryWithImages(selected) {
+                                Divider()
+                                FolderGalleryPreview(folderURL: selected)
+                                    .id(selected)
+                                    .frame(maxHeight: .infinity)
+                                    .background(Color.white)
+                            } else if PreviewType.detect(for: selected) != .none {
+                                Divider()
+                                PreviewPane(url: selected, manager: manager)
+                                    .id(selected)
+                                    .frame(maxHeight: .infinity)
+                                    .background(Color.white)
+                            } else {
+                                Spacer()
+                            }
+                        } else if manager.hasImages {
                             Divider()
-                            MoviePreviewView(folderURL: selected)
-                                .id(selected)
-                                .frame(maxHeight: .infinity)
-                                .background(Color.white)
-                        } else if isDirectoryWithImages(selected) {
-                            Divider()
-                            FolderGalleryPreview(folderURL: selected)
-                                .id(selected)
-                                .frame(maxHeight: .infinity)
-                                .background(Color.white)
-                        } else if PreviewType.detect(for: selected) != .none {
-                            Divider()
-                            PreviewPane(url: selected, manager: manager)
-                                .id(selected)
+                            FolderGalleryPreview(folderURL: manager.currentPath)
                                 .frame(maxHeight: .infinity)
                                 .background(Color.white)
                         } else {
                             Spacer()
                         }
-                    } else if manager.hasImages {
-                        Divider()
-                        FolderGalleryPreview(folderURL: manager.currentPath)
-                            .frame(maxHeight: .infinity)
-                            .background(Color.white)
                     } else {
                         Spacer()
                     }
@@ -524,7 +528,14 @@ class KeyCaptureView: NSView {
                 manager.browserViewMode = .files
             }
         default:
-            super.keyDown(with: event)
+            if let chars = event.characters, chars.count == 1,
+               let c = chars.first, c.isLetter,
+               !event.modifierFlags.contains(.command),
+               !event.modifierFlags.contains(.control) {
+                manager.jumpToLetter(c)
+            } else {
+                super.keyDown(with: event)
+            }
         }
     }
 }
@@ -685,9 +696,9 @@ struct ActionButtonBar: View {
                 }
             }) {
                 HStack(spacing: 4) {
-                    Image(systemName: "magnifyingglass")
+                    Image(systemName: manager.isSearching ? "xmark" : "magnifyingglass")
                         .font(.system(size: 12))
-                    Text("Search")
+                    Text(manager.isSearching ? "Close" : "Search")
                         .font(.system(size: 12, weight: .medium))
                 }
             }

@@ -5,6 +5,7 @@ enum PreviewType {
     case text
     case json
     case markdown
+    case fez
     case image
     case pdf
     case makefile
@@ -14,11 +15,17 @@ enum PreviewType {
     case audio
     case video
     case dmg
+    case packageJson
     case none
 
     static func detect(for url: URL) -> Self {
         let ext = url.pathExtension.lowercased()
         let filename = url.lastPathComponent.lowercased()
+
+        // Exact filename matches first
+        if filename == "package.json" {
+            return .packageJson
+        }
 
         // Check by extension first
         if ["md", "markdown"].contains(ext) {
@@ -27,6 +34,10 @@ enum PreviewType {
 
         if ext == "json" {
             return .json
+        }
+
+        if ext == "fez" {
+            return .fez
         }
 
         if ["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "tiff", "ico", "svg", "avif"].contains(ext) {
@@ -138,6 +149,8 @@ struct PreviewPane: View {
             MarkdownPreviewView(url: url)
         case .json:
             JSONPreviewView(url: url)
+        case .fez:
+            FezPreviewView(url: url)
         case .image:
             ImagePreviewView(url: url)
         case .pdf:
@@ -160,6 +173,8 @@ struct PreviewPane: View {
             VideoPreviewView(url: url)
         case .dmg:
             DMGPreviewView(url: url)
+        case .packageJson:
+            PackageJsonPreviewView(url: url)
         case .text:
             TextPreviewView(url: url)
         case .none:

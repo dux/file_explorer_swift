@@ -69,7 +69,8 @@ struct ArchivePreviewView: View {
                                 entry: entry,
                                 isSelected: selectedEntry?.id == entry.id,
                                 archiveURL: url,
-                                manager: manager
+                                manager: manager,
+                                onReload: { loadArchive() }
                             )
                             .onTapGesture {
                                 selectedEntry = entry
@@ -191,7 +192,7 @@ struct ArchivePreviewView: View {
                     let parts = line.trimmingCharacters(in: .whitespaces).split(separator: " ", maxSplits: 3, omittingEmptySubsequences: true)
                     if parts.count >= 4 {
                         let size = UInt64(parts[0]) ?? 0
-                        let path = String(parts[3])
+                        let path = String(parts[3]).trimmingCharacters(in: .whitespaces)
                         let name = URL(fileURLWithPath: path).lastPathComponent
                         let isDir = path.hasSuffix("/")
                         entries.append(ArchiveEntry(path: path, name: name, size: size, isDirectory: isDir, compressedSize: nil))
@@ -280,6 +281,7 @@ struct ArchiveEntryRow: View {
     let isSelected: Bool
     let archiveURL: URL
     @ObservedObject var manager: FileExplorerManager
+    var onReload: () -> Void = {}
 
     private var entryIcon: NSImage {
         if entry.isDirectory {
@@ -290,6 +292,10 @@ struct ArchiveEntryRow: View {
             return NSWorkspace.shared.icon(for: utType)
         }
         return NSWorkspace.shared.icon(for: .item)
+    }
+
+    private var archiveExt: String {
+        archiveURL.pathExtension.lowercased()
     }
 
     var body: some View {
@@ -316,16 +322,123 @@ struct ArchiveEntryRow: View {
         .background(isSelected ? Color.accentColor : Color.clear)
         .cornerRadius(4)
         .contentShape(Rectangle())
-        .onDrag {
-            let tempURL = extractToTemp()
-            if let url = tempURL {
-                return NSItemProvider(object: url as NSURL)
+        .contextMenu {
+            Button(action: { extractToCurrent() }) {
+                Label("Extract to folder", systemImage: "arrow.down.doc").font(.system(size: 15))
             }
-            return NSItemProvider()
+            if archiveExt == "zip" {
+                Divider()
+                Button(role: .destructive, action: { deleteFromArchive() }) {
+                    Label("Delete from archive", systemImage: "trash").font(.system(size: 15))
+                }
+            }
+        }
+        .onDrag {
+            let provider = NSItemProvider()
+            let arc = archiveURL
+            let ent = entry
+            provider.registerFileRepresentation(
+                forTypeIdentifier: UTType.fileURL.identifier,
+                fileOptions: [],
+                visibility: .all
+            ) { completion in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    if let url = Self.extractToTemp(archiveURL: arc, entry: ent) {
+                        completion(url, false, nil)
+                    } else {
+                        completion(nil, false, NSError(domain: "ArchiveExtract", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to extract entry"]))
+                    }
+                }
+                return nil
+            }
+            return provider
         }
     }
 
-    private func extractToTemp() -> URL? {
+    private func extractToCurrent() {
+        let destDir = manager.currentPath
+        let arc = archiveURL
+        let ent = entry
+        let ext = archiveExt
+        ToastManager.shared.show("Extracting \(ent.name)...")
+        Task.detached {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            switch ext {
+            case "zip":
+                process.arguments = ["unzip", "-o", arc.path, ent.path, "-d", destDir.path]
+            case "tar", "tgz", "gz", "bz2", "xz":
+                process.arguments = ["tar", "-xf", arc.path, "-C", destDir.path, ent.path]
+            default:
+                await MainActor.run { ToastManager.shared.showError("Unsupported format") }
+                return
+            }
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+            do {
+                try process.run()
+                _ = pipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                let success = process.terminationStatus == 0
+                await MainActor.run {
+                    if success {
+                        ToastManager.shared.show("Extracted \(ent.name)")
+                        manager.refresh()
+                    } else {
+                        ToastManager.shared.showError("Failed to extract \(ent.name)")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    ToastManager.shared.showError("Extract error: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func deleteFromArchive() {
+        let arc = archiveURL
+        let ent = entry
+        ToastManager.shared.show("Deleting \(ent.name)...")
+        Task.detached {
+            let process = Process()
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+            if ent.isDirectory {
+                // Shell glob needed for directory contents
+                let escaped = arc.path.replacingOccurrences(of: "'", with: "'\\''")
+                let entEscaped = ent.path.replacingOccurrences(of: "'", with: "'\\''")
+                process.executableURL = URL(fileURLWithPath: "/bin/sh")
+                process.arguments = ["-c", "zip -d '\(escaped)' '\(entEscaped)' '\(entEscaped)*'"]
+            } else {
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+                process.arguments = ["-d", arc.path, ent.path]
+            }
+            do {
+                try process.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                let status = process.terminationStatus
+                await MainActor.run {
+                    if status == 0 {
+                        ToastManager.shared.show("Deleted \(ent.name) from archive")
+                        onReload()
+                    } else {
+                        let msg = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Unknown error"
+                        ToastManager.shared.showError("Delete failed: \(msg)")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    ToastManager.shared.showError("Delete error: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    nonisolated private static func extractToTemp(archiveURL: URL, entry: ArchiveEntry) -> URL? {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("ArchiveExtract")
             .appendingPathComponent(UUID().uuidString)
@@ -359,9 +472,7 @@ struct ArchiveEntryRow: View {
             if FileManager.default.fileExists(atPath: extractedURL.path) {
                 return extractedURL
             }
-        } catch {
-            ToastManager.shared.showError("Extract error: \(error.localizedDescription)")
-        }
+        } catch {}
 
         return nil
     }

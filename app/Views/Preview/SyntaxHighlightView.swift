@@ -132,6 +132,7 @@ struct SyntaxHighlightView: NSViewRepresentable {
         // Web
         case "html", "htm": return "html"
         case "css": return "css"
+        case "fez": return "html"
         case "scss": return "scss"
         case "sass": return "sass"
         case "less": return "less"

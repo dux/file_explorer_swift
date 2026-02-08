@@ -5,6 +5,8 @@ struct ActionsPane: View {
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject var settings = AppSettings.shared
     @ObservedObject private var selection = SelectionManager.shared
+    @ObservedObject private var gitRepo = GitRepoManager.shared
+    @ObservedObject private var npmPackage = NpmPackageManager.shared
     @State private var allApps: [AppInfo] = []
     @State private var showAppSelector = false
     @State private var showOtherApps = false
@@ -152,7 +154,7 @@ struct ActionsPane: View {
 
             Divider()
 
-            VStack(spacing: 4) {
+            VStack(spacing: 1) {
                 ActionButton(
                     icon: selection.containsLocal(targetURL) ? "minus.circle" : "checkmark.circle",
                     title: selection.containsLocal(targetURL) ? "Remove from selection" : "Add to selection",
@@ -211,10 +213,19 @@ struct ActionsPane: View {
 
                 if isAppBundle {
                     ActionButton(
+                        icon: "checkmark.shield",
+                        title: "Enable unsafe app",
+                        color: .green,
+                        flatIndex: 3,
+                        manager: manager
+                    ) {
+                        manager.enableUnsafeApp(targetURL)
+                    }
+                    ActionButton(
                         icon: "trash",
                         title: "Uninstall \(targetURL.deletingPathExtension().lastPathComponent)",
                         color: .red,
-                        flatIndex: 3,
+                        flatIndex: 4,
                         manager: manager
                     ) {
                         appDataPaths = AppUninstaller.findAppData(for: targetURL)
@@ -267,6 +278,28 @@ struct ActionsPane: View {
                         showOfficeMetadataSheet = true
                     }
                 }
+
+                if let gitInfo = gitRepo.gitRepoInfo {
+                    ActionButton(
+                        icon: "arrow.up.right.square",
+                        title: gitInfo.displayLabel,
+                        color: .secondary,
+                        manager: manager
+                    ) {
+                        NSWorkspace.shared.open(gitInfo.webURL)
+                    }
+                }
+
+                if let npmInfo = npmPackage.npmPackageInfo {
+                    ActionButton(
+                        icon: "shippingbox",
+                        title: "\(npmInfo.displayLabel) (\(npmInfo.packageName))",
+                        color: .red,
+                        manager: manager
+                    ) {
+                        NSWorkspace.shared.open(npmInfo.webURL)
+                    }
+                }
             }
             .padding(.horizontal, 2)
             .padding(.vertical, 8)
@@ -294,7 +327,7 @@ struct ActionsPane: View {
                 }
 
                 if !preferredApps.isEmpty {
-                    ForEach(Array(preferredApps.enumerated()), id: \.element.url.path) { _, app in
+                    ForEach(Array(preferredApps.enumerated()), id: \.element.url.path) { idx, app in
                         let appIdx = paneItems.firstIndex(where: { $0.id == "app-\(app.url.path)" }) ?? -1
                         PreferredAppButton(
                             icon: app.icon,
@@ -302,11 +335,16 @@ struct ActionsPane: View {
                             appURL: app.url,
                             flatIndex: appIdx,
                             manager: manager,
+                            index: idx,
+                            isDefault: idx == 0,
                             onOpen: {
                                 NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
                             },
                             onRemove: {
                                 settings.removePreferredApp(for: fileType, appPath: app.url.path)
+                            },
+                            onMove: { from, to in
+                                settings.movePreferredApp(for: fileType, from: IndexSet(integer: from), to: to)
                             }
                         )
                     }
@@ -363,6 +401,12 @@ struct ActionsPane: View {
         .onChange(of: targetURL) { newURL in
             loadApps(for: newURL)
             manager.rightPaneItems = buildRightPaneItems()
+            gitRepo.update(for: newURL)
+            npmPackage.update(for: newURL)
+        }
+        .onChange(of: manager.currentPath) { newPath in
+            gitRepo.update(for: newPath)
+            npmPackage.update(for: newPath)
         }
         .onChange(of: manager.rightPaneFocused) { _ in
             manager.rightPaneItems = buildRightPaneItems()
@@ -370,6 +414,8 @@ struct ActionsPane: View {
         .onAppear {
             loadApps(for: targetURL)
             manager.rightPaneItems = buildRightPaneItems()
+            gitRepo.update(for: manager.currentPath)
+            npmPackage.update(for: manager.currentPath)
         }
         .sheet(isPresented: $showAppSelector) {
             AppSelectorSheet(
@@ -471,7 +517,7 @@ struct ActionButton: View {
                 Spacer()
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isFocused ? Color.accentColor : (isHovered ? Color.gray.opacity(0.15) : Color.clear))
@@ -509,7 +555,7 @@ struct ActionButtonWithIcon: View {
                 Spacer()
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isDragTarget ? Color.accentColor.opacity(0.2) :
@@ -539,8 +585,11 @@ struct PreferredAppButton: View {
     let appURL: URL
     var flatIndex: Int = -1
     var manager: FileExplorerManager? = nil
+    var index: Int = 0
+    var isDefault: Bool = false
     let onOpen: () -> Void
     let onRemove: () -> Void
+    var onMove: ((Int, Int) -> Void)? = nil
 
     @State private var isHovered = false
     @State private var isDragTarget = false
@@ -562,6 +611,18 @@ struct PreferredAppButton: View {
                         .font(.system(size: 14))
                         .foregroundColor(isFocused ? .white : .primary)
 
+                    if isDefault {
+                        Text("default")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(isFocused ? .white.opacity(0.7) : .secondary)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(isFocused ? Color.white.opacity(0.2) : Color.gray.opacity(0.15))
+                            )
+                    }
+
                     Spacer()
                 }
             }
@@ -576,7 +637,7 @@ struct PreferredAppButton: View {
             .opacity(isHovered || isFocused ? 1 : 0)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isFocused ? Color.accentColor :
@@ -590,7 +651,23 @@ struct PreferredAppButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .onDrop(of: [.fileURL], isTargeted: $isDragTarget) { providers in
+        .onDrag {
+            NSItemProvider(object: String(index) as NSString)
+        }
+        .onDrop(of: [.text, .fileURL], isTargeted: $isDragTarget) { providers in
+            if let textProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier("public.text") }) {
+                textProvider.loadItem(forTypeIdentifier: "public.text", options: nil) { data, _ in
+                    guard let data = data as? Data,
+                          let str = String(data: data, encoding: .utf8),
+                          let sourceIndex = Int(str),
+                          sourceIndex != index else { return }
+                    DispatchQueue.main.async {
+                        let dest = sourceIndex < index ? index + 1 : index
+                        onMove?(sourceIndex, dest)
+                    }
+                }
+                return true
+            }
             return handleFileDrop(providers: providers, appURL: appURL)
         }
     }

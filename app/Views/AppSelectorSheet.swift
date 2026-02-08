@@ -44,12 +44,14 @@ struct AppSelectorSheet: View {
                     placeholder: "Filter apps...",
                     onTextChange: { newText in
                         filteredApps = searcher.search(newText)
-                        selectedIndex = filteredApps.isEmpty ? -1 : 0
+                        let total = displayApps.count
+                        selectedIndex = total > 0 ? 0 : -1
                     },
                     onSubmit: {
-                        if !filteredApps.isEmpty {
-                            let idx = selectedIndex >= 0 && selectedIndex < filteredApps.count ? selectedIndex : 0
-                            openWithApp(filteredApps[idx])
+                        let apps = displayApps
+                        if !apps.isEmpty {
+                            let idx = selectedIndex >= 0 && selectedIndex < apps.count ? selectedIndex : 0
+                            openWithApp(apps[idx])
                         }
                     }
                 )
@@ -59,7 +61,8 @@ struct AppSelectorSheet: View {
                         searchText = ""
                         searchFieldRef?.stringValue = ""
                         filteredApps = searcher.search("")
-                        selectedIndex = filteredApps.isEmpty ? -1 : 0
+                        let total = displayApps.count
+                        selectedIndex = total > 0 ? 0 : -1
                         searchFieldRef?.window?.makeFirstResponder(searchFieldRef)
                     }) {
                         Image(systemName: "xmark.circle.fill")
@@ -93,10 +96,23 @@ struct AppSelectorSheet: View {
                     .foregroundColor(.secondary)
                 Spacer()
             } else {
+                let allApps = displayApps
+                let recentCount = recentApps.count
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 2) {
-                            ForEach(Array(filteredApps.enumerated()), id: \.element.url.path) { idx, app in
+                            if recentCount > 0 {
+                                Text("Recent")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 10)
+                                    .padding(.top, 4)
+                            }
+                            ForEach(Array(allApps.enumerated()), id: \.element.url.path) { idx, app in
+                                if idx == recentCount && recentCount > 0 {
+                                    Divider().padding(.vertical, 4)
+                                }
                                 AppRow(app: app, isSelected: isListFocused && selectedIndex == idx) {
                                     openWithApp(app)
                                 }
@@ -106,8 +122,8 @@ struct AppSelectorSheet: View {
                         .padding(8)
                     }
                     .onChange(of: selectedIndex) { newIdx in
-                        if isListFocused && newIdx >= 0 && newIdx < filteredApps.count {
-                            proxy.scrollTo(filteredApps[newIdx].url.path, anchor: .center)
+                        if isListFocused && newIdx >= 0 && newIdx < allApps.count {
+                            proxy.scrollTo(allApps[newIdx].url.path, anchor: .center)
                         }
                     }
                 }
@@ -120,10 +136,11 @@ struct AppSelectorSheet: View {
             selectedIndex: $selectedIndex,
             searchText: $searchText,
             searchFieldRef: $searchFieldRef,
-            itemCount: filteredApps.count,
+            itemCount: displayApps.count,
             onActivate: {
-                guard selectedIndex >= 0 && selectedIndex < filteredApps.count else { return }
-                openWithApp(filteredApps[selectedIndex])
+                let apps = displayApps
+                guard selectedIndex >= 0 && selectedIndex < apps.count else { return }
+                openWithApp(apps[selectedIndex])
             },
             onClose: {
                 isPresented = false
@@ -139,8 +156,32 @@ struct AppSelectorSheet: View {
         }
     }
 
+    private var recentApps: [AppInfo] {
+        guard searchText.isEmpty else { return [] }
+        let fm = FileManager.default
+        let recentPaths = AppSettings.shared.recentlyUsedApps.prefix(3)
+        // Exclude apps already in filteredApps top to avoid exact duplicate at top
+        let filteredPaths = Set(filteredApps.prefix(3).map { $0.url.path })
+        return recentPaths.compactMap { path in
+            guard fm.fileExists(atPath: path), !filteredPaths.contains(path) else { return nil }
+            let url = URL(fileURLWithPath: path)
+            let name = url.deletingPathExtension().lastPathComponent
+            let icon = NSWorkspace.shared.icon(forFile: path)
+            return AppInfo(url: url, name: name, icon: icon)
+        }
+    }
+
+    private var displayApps: [AppInfo] {
+        let recent = recentApps
+        if recent.isEmpty { return filteredApps }
+        let recentPaths = Set(recent.map { $0.url.path })
+        let rest = filteredApps.filter { !recentPaths.contains($0.url.path) }
+        return recent + rest
+    }
+
     private func openWithApp(_ app: AppInfo) {
         settings.addPreferredApp(for: fileType, appPath: app.url.path)
+        AppSettings.shared.addRecentlyUsedApp(appPath: app.url.path)
         NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
         isPresented = false
     }

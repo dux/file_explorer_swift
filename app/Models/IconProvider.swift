@@ -81,6 +81,7 @@ final class IconProvider {
         "graphql": "graphql",
         "gql": "graphql",
         "vue": "lib",
+        "fez": "html",
         "postcss": "postcss",
 
         // Data / Config
