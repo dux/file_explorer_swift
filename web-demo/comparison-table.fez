@@ -5,7 +5,7 @@
     init() {
       this.state.rows = [
         { feature: 'Tree view with ancestors', finder: false, fe: true },
-        { feature: 'Full keyboard navigation', finder: false, fe: true },
+        { feature: 'Full keyboard navigation + context menu', finder: false, fe: true },
         { feature: 'Code syntax highlighting', finder: false, fe: true },
         { feature: 'JSON tree viewer', finder: false, fe: true },
         { feature: 'Archive browsing', finder: false, fe: true },

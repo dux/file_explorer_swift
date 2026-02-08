@@ -50,6 +50,8 @@ struct ContentView: View {
             }
             }
 
+            CustomContextMenuOverlay(manager: manager)
+
             ToastView()
                 .padding(.bottom, 20)
         }

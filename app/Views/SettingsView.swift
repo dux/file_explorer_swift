@@ -274,6 +274,7 @@ struct HelpSettingsView: View {
                 }
 
                 helpSection("Right-Click Menu") {
+                    shortcutRow(". / Ctrl+M", "Open context menu for selected file")
                     helpText("View details, copy path, show in Finder, duplicate, add to zip, extract archive, color labels, enable unsigned app, move to trash.")
                 }
 

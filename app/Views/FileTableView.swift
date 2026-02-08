@@ -88,7 +88,6 @@ struct FileTableRow: View {
     @ObservedObject var selection = SelectionManager.shared
     @ObservedObject var tagManager = ColorTagManager.shared
     let index: Int
-    @State private var showingDetails = false
     @State private var lastClickTime: Date = .distantPast
 
     private var url: URL { fileInfo.url }
@@ -195,12 +194,7 @@ struct FileTableRow: View {
             }
         }
         .opacity(isHidden ? 0.5 : 1.0)
-        .contextMenu {
-            FileContextMenuItems(url: url, isDirectory: isDirectory, manager: manager, tagManager: tagManager, showingDetails: $showingDetails)
-        }
-        .sheet(isPresented: $showingDetails) {
-            FileDetailsView(url: url, isDirectory: isDirectory)
-        }
+        .customContextMenu(url: url, isDirectory: isDirectory)
     }
 
     private var humanReadableDate: String {

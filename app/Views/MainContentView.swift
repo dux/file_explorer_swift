@@ -304,6 +304,7 @@ class KeyCaptureView: NSView {
             return
         }
 
+        if handleContextMenuNavigation(event) { return }
         if handleRenameMode(event, manager: manager) { return }
         if handleTabCycle(event, manager: manager) { return }
         if handleSidebarMode(event, manager: manager) { return }
@@ -478,6 +479,27 @@ class KeyCaptureView: NSView {
         }
     }
 
+    private func handleContextMenuNavigation(_ event: NSEvent) -> Bool {
+        let contextMenu = ContextMenuManager.shared
+        guard contextMenu.isShowing else { return false }
+        switch event.keyCode {
+        case 125: // Down
+            contextMenu.moveFocus(1)
+            return true
+        case 126: // Up
+            contextMenu.moveFocus(-1)
+            return true
+        case 36: // Enter
+            contextMenu.activateFocused()
+            return true
+        case 53: // Escape
+            contextMenu.dismiss()
+            return true
+        default:
+            return false
+        }
+    }
+
     private func handleNormalMode(_ event: NSEvent, manager: FileExplorerManager) -> Bool {
         switch event.keyCode {
         case 0:
@@ -545,6 +567,14 @@ class KeyCaptureView: NSView {
                 manager.browserViewMode = .files
             }
             return true
+        case 47: // Period key - show context menu
+            showContextMenuForSelected(manager)
+            return true
+        case 46: // M key with Ctrl - show context menu
+            if event.modifierFlags.contains(.control) {
+                showContextMenuForSelected(manager)
+                return true
+            }
         default:
             if let chars = event.characters, chars.count == 1,
                let c = chars.first, c.isLetter,
@@ -568,6 +598,24 @@ class KeyCaptureView: NSView {
         manager.navigateTo(item)
         if manager.selectedItem == nil && !manager.allItems.isEmpty {
             manager.selectItem(at: 0, url: manager.allItems[0].url)
+        }
+    }
+
+    private func showContextMenuForSelected(_ manager: FileExplorerManager) {
+        guard let item = manager.selectedItem else { return }
+        var isDir: ObjCBool = false
+        FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir)
+        // Position menu near center of the window
+        let position: CGPoint
+        if let window = self.window {
+            let contentHeight = window.contentView?.frame.height ?? 400
+            let contentWidth = window.contentView?.frame.width ?? 600
+            position = CGPoint(x: contentWidth / 2, y: contentHeight / 2)
+        } else {
+            position = CGPoint(x: 300, y: 200)
+        }
+        Task { @MainActor in
+            ContextMenuManager.shared.show(url: item, isDirectory: isDir.boolValue, at: position)
         }
     }
 }

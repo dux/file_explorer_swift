@@ -4,10 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FileExplorer - Native macOS Finder Replacement</title>
-  <script type="module">
-    import PostWind from 'https://cdn.jsdelivr.net/npm/postwind@latest/dist/postwind.min.js';
-    PostWind.init();
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <script src="https://dux.github.io/fez/dist/fez.js"></script>
   <script fez="screenshot-gallery.fez"></script>
   <script fez="feature-card.fez"></script>
@@ -21,7 +18,7 @@
 
   <!-- Hero -->
   <header class="bg-white border-b border-gray-200">
-    <nav class="max-w-5xl mx-auto px-6|4 py-4 flex items-center justify-between">
+    <nav class="max-w-5xl mx-auto px-4 md:px-6 py-4 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <div class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">FE</div>
         <span class="font-semibold text-lg">FileExplorer</span>
@@ -35,14 +32,14 @@
     </nav>
   </header>
 
-  <section class="max-w-5xl mx-auto px-6|4 py-20|12 text-center">
-    <h1 class="text-5xl|3xl font-bold tracking-tight mb-4">
+  <section class="max-w-5xl mx-auto px-4 md:px-6 py-12 md:py-20 text-center">
+    <h1 class="text-3xl md:text-5xl font-bold tracking-tight mb-4">
       A better file manager<br>for macOS
     </h1>
-    <p class="text-xl|base text-gray-500 max-w-2xl mx-auto mb-8">
+    <p class="text-base md:text-xl text-gray-500 max-w-2xl mx-auto mb-8">
       Native Finder replacement built with Swift and SwiftUI. Fast, keyboard-driven, with rich file previews and iPhone file management.
     </p>
-    <div class="flex flex-col sm:flex-row gap-3 justify-center items-center mb-4">
+    <div class="flex flex-col md:flex-row gap-3 justify-center items-center mb-4">
       <a href="#install" class="bg-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-500 transition-colors">
         Install Now
       </a>
@@ -54,19 +51,19 @@
   </section>
 
   <!-- Screenshots -->
-  <section id="screenshots" class="max-w-4xl mx-auto px-6|4 pb-20|12">
+  <section id="screenshots" class="max-w-4xl mx-auto px-4 md:px-6 pb-12 md:pb-20">
     <screenshot-gallery></screenshot-gallery>
   </section>
 
   <!-- Features -->
-  <section id="features" class="bg-white border-y border-gray-200 py-20|12">
-    <div class="max-w-5xl mx-auto px-6|4">
-      <h2 class="text-3xl|2xl font-bold text-center mb-4">Everything Finder should be</h2>
-      <p class="text-gray-500 text-center mb-12|8 max-w-xl mx-auto">Built for power users who need more than drag-and-drop.</p>
-      <div class="grid grid-cols-3|1 gap-4">
+  <section id="features" class="bg-white border-y border-gray-200 py-12 md:py-20">
+    <div class="max-w-5xl mx-auto px-4 md:px-6">
+      <h2 class="text-2xl md:text-3xl font-bold text-center mb-4">Everything Finder should be</h2>
+      <p class="text-gray-500 text-center mb-8 md:mb-12 max-w-xl mx-auto">Built for power users who need more than drag-and-drop.</p>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <feature-card icon="&#x1F333;" title="Tree View" desc="Three-pane layout with ancestor path breadcrumbs and indented children. Sort by name or modified date."></feature-card>
         <feature-card icon="&#x1F50D;" title="Preview Pane" desc="Images, code with syntax highlighting, JSON trees, markdown, PDF, audio, video, archives, EPUB, and more."></feature-card>
-        <feature-card icon="&#x2328;&#xFE0F;" title="Keyboard Driven" desc="Full arrow-key navigation, tab cycling between panes, Enter to rename, Space to select, and many shortcuts."></feature-card>
+        <feature-card icon="&#x2328;&#xFE0F;" title="Keyboard Driven" desc="Full arrow-key navigation, tab cycling between panes, Enter to rename, Space to select, context menu via period key, and many more shortcuts."></feature-card>
         <feature-card icon="&#x1F4F1;" title="iPhone Files" desc="Browse iPhone app sandboxes via USB. Upload, download, delete, and create folders on connected devices."></feature-card>
         <feature-card icon="&#x1F3AC;" title="Movie Info" desc="Auto-detects movie folders and fetches info from OMDB: poster, ratings from IMDb, Rotten Tomatoes, and Metacritic."></feature-card>
         <feature-card icon="&#x1F5BC;&#xFE0F;" title="Image Tools" desc="View EXIF metadata, resize, crop, and convert between png, jpg, webp, heic, tiff, bmp, gif, and avif."></feature-card>
@@ -81,10 +78,10 @@
   </section>
 
   <!-- Comparison -->
-  <section id="compare" class="py-20|12">
-    <div class="max-w-3xl mx-auto px-6|4">
-      <h2 class="text-3xl|2xl font-bold text-center mb-4">FileExplorer vs Finder</h2>
-      <p class="text-gray-500 text-center mb-12|8">Side-by-side comparison of features.</p>
+  <section id="compare" class="py-12 md:py-20">
+    <div class="max-w-3xl mx-auto px-4 md:px-6">
+      <h2 class="text-2xl md:text-3xl font-bold text-center mb-4">FileExplorer vs Finder</h2>
+      <p class="text-gray-500 text-center mb-8 md:mb-12">Side-by-side comparison of features.</p>
       <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <comparison-table></comparison-table>
       </div>
@@ -92,26 +89,26 @@
   </section>
 
   <!-- Install -->
-  <section id="install" class="bg-gray-900 text-white py-20|12">
-    <div class="max-w-3xl mx-auto px-6|4 text-center">
-      <h2 class="text-3xl|2xl font-bold mb-4">Install in one command</h2>
+  <section id="install" class="bg-gray-900 text-white py-12 md:py-20">
+    <div class="max-w-3xl mx-auto px-4 md:px-6 text-center">
+      <h2 class="text-2xl md:text-3xl font-bold mb-4">Install in one command</h2>
       <p class="text-gray-400 mb-8">Downloads the latest build and installs to ~/Applications.</p>
       <div class="bg-gray-800 rounded-xl p-5 text-left font-mono text-sm mb-6 overflow-x-auto">
         <span class="text-gray-500">$</span>
         <span class="text-green-400"> curl -fsSL https://raw.githubusercontent.com/dux/file_explorer_swift/main/install.sh | bash</span>
       </div>
-      <div class="flex flex-col sm:flex-row gap-4 justify-center text-sm text-gray-400">
+      <div class="flex flex-col md:flex-row gap-4 justify-center text-sm text-gray-400">
         <div>Requires macOS 13+</div>
-        <div class="hidden sm:block">&middot;</div>
+        <div class="hidden md:block">&middot;</div>
         <div>Optional: libimobiledevice, fd, ffmpeg</div>
       </div>
     </div>
   </section>
 
   <!-- Build -->
-  <section class="py-20|12">
-    <div class="max-w-3xl mx-auto px-6|4 text-center">
-      <h2 class="text-3xl|2xl font-bold mb-4">Build from source</h2>
+  <section class="py-12 md:py-20">
+    <div class="max-w-3xl mx-auto px-4 md:px-6 text-center">
+      <h2 class="text-2xl md:text-3xl font-bold mb-4">Build from source</h2>
       <p class="text-gray-500 mb-8">Clone the repo and build with make.</p>
       <div class="bg-gray-900 rounded-xl p-5 text-left font-mono text-sm space-y-2 overflow-x-auto">
         <div><span class="text-gray-500">$</span><span class="text-green-400"> make</span><span class="text-gray-500">          # build, install to ~/Applications, and run</span></div>
@@ -123,7 +120,7 @@
 
   <!-- Footer -->
   <footer class="border-t border-gray-200 py-8">
-    <div class="max-w-5xl mx-auto px-6|4 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-400">
+    <div class="max-w-5xl mx-auto px-4 md:px-6 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-400">
       <div>FileExplorer by <a href="https://github.com/dux" class="text-gray-600 hover:text-gray-900">@dux</a></div>
       <div class="flex gap-6">
         <a href="https://github.com/dux/file_explorer_swift" class="hover:text-gray-900 transition-colors">GitHub</a>

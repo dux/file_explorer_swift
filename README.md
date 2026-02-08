@@ -53,7 +53,7 @@ curl -fsSL https://raw.githubusercontent.com/dux/file_explorer_swift/main/instal
 - Multi-file selection with paste/move/trash batch operations
 - Drag-and-drop copy between folders
 - Extract archives (zip, tar, tgz, gz, bz2, xz, rar, 7z) into unique folder
-- Context menus on file rows (open, duplicate, zip, trash, enable app)
+- Context menus on file rows (open, duplicate, zip, trash, enable app) — also accessible via keyboard (`.` or Ctrl+M)
 
 ### Preview pane
 - **Images**: jpg, jpeg, png, gif, bmp, webp, heic, heif, tiff, tif, svg, avif, ico
@@ -128,8 +128,9 @@ curl -fsSL https://raw.githubusercontent.com/dux/file_explorer_swift/main/instal
 - Cmd+O: open with preferred app
 - Ctrl+C: toggle file in selection
 - Ctrl+R: refresh folder contents
+- `.` or Ctrl+M: open context menu for selected file (navigate with Up/Down, Enter to activate, Escape to dismiss)
 - Backspace: navigate back in history
-- Escape: cancel search / exit color tag view
+- Escape: cancel search / dismiss context menu / exit color tag view
 - Home/End: jump to first/last file
 - Type any letter: jump to first file starting with that letter
 - Right pane keyboard navigation with up/down/enter
@@ -171,7 +172,7 @@ curl -fsSL https://raw.githubusercontent.com/dux/file_explorer_swift/main/instal
 | Feature | Finder | FileExplorer |
 |---|---|---|
 | Tree view with ancestors | No | Yes |
-| Keyboard-driven navigation | Limited | Full (arrows, tab cycling, letter jump, right pane) |
+| Keyboard-driven navigation | Limited | Full (arrows, tab cycling, letter jump, context menu, right pane) |
 | Color tags per file | Yes (system tags) | Yes (custom, multi-tag) |
 | File preview | Quick Look (Space) | Inline preview pane, always visible |
 | Code syntax highlighting | No | Yes, 50+ languages |

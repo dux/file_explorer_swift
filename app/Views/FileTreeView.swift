@@ -274,8 +274,6 @@ struct AncestorRow: View {
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject var shortcutsManager = ShortcutsManager.shared
     @ObservedObject var folderIconManager = FolderIconManager.shared
-    @ObservedObject var tagManager = ColorTagManager.shared
-    @State private var showingDetails = false
 
     private var isSelected: Bool {
         manager.selectedItem == url
@@ -340,12 +338,7 @@ struct AncestorRow: View {
                 manager.navigateTo(url)
             }
         }
-        .contextMenu {
-            FileContextMenuItems(url: url, isDirectory: true, manager: manager, tagManager: tagManager, showingDetails: $showingDetails)
-        }
-        .sheet(isPresented: $showingDetails) {
-            FileDetailsView(url: url, isDirectory: true)
-        }
+        .customContextMenu(url: url, isDirectory: true)
     }
 }
 
@@ -357,7 +350,6 @@ struct FileTreeRow: View {
     let index: Int
     let depth: Int
     let indentStep: CGFloat
-    @State private var showingDetails = false
     @State private var lastClickTime: Date = .distantPast
 
     private var url: URL { fileInfo.url }
@@ -492,12 +484,7 @@ struct FileTreeRow: View {
             }
         }
         .opacity(isHidden ? 0.5 : 1.0)
-        .contextMenu {
-            FileContextMenuItems(url: url, isDirectory: isDirectory, manager: manager, tagManager: tagManager, showingDetails: $showingDetails)
-        }
-        .sheet(isPresented: $showingDetails) {
-            FileDetailsView(url: url, isDirectory: isDirectory)
-        }
+        .customContextMenu(url: url, isDirectory: isDirectory)
     }
 }
 
