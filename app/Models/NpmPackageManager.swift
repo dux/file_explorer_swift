@@ -68,7 +68,7 @@ class NpmPackageManager: ObservableObject {
         if let homepage = json["homepage"] as? String,
            !homepage.isEmpty,
            let homepageURL = URL(string: homepage) {
-            let label = "Go to NPM package home"
+            let label = "NPM package home"
             return NpmPackageInfo(
                 webURL: homepageURL,
                 displayLabel: label,
@@ -83,7 +83,7 @@ class NpmPackageManager: ObservableObject {
         // Build npmjs.com URL
         guard let webURL = URL(string: "https://www.npmjs.com/package/\(name)") else { return nil }
 
-        let label = "Go to NPM package home"
+        let label = "NPM package home"
         return NpmPackageInfo(
             webURL: webURL,
             displayLabel: label,

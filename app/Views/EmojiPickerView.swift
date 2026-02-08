@@ -88,7 +88,7 @@ struct EmojiPickerView: View {
             // Header
             HStack {
                 Text("Choose Icon")
-                    .font(.system(size: 14, weight: .semibold))
+                    .textStyle(.default, weight: .semibold)
                 Spacer()
                 if hasExisting {
                     Button(action: {
@@ -96,7 +96,7 @@ struct EmojiPickerView: View {
                         onDismiss()
                     }) {
                         Text("Remove")
-                            .font(.system(size: 12))
+                            .textStyle(.small)
                             .foregroundColor(.red)
                     }
                     .buttonStyle(.plain)
@@ -115,15 +115,15 @@ struct EmojiPickerView: View {
             // Search
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12))
+                    .textStyle(.small)
                     .foregroundColor(.secondary)
                 TextField("Search emoji...", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13))
+                    .textStyle(.buttons)
                 if !searchText.isEmpty {
                     Button(action: { searchText = "" }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 12))
+                            .textStyle(.small)
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -143,7 +143,7 @@ struct EmojiPickerView: View {
                         ForEach(emojiCategories) { cat in
                             Button(action: { selectedTab = cat.id }) {
                                 Text(cat.name)
-                                    .font(.system(size: 11, weight: selectedTab == cat.id ? .semibold : .regular))
+                                    .textStyle(.small, weight: selectedTab == cat.id ? .semibold : .regular)
                                     .foregroundColor(selectedTab == cat.id ? .white : .secondary)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)

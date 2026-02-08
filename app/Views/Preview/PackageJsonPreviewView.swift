@@ -12,17 +12,17 @@ struct PackageJsonPreviewView: View {
             // Header
             HStack(spacing: 8) {
                 Image(systemName: "shippingbox.fill")
-                    .font(.system(size: 14))
+                    .textStyle(.default)
                     .foregroundColor(.green)
 
-                if let pkg = pkg {
+                if let pkg {
                     Text(pkg.name ?? "package.json")
-                        .font(.system(size: 13, weight: .medium))
+                        .textStyle(.buttons)
                         .lineLimit(1)
 
                     if let version = pkg.version {
                         Text("v\(version)")
-                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .textStyle(.small, weight: .medium, mono: true)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Color.green.opacity(0.15))
@@ -30,7 +30,7 @@ struct PackageJsonPreviewView: View {
                     }
                 } else {
                     Text("package.json")
-                        .font(.system(size: 13, weight: .medium))
+                        .textStyle(.buttons)
                         .lineLimit(1)
                 }
 
@@ -39,9 +39,9 @@ struct PackageJsonPreviewView: View {
                 Button(action: { showRaw.toggle() }) {
                     HStack(spacing: 4) {
                         Image(systemName: showRaw ? "list.bullet" : "curlybraces")
-                            .font(.system(size: 12))
+                            .textStyle(.small)
                         Text(showRaw ? "Info" : "Raw")
-                            .font(.system(size: 12))
+                            .textStyle(.small)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -62,7 +62,7 @@ struct PackageJsonPreviewView: View {
 
             if showRaw {
                 SyntaxHighlightView(code: rawContent, language: "json", fontSize: settings.previewFontSize)
-            } else if let pkg = pkg {
+            } else if let pkg {
                 packageInfoView(pkg)
             } else {
                 VStack {
@@ -85,7 +85,7 @@ struct PackageJsonPreviewView: View {
                 if let description = pkg.description {
                     sectionRow(icon: "text.quote", label: "Description", color: .secondary) {
                         Text(description)
-                            .font(.system(size: 14))
+                            .textStyle(.default)
                             .foregroundColor(.primary)
                     }
                 }
@@ -93,21 +93,21 @@ struct PackageJsonPreviewView: View {
                 if let license = pkg.license {
                     sectionRow(icon: "doc.text", label: "License", color: .blue) {
                         Text(license)
-                            .font(.system(size: 14, design: .monospaced))
+                            .textStyle(.default, mono: true)
                     }
                 }
 
                 if let main = pkg.main {
                     sectionRow(icon: "arrow.right.circle", label: "Entry", color: .purple) {
                         Text(main)
-                            .font(.system(size: 14, design: .monospaced))
+                            .textStyle(.default, mono: true)
                     }
                 }
 
                 if let type = pkg.type {
                     sectionRow(icon: "cube", label: "Type", color: .indigo) {
                         Text(type)
-                            .font(.system(size: 14, design: .monospaced))
+                            .textStyle(.default, mono: true)
                     }
                 }
 
@@ -117,9 +117,9 @@ struct PackageJsonPreviewView: View {
                             ForEach(engines.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
                                 HStack(spacing: 4) {
                                     Text(key)
-                                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                                        .textStyle(.default, weight: .medium, mono: true)
                                     Text(value)
-                                        .font(.system(size: 14, design: .monospaced))
+                                        .textStyle(.default, mono: true)
                                         .foregroundColor(.secondary)
                                 }
                             }
@@ -155,15 +155,15 @@ struct PackageJsonPreviewView: View {
         let pm = detectPackageManager()
         return HStack(spacing: 8) {
             Image(systemName: pm.icon)
-                .font(.system(size: 14))
+                .textStyle(.default)
                 .foregroundColor(pm.color)
             Text(pm.name)
-                .font(.system(size: 14, weight: .medium))
+                .textStyle(.default, weight: .medium)
                 .foregroundColor(pm.color)
 
             if let pmField = pkg?.packageManager {
                 Text(pmField)
-                    .font(.system(size: 13, design: .monospaced))
+                    .textStyle(.buttons, mono: true)
                     .foregroundColor(.secondary)
             }
         }
@@ -209,12 +209,12 @@ struct PackageJsonPreviewView: View {
     private func sectionRow<Content: View>(icon: String, label: String, color: Color, @ViewBuilder content: () -> Content) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 13))
+                .textStyle(.buttons)
                 .foregroundColor(color)
                 .frame(width: 18, alignment: .center)
 
             Text(label)
-                .font(.system(size: 14, weight: .medium))
+                .textStyle(.default, weight: .medium)
                 .foregroundColor(.secondary)
                 .frame(width: 80, alignment: .leading)
 
@@ -230,12 +230,12 @@ struct PackageJsonPreviewView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: "terminal.fill")
-                    .font(.system(size: 14))
+                    .textStyle(.default)
                     .foregroundColor(.cyan)
                 Text("Scripts")
-                    .font(.system(size: 14, weight: .semibold))
+                    .textStyle(.default, weight: .semibold)
                 Text("(\(scripts.count))")
-                    .font(.system(size: 13))
+                    .textStyle(.buttons)
                     .foregroundColor(.secondary)
             }
             .padding(.horizontal, 16)
@@ -245,12 +245,12 @@ struct PackageJsonPreviewView: View {
             ForEach(scripts.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
                 HStack(alignment: .top, spacing: 6) {
                     Text(key)
-                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        .textStyle(.default, weight: .medium, mono: true)
                         .foregroundColor(.cyan)
                         .frame(minWidth: 80, alignment: .trailing)
 
                     Text(value)
-                        .font(.system(size: 14, design: .monospaced))
+                        .textStyle(.default, mono: true)
                         .foregroundColor(.primary.opacity(0.8))
                         .lineLimit(2)
                         .textSelection(.enabled)
@@ -267,12 +267,12 @@ struct PackageJsonPreviewView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 14))
+                    .textStyle(.default)
                     .foregroundColor(color)
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .textStyle(.default, weight: .semibold)
                 Text("(\(count))")
-                    .font(.system(size: 13))
+                    .textStyle(.buttons)
                     .foregroundColor(.secondary)
             }
             .padding(.horizontal, 16)
@@ -282,13 +282,13 @@ struct PackageJsonPreviewView: View {
             ForEach(deps.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
                 HStack(spacing: 6) {
                     Text(key)
-                        .font(.system(size: 14, design: .monospaced))
+                        .textStyle(.default, mono: true)
                         .foregroundColor(.primary)
 
                     Spacer(minLength: 0)
 
                     Text(value)
-                        .font(.system(size: 14, design: .monospaced))
+                        .textStyle(.default, mono: true)
                         .foregroundColor(.secondary)
                 }
                 .padding(.horizontal, 16)

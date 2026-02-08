@@ -78,15 +78,29 @@ class AppSettings: ObservableObject {
         didSet { saveAsync() }
     }
 
+    // Font sizes for text styles
+    @Published var fontDefault: CGFloat {
+        didSet { saveAsync() }
+    }
+    @Published var fontButtons: CGFloat {
+        didSet { saveAsync() }
+    }
+    @Published var fontSmall: CGFloat {
+        didSet { saveAsync() }
+    }
+    @Published var fontTitle: CGFloat {
+        didSet { saveAsync() }
+    }
+
     private init() {
         configFile = configDir.appendingPathComponent("settings.json")
 
         // Default values
-        previewFontSize = 12
+        previewFontSize = 14
         previewPaneSplit = 0.5
         showPreviewPane = true
-        leftPaneWidth = 200
-        rightPaneWidth = 260
+        leftPaneWidth = 326
+        rightPaneWidth = 532
         browserViewMode = "files"
         windowX = nil
         windowY = nil
@@ -96,6 +110,10 @@ class AppSettings: ObservableObject {
         defaultFolderHandler = false
         flatFolders = false
         omdbAPIKey = ""
+        fontDefault = 14
+        fontButtons = 12
+        fontSmall = 12
+        fontTitle = 13
 
         // Migrate from old config path
         migrateOldConfig()
@@ -183,6 +201,10 @@ class AppSettings: ObservableObject {
         if let recent = json["recentlyUsedApps"] as? [String] {
             recentlyUsedApps = recent
         }
+        if let v = json["fontDefault"] as? CGFloat { fontDefault = v }
+        if let v = json["fontButtons"] as? CGFloat { fontButtons = v }
+        if let v = json["fontSmall"] as? CGFloat { fontSmall = v }
+        if let v = json["fontTitle"] as? CGFloat { fontTitle = v }
     }
 
     private func saveAsync() {
@@ -208,7 +230,11 @@ class AppSettings: ObservableObject {
             folderHandler: defaultFolderHandler,
             flatFolders: flatFolders,
             omdbKey: omdbAPIKey,
-            recentApps: recentlyUsedApps
+            recentApps: recentlyUsedApps,
+            fontDefault: fontDefault,
+            fontButtons: fontButtons,
+            fontSmall: fontSmall,
+            fontTitle: fontTitle
         )
 
         saveTask = Task.detached(priority: .utility) {
@@ -236,6 +262,10 @@ class AppSettings: ObservableObject {
         let flatFolders: Bool
         let omdbKey: String
         let recentApps: [String]
+        let fontDefault: CGFloat
+        let fontButtons: CGFloat
+        let fontSmall: CGFloat
+        let fontTitle: CGFloat
     }
 
     nonisolated private static func writeToDisk(_ s: SettingsSnapshot) {
@@ -260,6 +290,10 @@ class AppSettings: ObservableObject {
         json["flatFolders"] = s.flatFolders
         json["omdbAPIKey"] = s.omdbKey
         json["recentlyUsedApps"] = s.recentApps
+        json["fontDefault"] = s.fontDefault
+        json["fontButtons"] = s.fontButtons
+        json["fontSmall"] = s.fontSmall
+        json["fontTitle"] = s.fontTitle
 
         if let data = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted) {
             try? data.write(to: s.configFile)

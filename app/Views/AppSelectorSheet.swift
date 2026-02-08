@@ -21,7 +21,7 @@ struct AppSelectorSheet: View {
             // Header
             HStack {
                 Text("Open with...")
-                    .font(.system(size: 14, weight: .semibold))
+                    .textStyle(.default, weight: .semibold)
                 Spacer()
                 Button(action: { isPresented = false }) {
                     Image(systemName: "xmark.circle.fill")
@@ -86,7 +86,7 @@ struct AppSelectorSheet: View {
                 ProgressView()
                     .scaleEffect(0.8)
                 Text("Loading apps...")
-                    .font(.system(size: 12))
+                    .textStyle(.small)
                     .foregroundColor(.secondary)
                     .padding(.top, 8)
                 Spacer()
@@ -103,7 +103,7 @@ struct AppSelectorSheet: View {
                         LazyVStack(spacing: 2) {
                             if recentCount > 0 {
                                 Text("Recent")
-                                    .font(.system(size: 11, weight: .medium))
+                                    .textStyle(.small, weight: .medium)
                                     .foregroundColor(.secondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.horizontal, 10)
@@ -391,7 +391,7 @@ struct AppRow: View {
                     .frame(width: 24, height: 24)
 
                 Text(app.name)
-                    .font(.system(size: 13))
+                    .textStyle(.buttons)
                     .foregroundColor(isSelected ? .white : .primary)
 
                 Spacer()

@@ -29,7 +29,8 @@ let package = Package(
             resources: [
                 .copy("Resources/Icons"),
                 .copy("Resources/AppIcon.icns"),
-                .copy("Resources/AppIcon.svg")
+                .copy("Resources/AppIcon.svg"),
+                .copy("Resources/build-commit.txt")
             ]
         ),
         .testTarget(

@@ -48,7 +48,7 @@ struct ToastView: View {
     var body: some View {
         if manager.isShowing {
             Text(manager.message)
-                .font(.system(size: 13, weight: .medium))
+                .textStyle(.buttons)
                 .foregroundColor(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)

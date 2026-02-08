@@ -20,7 +20,7 @@ struct ImagePreviewView: View {
                             .font(.system(size: 32))
                             .foregroundColor(.secondary)
                         Text("Unable to load image")
-                            .font(.system(size: 13))
+                            .textStyle(.buttons)
                             .foregroundColor(.secondary)
                     }
                     .padding(.top, 40)

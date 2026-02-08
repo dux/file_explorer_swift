@@ -35,9 +35,9 @@ struct UninstallConfirmSheet: View {
                     .frame(width: 32, height: 32)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Uninstall \(appName)")
-                        .font(.system(size: 16, weight: .semibold))
+                        .textStyle(.default, weight: .semibold)
                     Text(appURL.path)
-                        .font(.system(size: 11))
+                        .textStyle(.small)
                         .foregroundColor(.secondary)
                 }
                 Spacer()
@@ -50,10 +50,10 @@ struct UninstallConfirmSheet: View {
             if dataPaths.isEmpty {
                 VStack(spacing: 8) {
                     Text("No app data found")
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                     Text("The app will be moved to Trash.")
-                        .font(.system(size: 12))
+                        .textStyle(.small)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity)
@@ -62,7 +62,7 @@ struct UninstallConfirmSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text("App data found (\(dataPaths.count))")
-                            .font(.system(size: 13, weight: .medium))
+                            .textStyle(.buttons)
                             .foregroundColor(.secondary)
                         Spacer()
                         Button(selectedPaths.count == dataPaths.count ? "Deselect all" : "Select all") {
@@ -72,7 +72,7 @@ struct UninstallConfirmSheet: View {
                                 selectedPaths = Set(dataPaths)
                             }
                         }
-                        .font(.system(size: 12))
+                        .textStyle(.small)
                         .buttonStyle(.plain)
                         .foregroundColor(.accentColor)
                     }
@@ -87,15 +87,15 @@ struct UninstallConfirmSheet: View {
                                 HStack(spacing: 8) {
                                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                                         .foregroundColor(isSelected ? .accentColor : .secondary)
-                                        .font(.system(size: 14))
+                                        .textStyle(.default)
 
                                     Image(systemName: path.hasDirectoryPath ? "folder.fill" : "doc.fill")
                                         .foregroundColor(.secondary)
-                                        .font(.system(size: 12))
+                                        .textStyle(.small)
                                         .frame(width: 16)
 
                                     Text(displayPath(path))
-                                        .font(.system(size: 12, design: .monospaced))
+                                        .textStyle(.small, mono: true)
                                         .lineLimit(1)
                                         .truncationMode(.middle)
 

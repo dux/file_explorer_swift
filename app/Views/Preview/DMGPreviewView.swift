@@ -71,7 +71,7 @@ struct DMGPreviewView: View {
                 VStack(spacing: 12) {
                     ProgressView()
                     Text("Mounting disk image...")
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -81,7 +81,7 @@ struct DMGPreviewView: View {
                         .font(.system(size: 32))
                         .foregroundColor(.orange)
                     Text(error)
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
@@ -92,15 +92,15 @@ struct DMGPreviewView: View {
                 if let volName = volumeName {
                     HStack(spacing: 8) {
                         Image(systemName: "internaldrive")
-                            .font(.system(size: 14))
+                            .textStyle(.default)
                             .foregroundColor(.purple)
                             .frame(width: 22)
                         Text(volName)
-                            .font(.system(size: 13, weight: .medium))
+                            .textStyle(.buttons)
                         Spacer()
                         if let info = dmgInfo {
                             Text(info.format)
-                                .font(.system(size: 12))
+                                .textStyle(.small)
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -126,9 +126,9 @@ struct DMGPreviewView: View {
 
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(appName)
-                                            .font(.system(size: 15, weight: .semibold))
+                                            .textStyle(.default, weight: .semibold)
                                         Text(app.displaySize)
-                                            .font(.system(size: 12))
+                                            .textStyle(.small)
                                             .foregroundColor(.secondary)
                                     }
 
@@ -145,7 +145,7 @@ struct DMGPreviewView: View {
                                             Image(systemName: "trash")
                                                 .foregroundColor(.white)
                                             Text("Uninstall \(appName)")
-                                                .font(.system(size: 13, weight: .medium))
+                                                .textStyle(.buttons)
                                         }
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 8)
@@ -170,7 +170,7 @@ struct DMGPreviewView: View {
                                                     .foregroundColor(.white)
                                             }
                                             Text("Install \(appName) to Applications")
-                                                .font(.system(size: 13, weight: .medium))
+                                                .textStyle(.buttons)
                                         }
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 8)
@@ -219,7 +219,7 @@ struct DMGPreviewView: View {
                             .foregroundColor(.secondary)
                     }
                 }
-                .font(.system(size: 12))
+                .textStyle(.small)
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -548,7 +548,7 @@ struct DMGEntryRow: View {
                 .frame(width: 22, height: 22)
 
             Text(entry.name)
-                .font(.system(size: 14))
+                .textStyle(.default)
                 .lineLimit(1)
                 .foregroundColor(isSelected ? .white : .primary)
 
@@ -556,7 +556,7 @@ struct DMGEntryRow: View {
 
             if !entry.isDirectory || entry.isApp {
                 Text(entry.displaySize)
-                    .font(.system(size: 11))
+                    .textStyle(.small)
                     .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
                     .frame(width: 60, alignment: .trailing)
             }

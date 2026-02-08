@@ -199,7 +199,7 @@ struct iPhoneGalleryThumbnail: View {
             }
 
             Text(file.name)
-                .font(.system(size: 12))
+                .textStyle(.small)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .foregroundColor(.secondary)
@@ -262,7 +262,7 @@ struct iPhonePreviewPane: View {
                     .font(.system(size: 32))
                     .foregroundColor(.secondary)
                 Text("Select a file to preview")
-                    .font(.system(size: 13))
+                    .textStyle(.buttons)
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -307,12 +307,12 @@ struct iPhoneAudioPreviewView: View {
                     // Track info
                     VStack(spacing: 4) {
                         Text(player.title ?? url.deletingPathExtension().lastPathComponent)
-                            .font(.system(size: 14, weight: .semibold))
+                            .textStyle(.default, weight: .semibold)
                             .lineLimit(1)
 
                         if let artist = player.artist {
                             Text(artist)
-                                .font(.system(size: 12))
+                                .textStyle(.small)
                                 .foregroundColor(.secondary)
                                 .lineLimit(1)
                         }
@@ -329,11 +329,11 @@ struct iPhoneAudioPreviewView: View {
 
                         HStack {
                             Text(formatTime(player.currentTime))
-                                .font(.system(size: 10, design: .monospaced))
+                                .textStyle(.small, mono: true)
                                 .foregroundColor(.secondary)
                             Spacer()
                             Text(formatTime(player.duration))
-                                .font(.system(size: 10, design: .monospaced))
+                                .textStyle(.small, mono: true)
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -370,7 +370,7 @@ struct iPhoneAudioPreviewView: View {
 
                         VStack(spacing: 8) {
                             Text("Trim & sync to iPhone")
-                                .font(.system(size: 10, weight: .semibold))
+                                .textStyle(.small, weight: .semibold)
                                 .foregroundColor(.secondary)
                                 .textCase(.uppercase)
 
@@ -384,7 +384,7 @@ struct iPhoneAudioPreviewView: View {
                                         Image(systemName: "scissors")
                                         Text("Cut start")
                                     }
-                                    .font(.system(size: 12))
+                                    .textStyle(.small)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)
                                     .background(Color.orange.opacity(0.15))
@@ -402,7 +402,7 @@ struct iPhoneAudioPreviewView: View {
                                         Image(systemName: "scissors")
                                         Text("Cut end")
                                     }
-                                    .font(.system(size: 12))
+                                    .textStyle(.small)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)
                                     .background(Color.orange.opacity(0.15))
@@ -417,14 +417,14 @@ struct iPhoneAudioPreviewView: View {
                                     ProgressView()
                                         .scaleEffect(0.6)
                                     Text(isUploading ? "Uploading to iPhone..." : "Processing...")
-                                        .font(.system(size: 10))
+                                        .textStyle(.small)
                                         .foregroundColor(.secondary)
                                 }
                             }
 
                             if let cropMessage = player.cropMessage {
                                 Text(cropMessage)
-                                    .font(.system(size: 10))
+                                    .textStyle(.small)
                                     .foregroundColor(player.cropSuccess ? .green : .red)
                                     .multilineTextAlignment(.center)
                             }
@@ -503,17 +503,17 @@ struct iPhoneSearchBar: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.secondary)
-                .font(.system(size: 13))
+                .textStyle(.buttons)
 
             TextField("Filter...", text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13))
+                .textStyle(.buttons)
 
             if !searchText.isEmpty {
                 Button(action: { searchText = "" }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.secondary)
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                 }
                 .buttonStyle(.plain)
             }
@@ -537,19 +537,19 @@ struct iPhoneBreadcrumbView: View {
                     manager.currentPane = .browser
                 }) {
                     Image(systemName: "arrow.left.circle")
-                        .font(.system(size: 14))
+                        .textStyle(.default)
                 }
                 .buttonStyle(.plain)
                 .help("Back to local files")
             }
 
             Image(systemName: "iphone")
-                .font(.system(size: 12))
+                .textStyle(.small)
                 .foregroundColor(.pink)
 
             // Device name
             Text(deviceManager.currentDevice?.name ?? "iPhone")
-                .font(.system(size: 13))
+                .textStyle(.buttons)
                 .foregroundColor(deviceManager.browseMode == .apps ? .primary : .blue)
                 .onTapGesture {
                     deviceManager.backToApps()
@@ -558,11 +558,11 @@ struct iPhoneBreadcrumbView: View {
             // App name if browsing app documents
             if case .appDocuments(_, let appName) = deviceManager.browseMode {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 10))
+                    .textStyle(.small)
                     .foregroundColor(.secondary)
 
                 Text(appName)
-                    .font(.system(size: 13))
+                    .textStyle(.buttons)
                     .foregroundColor(deviceManager.currentPath == basePath ? .primary : .blue)
                     .onTapGesture {
                         Task {
@@ -573,11 +573,11 @@ struct iPhoneBreadcrumbView: View {
                 // Path components (folders beyond /Documents)
                 ForEach(pathComponents, id: \.path) { component in
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10))
+                        .textStyle(.small)
                         .foregroundColor(.secondary)
 
                     Text(component.name)
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(component.path == deviceManager.currentPath ? .primary : .blue)
                         .onTapGesture {
                             Task {
@@ -601,7 +601,7 @@ struct iPhoneBreadcrumbView: View {
                 }
             }) {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 12))
+                    .textStyle(.small)
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
@@ -654,10 +654,10 @@ struct iPhoneAppListView: View {
                     .font(.system(size: 48))
                     .foregroundColor(.secondary)
                 Text("No apps with file sharing")
-                    .font(.headline)
+                    .textStyle(.default, weight: .semibold)
                     .foregroundColor(.secondary)
                 Text("Apps need \"UIFileSharingEnabled\" to share documents")
-                    .font(.caption)
+                    .textStyle(.small)
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -667,7 +667,7 @@ struct iPhoneAppListView: View {
                     .font(.system(size: 48))
                     .foregroundColor(.secondary)
                 Text("No matching apps")
-                    .font(.headline)
+                    .textStyle(.default, weight: .semibold)
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -697,10 +697,10 @@ struct iPhoneAppRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(app.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .textStyle(.buttons)
 
                 Text(app.id)
-                    .font(.system(size: 12))
+                    .textStyle(.small)
                     .foregroundColor(.secondary)
             }
 
@@ -708,12 +708,12 @@ struct iPhoneAppRow: View {
 
             if !app.version.isEmpty {
                 Text("v\(app.version)")
-                    .font(.system(size: 12))
+                    .textStyle(.small)
                     .foregroundColor(.secondary)
             }
 
             Image(systemName: "chevron.right")
-                .font(.system(size: 12))
+                .textStyle(.small)
                 .foregroundColor(.secondary)
         }
         .padding(.horizontal, 16)
@@ -790,7 +790,7 @@ struct iPhoneTableHeaderView: View {
                 .frame(width: 180, alignment: .leading)
                 .padding(.leading, 16)
         }
-        .font(.system(size: 12, weight: .medium))
+        .textStyle(.small, weight: .medium)
         .foregroundColor(.secondary)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -818,7 +818,7 @@ struct iPhoneFileRow: View {
             // Selection indicator
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 14))
+                    .textStyle(.default)
                     .foregroundColor(.green)
                     .frame(width: 20)
             } else {
@@ -832,7 +832,7 @@ struct iPhoneFileRow: View {
                     .frame(width: 24)
 
                 Text(file.name)
-                    .font(.system(size: 13))
+                    .textStyle(.buttons)
                     .lineLimit(1)
                     .truncationMode(.middle)
 
@@ -847,12 +847,12 @@ struct iPhoneFileRow: View {
             Spacer()
 
             Text(file.isDirectory ? "--" : formatFileSize(file.size))
-                .font(.system(size: 12))
+                .textStyle(.small)
                 .foregroundColor(.secondary)
                 .frame(width: 100, alignment: .trailing)
 
             Text(formatDate(file.modifiedDate))
-                .font(.system(size: 12))
+                .textStyle(.small)
                 .foregroundColor(.secondary)
                 .frame(width: 180, alignment: .leading)
                 .padding(.leading, 16)

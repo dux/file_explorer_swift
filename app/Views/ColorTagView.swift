@@ -20,10 +20,10 @@ struct ColorTagView: View {
                     .frame(width: 16, height: 16)
 
                 Text(color.label)
-                    .font(.system(size: 14, weight: .semibold))
+                    .textStyle(.default, weight: .semibold)
 
                 Text("\(fileCount) item\(fileCount == 1 ? "" : "s")")
-                    .font(.system(size: 12))
+                    .textStyle(.small)
                     .foregroundColor(.secondary)
 
                 Spacer()
@@ -55,10 +55,10 @@ struct ColorTagView: View {
                                 .foregroundColor(color.color)
                         )
                     Text("No items tagged \(color.label.lowercased())")
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                     Text("Right-click any file and choose Color Label")
-                        .font(.system(size: 12))
+                        .textStyle(.small)
                         .foregroundColor(.secondary.opacity(0.7))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -115,12 +115,13 @@ struct ColorTagMenuItems: View {
 
     var body: some View {
         ForEach(TagColor.allCases) { color in
+            let tagged = tagManager.isTagged(url, color: color)
             Button(action: { tagManager.toggleTag(url, color: color) }) {
-                Label {
+                HStack(spacing: 8) {
+                    Image(systemName: tagged ? "checkmark.circle.fill" : "circle.fill")
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(tagged ? .white : color.color, color.color)
                     Text(color.label)
-                } icon: {
-                    Image(systemName: tagManager.isTagged(url, color: color) ? "checkmark.circle.fill" : "circle.fill")
-                        .foregroundColor(color.color)
                 }
             }
         }

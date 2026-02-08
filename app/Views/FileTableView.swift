@@ -127,7 +127,7 @@ struct FileTableRow: View {
                 }
 
                 Text(url.lastPathComponent)
-                    .font(.system(size: 14))
+                    .textStyle(.default)
                     .lineLimit(1)
                     .foregroundColor(isSelected ? .white : .primary)
 
@@ -147,13 +147,13 @@ struct FileTableRow: View {
 
             if manager.sortMode == .modified {
                 Text(humanReadableDate)
-                    .font(.system(size: 14))
+                    .textStyle(.default)
                     .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
                     .frame(width: 180, alignment: .leading)
             }
 
             Text(fileSizeDisplay)
-                .font(.system(size: 14))
+                .textStyle(.default)
                 .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
                 .frame(width: 80, alignment: .trailing)
         }
@@ -177,59 +177,26 @@ struct FileTableRow: View {
                 }
                 lastClickTime = .distantPast
             } else {
-                if manager.selectedItem == url {
-                    manager.selectedItem = nil
-                    manager.selectedIndex = -1
-                } else {
+                if isDirectory {
                     manager.selectItem(at: index, url: url)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        manager.navigateTo(url)
+                        manager.selectCurrentFolder()
+                    }
+                } else {
+                    if manager.selectedItem == url {
+                        manager.selectedItem = nil
+                        manager.selectedIndex = -1
+                    } else {
+                        manager.selectItem(at: index, url: url)
+                    }
                 }
                 lastClickTime = now
             }
         }
         .opacity(isHidden ? 0.5 : 1.0)
         .contextMenu {
-            Button(action: { showingDetails = true }) {
-                Label("View Details", systemImage: "info.circle").font(.system(size: 15))
-            }
-            Button(action: { manager.toggleFileSelection(url) }) {
-                Label(manager.isInSelection(url) ? "Remove from Selection" : "Add to Selection",
-                      systemImage: manager.isInSelection(url) ? "minus.circle" : "checkmark.circle").font(.system(size: 15))
-            }
-            Button(action: {
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.setString(url.path, forType: .string)
-            }) {
-                Label("Copy Path", systemImage: "doc.on.clipboard").font(.system(size: 15))
-            }
-            Button(action: {
-                NSWorkspace.shared.activateFileViewerSelecting([url])
-            }) {
-                Label("Show in Finder", systemImage: "folder").font(.system(size: 15))
-            }
-            Divider()
-            Button(action: { manager.duplicateFile(url) }) {
-                Label("Duplicate", systemImage: "doc.on.doc").font(.system(size: 15))
-            }
-            Button(action: { manager.addToZip(url) }) {
-                Label("Add to Zip", systemImage: "doc.zipper").font(.system(size: 15))
-            }
-            if ["zip", "tar", "tgz", "gz", "bz2", "xz", "rar", "7z"].contains(url.pathExtension.lowercased()) {
-                Button(action: { manager.extractArchive(url) }) {
-                    Label("Extract to folder", systemImage: "arrow.down.doc").font(.system(size: 15))
-                }
-            }
-            if url.pathExtension.lowercased() == "app" && isDirectory {
-                Button(action: { manager.enableUnsafeApp(url) }) {
-                    Label("Enable unsafe app", systemImage: "checkmark.shield").font(.system(size: 15))
-                }
-            }
-            Divider()
-            Button(role: .destructive, action: { manager.moveToTrash(url) }) {
-                Label("Move to Trash", systemImage: "trash").font(.system(size: 15))
-            }
-            Divider()
-            ColorTagMenuItems(url: url, tagManager: tagManager)
+            FileContextMenuItems(url: url, isDirectory: isDirectory, manager: manager, tagManager: tagManager, showingDetails: $showingDetails)
         }
         .sheet(isPresented: $showingDetails) {
             FileDetailsView(url: url, isDirectory: isDirectory)

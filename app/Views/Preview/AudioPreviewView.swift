@@ -24,13 +24,13 @@ struct AudioPreviewView: View {
                 // Track info
                 VStack(spacing: 2) {
                     Text(player.title ?? url.deletingPathExtension().lastPathComponent)
-                        .font(.system(size: 14, weight: .semibold))
+                        .textStyle(.default, weight: .semibold)
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
 
                     if let artist = player.artist {
                         Text(artist)
-                            .font(.system(size: 12))
+                            .textStyle(.small)
                             .foregroundColor(.secondary)
                             .lineLimit(1)
                     }
@@ -47,11 +47,11 @@ struct AudioPreviewView: View {
 
                     HStack {
                         Text(formatTime(player.currentTime))
-                            .font(.system(size: 11, design: .monospaced))
+                            .textStyle(.small, mono: true)
                             .foregroundColor(.secondary)
                         Spacer()
                         Text(formatTime(player.duration))
-                            .font(.system(size: 11, design: .monospaced))
+                            .textStyle(.small, mono: true)
                             .foregroundColor(.secondary)
                     }
                 }
@@ -84,7 +84,7 @@ struct AudioPreviewView: View {
                 // Volume
                 HStack(spacing: 6) {
                     Image(systemName: "speaker.fill")
-                        .font(.system(size: 10))
+                        .textStyle(.small)
                         .foregroundColor(.secondary)
 
                     Slider(value: $player.volume, in: 0...1)
@@ -92,7 +92,7 @@ struct AudioPreviewView: View {
                         .accentColor(.secondary)
 
                     Image(systemName: "speaker.wave.3.fill")
-                        .font(.system(size: 10))
+                        .textStyle(.small)
                         .foregroundColor(.secondary)
                 }
 
@@ -113,9 +113,9 @@ struct AudioPreviewView: View {
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "backward.end.fill")
-                                    .font(.system(size: 10))
+                                    .textStyle(.small)
                                 Text("Remove start")
-                                    .font(.system(size: 11, weight: .medium))
+                                    .textStyle(.small, weight: .medium)
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
@@ -137,14 +137,14 @@ struct AudioPreviewView: View {
                         VStack(spacing: 2) {
                             HStack(spacing: 4) {
                                 Image(systemName: "scissors")
-                                    .font(.system(size: 11))
+                                    .textStyle(.small)
                                     .foregroundColor(.orange)
                                 Text("TRIM")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .textStyle(.small, weight: .bold)
                                     .foregroundColor(.primary)
                             }
                             Text("Seek & trim")
-                                .font(.system(size: 9))
+                                .textStyle(.small)
                                 .foregroundColor(.secondary)
                         }
                         .frame(minWidth: 60)
@@ -157,9 +157,9 @@ struct AudioPreviewView: View {
                         }) {
                             HStack(spacing: 4) {
                                 Text("Remove end")
-                                    .font(.system(size: 11, weight: .medium))
+                                    .textStyle(.small, weight: .medium)
                                 Image(systemName: "forward.end.fill")
-                                    .font(.system(size: 10))
+                                    .textStyle(.small)
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
@@ -189,14 +189,14 @@ struct AudioPreviewView: View {
                             ProgressView()
                                 .scaleEffect(0.6)
                             Text("Processing...")
-                                .font(.system(size: 11))
+                                .textStyle(.small)
                                 .foregroundColor(.secondary)
                         }
                     }
 
                     if let cropMessage = player.cropMessage {
                         Text(cropMessage)
-                            .font(.system(size: 11, weight: .medium))
+                            .textStyle(.small, weight: .medium)
                             .foregroundColor(player.cropSuccess ? .green : .red)
                     }
                 }

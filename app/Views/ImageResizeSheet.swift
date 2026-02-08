@@ -40,7 +40,7 @@ struct ImageResizeSheet: View {
                     .font(.system(size: 18))
                     .foregroundColor(.pink)
                 Text(isCropMode ? "Crop Image" : "Resize Image")
-                    .font(.system(size: 15, weight: .semibold))
+                    .textStyle(.default, weight: .semibold)
                 Spacer()
 
                 Picker("", selection: $isCropMode) {
@@ -144,12 +144,12 @@ struct ImageResizeSheet: View {
             VStack(spacing: 12) {
                 HStack {
                     Text("Original: \(Int(originalSize.width)) × \(Int(originalSize.height))")
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                     Spacer()
                     if !newWidth.isEmpty && !newHeight.isEmpty {
                         Text("New: \(newWidth) × \(newHeight)")
-                            .font(.system(size: 13, weight: .medium))
+                            .textStyle(.buttons)
                             .foregroundColor(.pink)
                     }
                 }
@@ -157,7 +157,7 @@ struct ImageResizeSheet: View {
                 if isCropMode {
                     if !isDragging {
                         Text("Drag on image to select crop area")
-                            .font(.system(size: 13))
+                            .textStyle(.buttons)
                             .foregroundColor(.secondary)
                     } else {
                         HStack {
@@ -166,7 +166,7 @@ struct ImageResizeSheet: View {
                                 cropStart = .zero
                                 cropEnd = .zero
                             }
-                            .font(.system(size: 13))
+                            .textStyle(.buttons)
                         }
                     }
                 } else {
@@ -175,7 +175,7 @@ struct ImageResizeSheet: View {
                         ForEach(ResizePreset.allCases.filter { $0 != .custom }, id: \.self) { preset in
                             Button(action: { applyPreset(preset) }) {
                                 Text(preset.rawValue)
-                                    .font(.system(size: 13))
+                                    .textStyle(.buttons)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 6)
                                     .background(
@@ -202,7 +202,7 @@ struct ImageResizeSheet: View {
                             }
 
                         Image(systemName: keepAspectRatio ? "link" : "link.badge.plus")
-                            .font(.system(size: 14))
+                            .textStyle(.default)
                             .foregroundColor(keepAspectRatio ? .accentColor : .secondary)
                             .onTapGesture { keepAspectRatio.toggle() }
 
@@ -216,14 +216,14 @@ struct ImageResizeSheet: View {
                             }
 
                         Text("px")
-                            .font(.system(size: 13))
+                            .textStyle(.buttons)
                             .foregroundColor(.secondary)
                     }
                 }
 
                 if let error = errorMessage {
                     Text(error)
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.red)
                 }
             }
@@ -234,7 +234,7 @@ struct ImageResizeSheet: View {
             // Footer
             HStack {
                 Text(url.lastPathComponent)
-                    .font(.system(size: 13))
+                    .textStyle(.buttons)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                 Spacer()

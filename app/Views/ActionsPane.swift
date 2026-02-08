@@ -92,12 +92,7 @@ struct ActionsPane: View {
         items.append(RightPaneItem(id: "selection", title: inSelection ? "Remove from selection" : "Add to selection") { [url] in
             self.manager.toggleFileSelection(url)
         })
-        items.append(RightPaneItem(id: "copypath", title: "Copy path") {
-            self.copyPath()
-        })
-        items.append(RightPaneItem(id: "rename", title: "Rename") {
-            self.manager.startRename()
-        })
+
         if isImageFile {
             items.append(RightPaneItem(id: "exif", title: "EXIF / Metadata") {
                 self.showExifSheet = true
@@ -143,7 +138,7 @@ struct ActionsPane: View {
                 }
 
                 Text(targetName)
-                    .font(.system(size: 14))
+                    .textStyle(.default)
                     .lineLimit(1)
                     .truncationMode(.middle)
 
@@ -165,32 +160,12 @@ struct ActionsPane: View {
                     manager.toggleFileSelection(targetURL)
                 }
 
-                ActionButton(
-                    icon: "doc.on.doc",
-                    title: "Copy path",
-                    color: .blue,
-                    flatIndex: 1,
-                    manager: manager
-                ) {
-                    copyPath()
-                }
-
-                ActionButton(
-                    icon: "pencil",
-                    title: "Rename",
-                    color: .orange,
-                    flatIndex: 2,
-                    manager: manager
-                ) {
-                    manager.startRename()
-                }
-
                 if isDirectory && !isAppBundle {
                     ActionButton(
                         icon: "face.smiling",
                         title: "Assign icon",
                         color: .purple,
-                        flatIndex: 3,
+                        flatIndex: 1,
                         manager: manager
                     ) {
                         showEmojiPicker = true
@@ -216,7 +191,7 @@ struct ActionsPane: View {
                         icon: "checkmark.shield",
                         title: "Enable unsafe app",
                         color: .green,
-                        flatIndex: 3,
+                        flatIndex: 1,
                         manager: manager
                     ) {
                         manager.enableUnsafeApp(targetURL)
@@ -225,7 +200,7 @@ struct ActionsPane: View {
                         icon: "trash",
                         title: "Uninstall \(targetURL.deletingPathExtension().lastPathComponent)",
                         color: .red,
-                        flatIndex: 4,
+                        flatIndex: 2,
                         manager: manager
                     ) {
                         appDataPaths = AppUninstaller.findAppData(for: targetURL)
@@ -234,7 +209,7 @@ struct ActionsPane: View {
                 }
 
                 if isImageFile {
-                    let base = 3
+                    let base = 1
                     ActionButton(
                         icon: "camera.aperture",
                         title: "EXIF / Metadata",
@@ -267,7 +242,7 @@ struct ActionsPane: View {
                 }
 
                 if isOfficeFile {
-                    let base = 3
+                    let base = 1
                     ActionButton(
                         icon: "doc.text.magnifyingglass",
                         title: "Document Info",
@@ -308,9 +283,7 @@ struct ActionsPane: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(openWithLabel)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .textCase(.uppercase)
+                    .textStyle(.title)
                     .padding(.horizontal, 10)
                     .padding(.top, 8)
                     .padding(.bottom, 4)
@@ -358,9 +331,9 @@ struct ActionsPane: View {
                     }) {
                         HStack(spacing: 4) {
                             Image(systemName: showOtherApps ? "chevron.down" : "chevron.right")
-                                .font(.system(size: 9, weight: .semibold))
+                                .textStyle(.small, weight: .semibold)
                             Text("macOS suggested apps (\(otherApps.count))")
-                                .font(.system(size: 13, weight: .medium))
+                                .textStyle(.buttons)
                             Spacer()
                         }
                         .foregroundColor(.secondary)
@@ -386,7 +359,7 @@ struct ActionsPane: View {
                 if allApps.isEmpty {
                     HStack(spacing: 4) {
                         Text("No suggested apps")
-                            .font(.system(size: 13, weight: .medium))
+                            .textStyle(.buttons)
                         Spacer()
                     }
                     .foregroundColor(.secondary)
@@ -506,12 +479,12 @@ struct ActionButton: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 14))
+                    .textStyle(.default)
                     .foregroundColor(isFocused ? .white : color)
                     .frame(width: 22, height: 22)
 
                 Text(title)
-                    .font(.system(size: 14))
+                    .textStyle(.default)
                     .foregroundColor(isFocused ? .white : .primary)
 
                 Spacer()
@@ -549,7 +522,7 @@ struct ActionButtonWithIcon: View {
                     .frame(width: 22, height: 22)
 
                 Text(title)
-                    .font(.system(size: 14))
+                    .textStyle(.default)
                     .foregroundColor(.primary)
 
                 Spacer()
@@ -608,12 +581,12 @@ struct PreferredAppButton: View {
                         .frame(width: 22, height: 22)
 
                     Text(title)
-                        .font(.system(size: 14))
+                        .textStyle(.default)
                         .foregroundColor(isFocused ? .white : .primary)
 
                     if isDefault {
                         Text("default")
-                            .font(.system(size: 9, weight: .medium))
+                            .textStyle(.small, weight: .medium)
                             .foregroundColor(isFocused ? .white.opacity(0.7) : .secondary)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
@@ -630,7 +603,7 @@ struct PreferredAppButton: View {
 
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 14))
+                    .textStyle(.default)
                     .foregroundColor(isFocused ? .white.opacity(0.7) : .secondary)
             }
             .buttonStyle(.plain)

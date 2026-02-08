@@ -11,11 +11,11 @@ struct JSONPreviewView: View {
             // Header with format button
             HStack(spacing: 8) {
                 Image(systemName: "curlybraces")
-                    .font(.system(size: 14))
+                    .textStyle(.default)
                     .foregroundColor(.orange)
 
                 Text(url.lastPathComponent)
-                    .font(.system(size: 13, weight: .medium))
+                    .textStyle(.buttons)
                     .lineLimit(1)
 
                 Spacer()
@@ -23,9 +23,9 @@ struct JSONPreviewView: View {
                 Button(action: toggleFormat) {
                     HStack(spacing: 4) {
                         Image(systemName: isFormatted ? "text.alignleft" : "text.justify")
-                            .font(.system(size: 12))
+                            .textStyle(.small)
                         Text(isFormatted ? "Raw" : "Format")
-                            .font(.system(size: 12))
+                            .textStyle(.small)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)

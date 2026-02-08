@@ -38,7 +38,7 @@ struct SearchBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Search in \(displayPath)")
-                .font(.system(size: 11))
+                .textStyle(.small)
                 .foregroundColor(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -57,7 +57,7 @@ struct SearchBar: View {
 
                 if !manager.searchQuery.isEmpty {
                     Text("\(manager.searchResults.count)")
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                 }
 
@@ -100,11 +100,11 @@ struct SearchResultsView: View {
                     .foregroundColor(.secondary)
                 if manager.searchQuery.isEmpty {
                     Text("Type to search files")
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                 } else {
                     Text("No results for \"\(manager.searchQuery)\"")
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                 }
             }
@@ -185,14 +185,14 @@ struct SelectionBar: View {
                 HStack(spacing: 8) {
                     Button(action: { withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() } }) {
                         Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
+                            .textStyle(.small, weight: .semibold)
                             .foregroundColor(.secondary)
                             .frame(width: 16)
                     }
                     .buttonStyle(.plain)
 
                     Text("SELECTION (\(selectedItems.count))")
-                        .font(.system(size: 10, weight: .semibold))
+                        .textStyle(.small, weight: .semibold)
                         .foregroundColor(.secondary)
 
                     Spacer()
@@ -244,7 +244,7 @@ struct SelectionBar: View {
 
                     Button(action: { selection.clear() }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
+                            .textStyle(.default)
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -285,9 +285,9 @@ struct SelectionBarButton: View {
         Button(action: action) {
             HStack(spacing: 3) {
                 Image(systemName: icon)
-                    .font(.system(size: 12))
+                    .textStyle(.small)
                 Text(title)
-                    .font(.system(size: 12, weight: .medium))
+                    .textStyle(.small, weight: .medium)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -325,16 +325,16 @@ struct SelectionBarItem: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: iconName)
-                .font(.system(size: 10))
+                .textStyle(.small)
                 .foregroundColor(iconColor)
 
             Text(item.name)
-                .font(.system(size: 12))
+                .textStyle(.small)
                 .lineLimit(1)
 
             Button(action: { selection.remove(item) }) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
+                    .textStyle(.small, weight: .bold)
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
@@ -378,13 +378,13 @@ struct SelectedFilesView: View {
             // Header with clear all button
             HStack {
                 Text("\(selectedItems.count) item\(selectedItems.count == 1 ? "" : "s") selected")
-                    .font(.system(size: 12))
+                    .textStyle(.small)
                     .foregroundColor(.secondary)
                 Spacer()
                 if !selectedItems.isEmpty {
                     Button(action: { selection.clear() }) {
                         Text("Clear All")
-                            .font(.system(size: 12))
+                            .textStyle(.small)
                             .foregroundColor(.red)
                     }
                     .buttonStyle(.plain)
@@ -402,10 +402,10 @@ struct SelectedFilesView: View {
                         .font(.system(size: 32))
                         .foregroundColor(.secondary)
                     Text("No files selected")
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                     Text("Press Space on a file to add it to selection")
-                        .font(.system(size: 12))
+                        .textStyle(.small)
                         .foregroundColor(.secondary.opacity(0.8))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -415,7 +415,7 @@ struct SelectedFilesView: View {
                     if !localItems.isEmpty {
                         HStack(spacing: 8) {
                             Text("Local (\(localItems.count)):")
-                                .font(.system(size: 12))
+                                .textStyle(.small)
                                 .foregroundColor(.secondary)
                             SelectionActionButton(title: "Paste here", icon: "doc.on.doc", color: .blue) {
                                 copyLocalFilesHere()
@@ -434,7 +434,7 @@ struct SelectedFilesView: View {
                     if !iPhoneItems.isEmpty {
                         HStack(spacing: 8) {
                             Text("iPhone (\(iPhoneItems.count)):")
-                                .font(.system(size: 12))
+                                .textStyle(.small)
                                 .foregroundColor(.pink)
                             SelectionActionButton(title: "Download here", icon: "arrow.down.doc", color: .blue) {
                                 Task { await downloadiPhoneFilesHere() }
@@ -556,9 +556,9 @@ struct SelectionActionButton: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 12))
+                    .textStyle(.small)
                 Text(title)
-                    .font(.system(size: 14, weight: .medium))
+                    .textStyle(.default, weight: .medium)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
@@ -600,7 +600,7 @@ struct SelectedItemRow: View {
                 .foregroundColor(iconColor)
                 .frame(width: 24, height: 24)
             Text(item.displayPath)
-                .font(.system(size: 13))
+                .textStyle(.buttons)
                 .foregroundColor(.primary)
                 .lineLimit(1)
                 .truncationMode(.middle)

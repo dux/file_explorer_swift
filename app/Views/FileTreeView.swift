@@ -52,6 +52,16 @@ struct FileTreeView: View {
                         if settings.flatFolders {
                             // Compact breadcrumb + flat list
                             FlatBreadcrumbRow(ancestors: ancestors, manager: manager)
+                                .overlay(alignment: .trailing) {
+                                    Button(action: { settings.flatFolders.toggle() }) {
+                                        Text("in line")
+                                            .textStyle(.small)
+                                            .foregroundColor(.secondary.opacity(0.5))
+                                            .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .padding(.trailing, 100)
+                                }
 
                             ForEach(Array(manager.allItems.enumerated()), id: \.element.id) { index, fileInfo in
                                 FileTreeRow(
@@ -76,6 +86,18 @@ struct FileTreeView: View {
                                     indentStep: indentStep,
                                     manager: manager
                                 )
+                                .overlay(alignment: .trailing) {
+                                    if depth == 0 {
+                                        Button(action: { settings.flatFolders.toggle() }) {
+                                            Text("in tree")
+                                                .textStyle(.small)
+                                                .foregroundColor(.secondary.opacity(0.5))
+                                                .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(.borderless)
+                                        .padding(.trailing, isCurrent ? 100 : 12)
+                                    }
+                                }
                             }
 
                             // Children rows
@@ -116,6 +138,7 @@ struct FileTreeView: View {
                     handleDrop(providers: providers)
                     return true
                 }
+
             }
         }
     }
@@ -187,13 +210,13 @@ struct FlatBreadcrumbRow: View {
             ForEach(Array(ancestors.enumerated()), id: \.element.url) { index, ancestor in
                 if index > 0 {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 9))
+                        .textStyle(.small)
                         .foregroundColor(.secondary.opacity(0.5))
                 }
 
                 let isCurrent = ancestor.url.path == manager.currentPath.path
                 Text(ancestor.name)
-                    .font(.system(size: 15, weight: isCurrent ? .semibold : .regular))
+                    .textStyle(.default, weight: isCurrent ? .semibold : .regular)
                     .foregroundColor(isSelected ? .white : (isCurrent ? .primary : .secondary))
                     .lineLimit(1)
                     .onTapGesture {
@@ -211,7 +234,7 @@ struct FlatBreadcrumbRow: View {
 
             if manager.hiddenCount > 0 {
                 Text("+\(manager.hiddenCount) hidden")
-                    .font(.system(size: 12))
+                    .textStyle(.small)
                     .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary.opacity(0.6))
             }
 
@@ -226,9 +249,9 @@ struct FlatBreadcrumbRow: View {
             }) {
                 HStack(spacing: 3) {
                     Image(systemName: isPinned ? "pin.fill" : "pin")
-                        .font(.system(size: 12))
+                        .textStyle(.small)
                     Text(isPinned ? "unpin" : "pin folder")
-                        .font(.system(size: 12))
+                        .textStyle(.small)
                 }
                 .foregroundColor(isPinned ? .orange : .secondary.opacity(0.5))
                 .contentShape(Rectangle())
@@ -251,6 +274,8 @@ struct AncestorRow: View {
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject var shortcutsManager = ShortcutsManager.shared
     @ObservedObject var folderIconManager = FolderIconManager.shared
+    @ObservedObject var tagManager = ColorTagManager.shared
+    @State private var showingDetails = false
 
     private var isSelected: Bool {
         manager.selectedItem == url
@@ -265,13 +290,13 @@ struct AncestorRow: View {
             FolderIconView(url: url, size: 20, selected: isSelected)
 
             Text(name)
-                .font(.system(size: 14, weight: isCurrent ? .semibold : .regular))
+                .textStyle(.default, weight: isCurrent ? .semibold : .regular)
                 .foregroundColor(isSelected ? .white : (isCurrent ? .primary : .secondary))
                 .lineLimit(1)
 
             if isCurrent && manager.hiddenCount > 0 {
                 Text("+\(manager.hiddenCount) hidden")
-                    .font(.system(size: 13))
+                    .textStyle(.buttons)
                     .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary.opacity(0.6))
             }
 
@@ -287,9 +312,9 @@ struct AncestorRow: View {
                 }) {
                     HStack(spacing: 3) {
                         Image(systemName: isPinned ? "pin.fill" : "pin")
-                            .font(.system(size: 12))
+                            .textStyle(.small)
                         Text(isPinned ? "unpin" : "pin folder")
-                            .font(.system(size: 12))
+                            .textStyle(.small)
                     }
                     .foregroundColor(isPinned ? .orange : .secondary.opacity(0.5))
                     .contentShape(Rectangle())
@@ -314,6 +339,12 @@ struct AncestorRow: View {
             } else {
                 manager.navigateTo(url)
             }
+        }
+        .contextMenu {
+            FileContextMenuItems(url: url, isDirectory: true, manager: manager, tagManager: tagManager, showingDetails: $showingDetails)
+        }
+        .sheet(isPresented: $showingDetails) {
+            FileDetailsView(url: url, isDirectory: true)
         }
     }
 }
@@ -391,7 +422,7 @@ struct FileTreeRow: View {
             }
 
             Text(url.lastPathComponent)
-                .font(.system(size: 14))
+                .textStyle(.default)
                 .lineLimit(1)
                 .foregroundColor(isSelected ? .white : .primary)
 
@@ -409,13 +440,13 @@ struct FileTreeRow: View {
 
             if manager.sortMode == .modified && !humanReadableDate.isEmpty {
                 Text(humanReadableDate)
-                    .font(.system(size: 13))
+                    .textStyle(.buttons)
                     .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
             }
 
             if !fileSizeDisplay.isEmpty {
                 Text(fileSizeDisplay)
-                    .font(.system(size: 13))
+                    .textStyle(.buttons)
                     .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
                     .frame(width: 60, alignment: .trailing)
             }
@@ -443,59 +474,26 @@ struct FileTreeRow: View {
                 lastClickTime = .distantPast
             } else {
                 // Single click
-                if manager.selectedItem == url {
-                    manager.selectedItem = nil
-                    manager.selectedIndex = -1
-                } else {
+                if isDirectory {
                     manager.selectItem(at: index, url: url)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        manager.navigateTo(url)
+                        manager.selectCurrentFolder()
+                    }
+                } else {
+                    if manager.selectedItem == url {
+                        manager.selectedItem = nil
+                        manager.selectedIndex = -1
+                    } else {
+                        manager.selectItem(at: index, url: url)
+                    }
                 }
                 lastClickTime = now
             }
         }
         .opacity(isHidden ? 0.5 : 1.0)
         .contextMenu {
-            Button(action: { showingDetails = true }) {
-                Label("View Details", systemImage: "info.circle").font(.system(size: 15))
-            }
-            Button(action: { manager.toggleFileSelection(url) }) {
-                Label(manager.isInSelection(url) ? "Remove from Selection" : "Add to Selection",
-                      systemImage: manager.isInSelection(url) ? "minus.circle" : "checkmark.circle").font(.system(size: 15))
-            }
-            Button(action: {
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.setString(url.path, forType: .string)
-            }) {
-                Label("Copy Path", systemImage: "doc.on.clipboard").font(.system(size: 15))
-            }
-            Button(action: {
-                NSWorkspace.shared.activateFileViewerSelecting([url])
-            }) {
-                Label("Show in Finder", systemImage: "folder").font(.system(size: 15))
-            }
-            Divider()
-            Button(action: { manager.duplicateFile(url) }) {
-                Label("Duplicate", systemImage: "doc.on.doc").font(.system(size: 15))
-            }
-            Button(action: { manager.addToZip(url) }) {
-                Label("Add to Zip", systemImage: "doc.zipper").font(.system(size: 15))
-            }
-            if ["zip", "tar", "tgz", "gz", "bz2", "xz", "rar", "7z"].contains(url.pathExtension.lowercased()) {
-                Button(action: { manager.extractArchive(url) }) {
-                    Label("Extract to folder", systemImage: "arrow.down.doc").font(.system(size: 15))
-                }
-            }
-            if url.pathExtension.lowercased() == "app" && isDirectory {
-                Button(action: { manager.enableUnsafeApp(url) }) {
-                    Label("Enable unsafe app", systemImage: "checkmark.shield").font(.system(size: 15))
-                }
-            }
-            Divider()
-            Button(role: .destructive, action: { manager.moveToTrash(url) }) {
-                Label("Move to Trash", systemImage: "trash").font(.system(size: 15))
-            }
-            Divider()
-            ColorTagMenuItems(url: url, tagManager: tagManager)
+            FileContextMenuItems(url: url, isDirectory: isDirectory, manager: manager, tagManager: tagManager, showingDetails: $showingDetails)
         }
         .sheet(isPresented: $showingDetails) {
             FileDetailsView(url: url, isDirectory: isDirectory)

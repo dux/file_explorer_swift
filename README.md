@@ -81,12 +81,12 @@ curl -fsSL https://raw.githubusercontent.com/dux/file_explorer_swift/main/instal
 
 ### Git integration
 - Auto-detects git repositories by traversing parent directories
-- Shows "Go to GitHub/GitLab/Bitbucket/Codeberg/SourceHut" link in actions pane
+- Shows "GitHub/GitLab/Bitbucket/Codeberg/SourceHut" link in actions pane
 - Supports SSH, HTTPS, and ssh:// remote URL formats
 
 ### NPM package detection
 - Auto-detects npm packages by finding package.json in parent directories
-- Shows "Go to NPM package home" link in actions pane
+- Shows "NPM package home" link in actions pane
 - Uses `homepage` field from package.json when defined, falls back to npmjs.com
 - Skips private packages with no homepage
 

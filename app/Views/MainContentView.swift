@@ -57,6 +57,41 @@ struct ResizableSplitView<Top: View, Bottom: View>: View {
     }
 }
 
+// Preview type detected async to avoid blocking the main thread with disk I/O
+enum PreviewKind: Equatable {
+    case movie, imageGallery, standard, none
+}
+
+private let previewImageExtensions: Set<String> = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif", "tiff", "tif", "svg", "avif"]
+
+func detectPreviewKind(for url: URL) -> PreviewKind {
+    var isDir: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else { return .none }
+
+    if isDir.boolValue {
+        if MovieManager.detectMovie(folderName: url.lastPathComponent) != nil,
+           MovieManager.hasVideoFile(in: url) {
+            return .movie
+        }
+        if let contents = try? FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]),
+           contents.contains(where: { previewImageExtensions.contains($0.pathExtension.lowercased()) }) {
+            return .imageGallery
+        }
+    } else {
+        let ext = url.pathExtension.lowercased()
+        if MovieManager.videoExtensions.contains(ext),
+           MovieManager.detectMovie(folderName: url.lastPathComponent) != nil {
+            return .movie
+        }
+    }
+
+    if PreviewType.detect(for: url) != .none {
+        return .standard
+    }
+
+    return .none
+}
+
 struct MainContentView: View {
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject private var settings = AppSettings.shared
@@ -64,47 +99,7 @@ struct MainContentView: View {
     @State private var rightPaneDragStartWidth: CGFloat = 0
     @State private var dragRightPaneWidth: CGFloat? = nil
 
-    private static let imageExtensionsCheck: Set<String> = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif", "tiff", "tif", "svg", "avif"]
-
-    private func isDirectoryWithImages(_ url: URL) -> Bool {
-        var isDir: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else { return false }
-        guard let contents = try? FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else { return false }
-        return contents.contains { Self.imageExtensionsCheck.contains($0.pathExtension.lowercased()) }
-    }
-
-    // Cache last result to avoid repeated disk I/O during body re-renders
-    @State private var movieCheckCache: (path: String, result: Bool) = ("", false)
-
-    private func isMovieFolder(_ url: URL) -> Bool {
-        let path = url.path
-        if movieCheckCache.path == path { return movieCheckCache.result }
-
-        // Fast string-only checks first — no disk I/O
-        var isDir: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir) else { return false }
-
-        let result: Bool
-        if isDir.boolValue {
-            guard MovieManager.detectMovie(folderName: url.lastPathComponent) != nil else {
-                result = false
-                movieCheckCache = (path, result)
-                return result
-            }
-            result = MovieManager.hasVideoFile(in: url)
-        } else {
-            let ext = url.pathExtension.lowercased()
-            guard MovieManager.videoExtensions.contains(ext) else {
-                result = false
-                movieCheckCache = (path, result)
-                return result
-            }
-            result = MovieManager.detectMovie(folderName: url.lastPathComponent) != nil
-        }
-
-        movieCheckCache = (path, result)
-        return result
-    }
+    @State private var previewKind: PreviewKind = .none
 
     var body: some View {
         HStack(spacing: 0) {
@@ -154,25 +149,26 @@ struct MainContentView: View {
                     if settings.showPreviewPane {
                         // Preview below actions
                         if let selected = manager.selectedItem {
-                            if isMovieFolder(selected) {
+                            switch previewKind {
+                            case .movie:
                                 Divider()
                                 MoviePreviewView(folderURL: selected)
                                     .id(selected)
                                     .frame(maxHeight: .infinity)
                                     .background(Color.white)
-                            } else if isDirectoryWithImages(selected) {
+                            case .imageGallery:
                                 Divider()
                                 FolderGalleryPreview(folderURL: selected)
                                     .id(selected)
                                     .frame(maxHeight: .infinity)
                                     .background(Color.white)
-                            } else if PreviewType.detect(for: selected) != .none {
+                            case .standard:
                                 Divider()
                                 PreviewPane(url: selected, manager: manager)
                                     .id(selected)
                                     .frame(maxHeight: .infinity)
                                     .background(Color.white)
-                            } else {
+                            case .none:
                                 Spacer()
                             }
                         } else if manager.hasImages {
@@ -189,6 +185,19 @@ struct MainContentView: View {
                 }
                 .frame(width: dragRightPaneWidth ?? settings.rightPaneWidth)
                 .background(Color(red: 0.98, green: 0.976, blue: 0.96))
+                .task(id: manager.selectedItem) {
+                    guard let url = manager.selectedItem else {
+                        previewKind = .none
+                        return
+                    }
+                    let u = url
+                    let kind = await Task.detached(priority: .userInitiated) {
+                        detectPreviewKind(for: u)
+                    }.value
+                    if !Task.isCancelled {
+                        previewKind = kind
+                    }
+                }
         }
         .background(Color(NSColor.windowBackgroundColor))
         .background(KeyEventHandlingView(manager: manager))
@@ -218,7 +227,7 @@ struct RenameDialog: View {
                     .font(.system(size: 24))
                     .foregroundColor(.blue)
                 Text("Rename")
-                    .font(.system(size: 16, weight: .semibold))
+                    .textStyle(.default, weight: .semibold)
                 Spacer()
             }
 
@@ -295,247 +304,270 @@ class KeyCaptureView: NSView {
             return
         }
 
-        // If renaming, let the text field handle all input except Escape
-        if manager.renamingItem != nil {
-            if event.keyCode == 53 { // Escape - cancel rename
-                manager.cancelRename()
-                // Reclaim focus
-                DispatchQueue.main.async {
-                    self.window?.makeFirstResponder(self)
-                }
-            }
-            // Let all other keys go to text field
-            return
-        }
+        if handleRenameMode(event, manager: manager) { return }
+        if handleTabCycle(event, manager: manager) { return }
+        if handleSidebarMode(event, manager: manager) { return }
+        if handleRightPaneMode(event, manager: manager) { return }
+        if handleOpenWithPreferred(event, manager: manager) { return }
+        if handleSearchNavigation(event, manager: manager) { return }
+        if handleColorTagNavigation(event, manager: manager) { return }
+        if handleNormalMode(event, manager: manager) { return }
 
-        // Tab - cycle panes: left -> center -> right -> left
-        if event.keyCode == 48 { // Tab
-            if manager.sidebarFocused {
-                // left -> center
-                manager.unfocusSidebar()
-            } else if manager.rightPaneFocused {
-                // right -> left
-                manager.unfocusRightPane()
-                manager.focusSidebar()
-            } else {
-                // center -> right
-                manager.focusRightPane()
-            }
-            return
-        }
+        super.keyDown(with: event)
+    }
 
-        // Sidebar-focused mode
+    private func handleRenameMode(_ event: NSEvent, manager: FileExplorerManager) -> Bool {
+        guard manager.renamingItem != nil else { return false }
+
+        if event.keyCode == 53 {
+            manager.cancelRename()
+            DispatchQueue.main.async {
+                self.window?.makeFirstResponder(self)
+            }
+        }
+        return true
+    }
+
+    private func handleTabCycle(_ event: NSEvent, manager: FileExplorerManager) -> Bool {
+        guard event.keyCode == 48 else { return false }
+
         if manager.sidebarFocused {
-            switch event.keyCode {
-            case 125: // Down arrow
-                manager.sidebarSelectNext()
-            case 126: // Up arrow
-                manager.sidebarSelectPrevious()
-            case 124, 36: // Right arrow or Enter - activate item
-                manager.sidebarActivate()
-            case 123: // Left arrow - do nothing in sidebar
-                break
-            case 53: // Escape - back to main
-                manager.unfocusSidebar()
-            default:
-                break
-            }
-            return
+            manager.unfocusSidebar()
+        } else if manager.rightPaneFocused {
+            manager.unfocusRightPane()
+            manager.focusSidebar()
+        } else {
+            manager.focusRightPane()
         }
+        return true
+    }
 
-        // Right pane focused mode
-        if manager.rightPaneFocused {
-            switch event.keyCode {
-            case 125: // Down arrow
-                manager.rightPaneSelectNext()
-            case 126: // Up arrow
-                manager.rightPaneSelectPrevious()
-            case 36: // Enter - activate item
-                manager.rightPaneActivate()
-            case 123: // Left arrow - back to main
-                manager.unfocusRightPane()
-            case 53: // Escape - back to main
-                manager.unfocusRightPane()
-            default:
-                break
-            }
-            return
+    private func handleSidebarMode(_ event: NSEvent, manager: FileExplorerManager) -> Bool {
+        guard manager.sidebarFocused else { return false }
+
+        switch event.keyCode {
+        case 125:
+            manager.sidebarSelectNext()
+        case 126:
+            manager.sidebarSelectPrevious()
+        case 124, 36:
+            manager.sidebarActivate()
+        case 53:
+            manager.unfocusSidebar()
+        default:
+            break
         }
+        return true
+    }
 
-        // Cmd+O - open selected item with preferred app
-        if event.keyCode == 31 && event.modifierFlags.contains(.command) {
-            if manager.isSearching {
-                if manager.listCursorIndex >= 0 && manager.listCursorIndex < manager.searchResults.count {
-                    let item = manager.searchResults[manager.listCursorIndex]
-                    manager.listActivateItem(url: item.url, isDirectory: item.isDirectory)
-                }
-            } else if case .colorTag(let tagColor) = manager.currentPane {
-                let files = ColorTagManager.shared.list(tagColor)
-                if manager.listCursorIndex >= 0 && manager.listCursorIndex < files.count {
-                    let file = files[manager.listCursorIndex]
-                    guard file.exists else { return }
-                    manager.listActivateItem(url: file.url, isDirectory: file.isDirectory)
-                }
-            } else if let item = manager.selectedItem {
-                var isDirectory: ObjCBool = false
-                FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory)
-                if isDirectory.boolValue {
-                    manager.navigateTo(item)
-                } else {
-                    manager.openFileWithPreferredApp(item)
-                }
-            }
-            return
+    private func handleRightPaneMode(_ event: NSEvent, manager: FileExplorerManager) -> Bool {
+        guard manager.rightPaneFocused else { return false }
+
+        switch event.keyCode {
+        case 125:
+            manager.rightPaneSelectNext()
+        case 126:
+            manager.rightPaneSelectPrevious()
+        case 36:
+            manager.rightPaneActivate()
+        case 123, 53:
+            manager.unfocusRightPane()
+        default:
+            break
         }
+        return true
+    }
 
-        // Search results or color tag list navigation
+    private func handleOpenWithPreferred(_ event: NSEvent, manager: FileExplorerManager) -> Bool {
+        guard event.keyCode == 31 && event.modifierFlags.contains(.command) else { return false }
+
         if manager.isSearching {
-            switch event.keyCode {
-            case 125: // Down
-                manager.listSelectNext(count: manager.searchResults.count)
-                if manager.listCursorIndex >= 0 && manager.listCursorIndex < manager.searchResults.count {
-                    let item = manager.searchResults[manager.listCursorIndex]
-                    manager.selectItem(at: -1, url: item.url)
-                }
-                return
-            case 126: // Up
-                manager.listSelectPrevious(count: manager.searchResults.count)
-                if manager.listCursorIndex >= 0 && manager.listCursorIndex < manager.searchResults.count {
-                    let item = manager.searchResults[manager.listCursorIndex]
-                    manager.selectItem(at: -1, url: item.url)
-                }
-                return
-            case 36: // Enter - go there
-                if manager.listCursorIndex >= 0 && manager.listCursorIndex < manager.searchResults.count {
-                    let item = manager.searchResults[manager.listCursorIndex]
-                    manager.listActivateItem(url: item.url, isDirectory: item.isDirectory)
-                }
-                return
-            case 53: // Escape
-                manager.cancelSearch()
-                return
-            default:
-                break
+            if manager.listCursorIndex >= 0 && manager.listCursorIndex < manager.searchResults.count {
+                let item = manager.searchResults[manager.listCursorIndex]
+                manager.listActivateItem(url: item.url, isDirectory: item.isDirectory)
             }
+            return true
         }
 
         if case .colorTag(let tagColor) = manager.currentPane {
             let files = ColorTagManager.shared.list(tagColor)
-            switch event.keyCode {
-            case 125: // Down
-                manager.listSelectNext(count: files.count)
-                if manager.listCursorIndex >= 0 && manager.listCursorIndex < files.count {
-                    manager.selectItem(at: -1, url: files[manager.listCursorIndex].url)
-                }
-                return
-            case 126: // Up
-                manager.listSelectPrevious(count: files.count)
-                if manager.listCursorIndex >= 0 && manager.listCursorIndex < files.count {
-                    manager.selectItem(at: -1, url: files[manager.listCursorIndex].url)
-                }
-                return
-            case 36: // Enter - go there
-                if manager.listCursorIndex >= 0 && manager.listCursorIndex < files.count {
-                    let file = files[manager.listCursorIndex]
-                    guard file.exists else { return }
+            if manager.listCursorIndex >= 0 && manager.listCursorIndex < files.count {
+                let file = files[manager.listCursorIndex]
+                if file.exists {
                     manager.listActivateItem(url: file.url, isDirectory: file.isDirectory)
                 }
-                return
-            case 53: // Escape
-                manager.currentPane = .browser
-                manager.listCursorIndex = -1
-                return
-            default:
-                break
             }
+            return true
         }
 
-        // Normal mode - Finder-like behavior
+        if let item = manager.selectedItem {
+            var isDirectory: ObjCBool = false
+            FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory)
+            if isDirectory.boolValue {
+                manager.navigateTo(item)
+            } else {
+                manager.openFileWithPreferredApp(item)
+            }
+        }
+        return true
+    }
+
+    private func handleSearchNavigation(_ event: NSEvent, manager: FileExplorerManager) -> Bool {
+        guard manager.isSearching else { return false }
+
         switch event.keyCode {
-        case 0: // A key - check for Ctrl+A or Cmd+A
+        case 125:
+            manager.listSelectNext(count: manager.searchResults.count)
+            if manager.listCursorIndex >= 0 && manager.listCursorIndex < manager.searchResults.count {
+                let item = manager.searchResults[manager.listCursorIndex]
+                manager.selectItem(at: -1, url: item.url)
+            }
+            return true
+        case 126:
+            manager.listSelectPrevious(count: manager.searchResults.count)
+            if manager.listCursorIndex >= 0 && manager.listCursorIndex < manager.searchResults.count {
+                let item = manager.searchResults[manager.listCursorIndex]
+                manager.selectItem(at: -1, url: item.url)
+            }
+            return true
+        case 36:
+            if manager.listCursorIndex >= 0 && manager.listCursorIndex < manager.searchResults.count {
+                let item = manager.searchResults[manager.listCursorIndex]
+                manager.listActivateItem(url: item.url, isDirectory: item.isDirectory)
+            }
+            return true
+        case 53:
+            manager.cancelSearch()
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func handleColorTagNavigation(_ event: NSEvent, manager: FileExplorerManager) -> Bool {
+        guard case .colorTag(let tagColor) = manager.currentPane else { return false }
+
+        let files = ColorTagManager.shared.list(tagColor)
+        switch event.keyCode {
+        case 125:
+            manager.listSelectNext(count: files.count)
+            if manager.listCursorIndex >= 0 && manager.listCursorIndex < files.count {
+                manager.selectItem(at: -1, url: files[manager.listCursorIndex].url)
+            }
+            return true
+        case 126:
+            manager.listSelectPrevious(count: files.count)
+            if manager.listCursorIndex >= 0 && manager.listCursorIndex < files.count {
+                manager.selectItem(at: -1, url: files[manager.listCursorIndex].url)
+            }
+            return true
+        case 36:
+            if manager.listCursorIndex >= 0 && manager.listCursorIndex < files.count {
+                let file = files[manager.listCursorIndex]
+                if file.exists {
+                    manager.listActivateItem(url: file.url, isDirectory: file.isDirectory)
+                }
+            }
+            return true
+        case 53:
+            manager.currentPane = .browser
+            manager.listCursorIndex = -1
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func handleNormalMode(_ event: NSEvent, manager: FileExplorerManager) -> Bool {
+        switch event.keyCode {
+        case 0:
             if event.modifierFlags.contains(.control) || event.modifierFlags.contains(.command) {
                 manager.selectAllFiles()
-                return
+                return true
             }
-        case 8: // C key - Ctrl+C toggles selection
+        case 8:
             if event.modifierFlags.contains(.control) {
                 if let item = manager.selectedItem {
                     manager.toggleFileSelection(item)
                 }
-                return
+                return true
             }
-        case 15: // R key - check for Ctrl+R
+        case 15:
             if event.modifierFlags.contains(.control) {
                 manager.refresh()
-                return
+                return true
             }
-        case 125: // Down arrow
+        case 125:
             if event.modifierFlags.contains(.command) {
-                // Cmd+Down - enter folder (like Finder)
-                if let item = manager.selectedItem {
-                    var isDirectory: ObjCBool = false
-                    FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory)
-                    if isDirectory.boolValue {
-                        manager.navigateTo(item)
-                        if manager.selectedItem == nil && !manager.allItems.isEmpty {
-                            manager.selectItem(at: 0, url: manager.allItems[0].url)
-                        }
-                    }
-                }
+                navigateIntoSelectedDirectoryIfNeeded(manager)
             } else {
                 manager.selectNext()
             }
-        case 126: // Up arrow
+            return true
+        case 126:
             if event.modifierFlags.contains(.command) {
-                manager.navigateUp() // Cmd+Up - go to parent (like Finder)
+                manager.navigateUp()
             } else {
                 manager.selectPrevious()
             }
-        case 123: // Left arrow - go to parent folder
+            return true
+        case 123:
             manager.navigateUp()
-        case 124: // Right arrow - enter folder
-            if let item = manager.selectedItem {
-                var isDirectory: ObjCBool = false
-                FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory)
-                if isDirectory.boolValue {
-                    manager.navigateTo(item)
-                    if manager.selectedItem == nil && !manager.allItems.isEmpty {
-                        manager.selectItem(at: 0, url: manager.allItems[0].url)
-                    }
-                }
-            }
-        case 49: // Space - quick look / toggle selection
+            return true
+        case 124:
+            navigateIntoSelectedDirectoryIfNeeded(manager)
+            return true
+        case 49:
             manager.toggleGlobalSelection()
-        case 36: // Return/Enter - rename selected item
+            return true
+        case 36:
             if manager.selectedItem != nil {
                 manager.startRename()
             }
-        case 51: // Delete/Backspace - go back
+            return true
+        case 51:
             if event.modifierFlags.contains(.command) {
-                // Cmd+Delete - move to trash
                 if let item = manager.selectedItem {
                     manager.moveToTrash(item)
                 }
             } else {
                 manager.goBack()
             }
-        case 115: // Home
+            return true
+        case 115:
             manager.selectFirst()
-        case 119: // End
+            return true
+        case 119:
             manager.selectLast()
-        case 53: // Escape
+            return true
+        case 53:
             if manager.browserViewMode != .files {
                 manager.browserViewMode = .files
             }
+            return true
         default:
             if let chars = event.characters, chars.count == 1,
                let c = chars.first, c.isLetter,
                !event.modifierFlags.contains(.command),
                !event.modifierFlags.contains(.control) {
                 manager.jumpToLetter(c)
-            } else {
-                super.keyDown(with: event)
+                return true
             }
+        }
+
+        return false
+    }
+
+    private func navigateIntoSelectedDirectoryIfNeeded(_ manager: FileExplorerManager) {
+        guard let item = manager.selectedItem else { return }
+
+        var isDirectory: ObjCBool = false
+        FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory)
+        guard isDirectory.boolValue else { return }
+
+        manager.navigateTo(item)
+        if manager.selectedItem == nil && !manager.allItems.isEmpty {
+            manager.selectItem(at: 0, url: manager.allItems[0].url)
         }
     }
 }
@@ -560,7 +592,7 @@ struct ToolbarView: View {
             Spacer()
 
             Text(manager.currentPath.lastPathComponent.isEmpty ? "Root" : manager.currentPath.lastPathComponent)
-                .font(.headline)
+                .textStyle(.default, weight: .semibold)
                 .lineLimit(1)
 
             Spacer()
@@ -610,13 +642,13 @@ struct BreadcrumbView: View {
             ForEach(Array(pathComponents.enumerated()), id: \.offset) { index, component in
                 if index > 0 {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10))
+                        .textStyle(.small)
                         .foregroundColor(.secondary)
                 }
 
                 Button(action: { manager.navigateTo(component.url) }) {
                     Text(component.name)
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(index == pathComponents.count - 1 ? .primary : .blue)
                 }
                 .buttonStyle(.plain)
@@ -628,7 +660,7 @@ struct BreadcrumbView: View {
             if isPinned {
                 Button(action: { showEmojiPicker = true }) {
                     Image(systemName: "face.smiling")
-                        .font(.system(size: 12))
+                        .textStyle(.small)
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -658,7 +690,7 @@ struct BreadcrumbView: View {
                 }
             }) {
                 Image(systemName: isPinned ? "pin.fill" : "pin")
-                    .font(.system(size: 12))
+                    .textStyle(.small)
                     .foregroundColor(isPinned ? .orange : .secondary)
             }
             .buttonStyle(.plain)
@@ -684,7 +716,7 @@ struct ActionButtonBar: View {
                 manager.toggleShowHidden()
             }) {
                 Text(manager.showHidden ? "hide hidden" : "show hidden")
-                    .font(.system(size: 12, weight: .medium))
+                    .textStyle(.buttons)
             }
             .buttonStyle(.bordered)
 
@@ -697,9 +729,9 @@ struct ActionButtonBar: View {
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: manager.isSearching ? "xmark" : "magnifyingglass")
-                        .font(.system(size: 12))
+                        .textStyle(.buttons)
                     Text(manager.isSearching ? "Close" : "Search")
-                        .font(.system(size: 12, weight: .medium))
+                        .textStyle(.buttons)
                 }
             }
             .buttonStyle(.bordered)
@@ -710,7 +742,9 @@ struct ActionButtonBar: View {
 
             // Sort buttons
             Text("Sort by")
-                .font(.system(size: 12))
+                .textStyle(.buttons)
+                .lineLimit(1)
+                .fixedSize()
                 .foregroundColor(.secondary)
 
             HStack(spacing: 0) {
@@ -719,7 +753,9 @@ struct ActionButtonBar: View {
                         manager.sortMode = mode
                     }) {
                         Text(mode.rawValue)
-                            .font(.system(size: 12, weight: manager.sortMode == mode ? .semibold : .regular))
+                            .textStyle(.buttons, weight: manager.sortMode == mode ? .semibold : .regular)
+                            .lineLimit(1)
+                            .fixedSize()
                             .foregroundColor(manager.sortMode == mode ? .white : .primary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
@@ -748,9 +784,9 @@ struct ActionButtonBar: View {
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "folder.badge.plus")
-                        .font(.system(size: 12))
+                        .textStyle(.buttons)
                     Text("Folder")
-                        .font(.system(size: 12))
+                        .textStyle(.buttons)
                 }
             }
             .buttonStyle(.bordered)
@@ -761,9 +797,9 @@ struct ActionButtonBar: View {
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "doc.badge.plus")
-                        .font(.system(size: 12))
+                        .textStyle(.buttons)
                     Text("File")
-                        .font(.system(size: 12))
+                        .textStyle(.buttons)
                 }
             }
             .buttonStyle(.bordered)
@@ -794,7 +830,7 @@ struct NewFolderDialog: View {
                     .font(.system(size: 24))
                     .foregroundColor(.blue)
                 Text("New Folder")
-                    .font(.system(size: 16, weight: .semibold))
+                    .textStyle(.default, weight: .semibold)
                 Spacer()
             }
 
@@ -849,7 +885,7 @@ struct TableHeaderView: View {
             Text("Size")
                 .frame(width: 80, alignment: .trailing)
         }
-        .font(.system(size: 12, weight: .medium))
+        .textStyle(.small, weight: .medium)
         .foregroundColor(.secondary)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

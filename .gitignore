@@ -5,4 +5,5 @@ frontend/dist
 /tmp
 .ds_store
 .watch_timestamp
+app/Resources/build-commit.txt
 

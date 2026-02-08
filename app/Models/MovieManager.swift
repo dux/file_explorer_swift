@@ -33,6 +33,13 @@ class MovieManager {
         AppSettings.shared.omdbAPIKey
     }
     private var inFlightTasks: [String: Task<MovieInfo?, Never>] = [:]
+    nonisolated private static let networkSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.waitsForConnectivity = false
+        config.timeoutIntervalForRequest = 12
+        config.timeoutIntervalForResource = 20
+        return URLSession(configuration: config)
+    }()
 
     private init() {}
 
@@ -130,50 +137,59 @@ class MovieManager {
         }
     }
 
-    // Check if URL is a movie (folder or file) and return cached or fetched info
-    func getMovieInfo(for url: URL) async -> MovieInfo? {
+    // Detect + read cache off the main thread, returns (detected, cachedInfo, cacheFileURL)
+    nonisolated private static func prepareMovieInfo(for url: URL) -> (detected: (title: String, year: String), cached: MovieInfo?, cacheFile: URL)? {
         var isDir: ObjCBool = false
         FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
 
         let detected: (title: String, year: String)
 
         if isDir.boolValue {
-            if let fromFolder = Self.detectMovie(folderName: url.lastPathComponent) {
+            if let fromFolder = detectMovie(folderName: url.lastPathComponent) {
                 detected = fromFolder
-            } else if let videoFile = Self.firstVideoFile(in: url),
-                      let fromFile = Self.detectMovie(folderName: videoFile.lastPathComponent) {
+            } else if let videoFile = firstVideoFile(in: url),
+                      let fromFile = detectMovie(folderName: videoFile.lastPathComponent) {
                 detected = fromFile
             } else {
                 return nil
             }
         } else {
-            guard let fromFile = Self.detectMovie(folderName: url.lastPathComponent) else {
+            guard let fromFile = detectMovie(folderName: url.lastPathComponent) else {
                 return nil
             }
             detected = fromFile
         }
 
-        let cacheFile = Self.cacheFileURL(for: url, isDir: isDir.boolValue)
+        let cacheFile = cacheFileURL(for: url, isDir: isDir.boolValue)
+        let cached = loadCache(from: cacheFile)
 
-        // Check cache first (off main thread)
-        let cf = cacheFile
-        let cached: MovieInfo? = await Task.detached(priority: .utility) {
-            return Self.loadCache(from: cf)
+        return (detected, cached, cacheFile)
+    }
+
+    // Check if URL is a movie (folder or file) and return cached or fetched info
+    func getMovieInfo(for url: URL) async -> MovieInfo? {
+        // All disk I/O runs off the main thread
+        let prep = await Task.detached(priority: .userInitiated) {
+            Self.prepareMovieInfo(for: url)
         }.value
-        if let cached { return cached }
 
-        // Deduplicate in-flight requests
+        guard let prep else { return nil }
+        if let cached = prep.cached { return cached }
+
+        // Deduplicate in-flight requests (main actor)
         let taskKey = url.path
         if let existing = inFlightTasks[taskKey] {
             return await existing.value
         }
 
-        let title = detected.title
-        let year = detected.year
+        let title = prep.detected.title
+        let year = prep.detected.year
+        let apiKey = omdbKey
+        let cf = prep.cacheFile
 
         let task = Task.detached(priority: .utility) { () -> MovieInfo? in
             let searchTerm = year.isEmpty ? title : "\(title) \(year)"
-            if let info = await Self.lookupMovie(searchTerm) {
+            if let info = await Self.lookupMovieDetached(searchTerm, apiKey: apiKey) {
                 Self.saveCache(info, to: cf)
                 return info
             }
@@ -212,7 +228,9 @@ class MovieManager {
         guard let url = URL(string: urlString) else { return nil }
 
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 12
+            let (data, response) = try await networkSession.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 return nil
             }
@@ -238,7 +256,9 @@ class MovieManager {
         guard let url = URL(string: urlString) else { return nil }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 12
+            let (data, _) = try await networkSession.data(for: request)
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return nil
             }
@@ -262,33 +282,28 @@ class MovieManager {
 
     // Fetch movie info by IMDB ID and cache it for the given folder/file URL
     func getMovieInfoByIMDB(id imdbID: String, for url: URL) async -> MovieInfo? {
-        var isDir: ObjCBool = false
-        FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
-        let cacheFile = Self.cacheFileURL(for: url, isDir: isDir.boolValue)
-        let cf = cacheFile
+        // Disk I/O (fileExists + cacheFileURL) off the main thread
+        let imdbIDCopy = imdbID
+        let urlCopy = url
+        let result = await Task.detached(priority: .utility) { () -> MovieInfo? in
+            var isDir: ObjCBool = false
+            FileManager.default.fileExists(atPath: urlCopy.path, isDirectory: &isDir)
+            let cacheFile = Self.cacheFileURL(for: urlCopy, isDir: isDir.boolValue)
 
-        let info = await Task.detached(priority: .utility) {
-            await Self.scrapeIMDB(id: imdbID)
+            guard let info = await Self.scrapeIMDB(id: imdbIDCopy) else { return nil }
+            Self.saveCache(info, to: cacheFile)
+            return info
         }.value
 
-        if let info {
-            let cacheDest = cf
-            Task.detached(priority: .utility) {
-                Self.saveCache(info, to: cacheDest)
-            }
-        }
-        return info
+        return result
     }
 
-    // Pure lookup: search term -> MovieInfo
-    // Try OMDB API first (fast) if key is configured, then fall back to DuckDuckGo -> IMDB scraping
-    nonisolated static func lookupMovie(_ searchTerm: String) async -> MovieInfo? {
+    // Pure lookup: search term -> MovieInfo (takes apiKey to avoid MainActor hop)
+    nonisolated static func lookupMovieDetached(_ searchTerm: String, apiKey: String) async -> MovieInfo? {
         let detected = detectMovie(folderName: searchTerm)
         let title = detected?.title ?? searchTerm
         let year = detected?.year ?? ""
 
-        // Try OMDB API first if key is available (much faster)
-        let apiKey = await MainActor.run { AppSettings.shared.omdbAPIKey }
         if !apiKey.isEmpty {
             if let info = await fetchFromOMDB(title: title, year: year, apiKey: apiKey) {
                 return info
@@ -300,6 +315,13 @@ class MovieManager {
         return await scrapeIMDB(id: imdbID)
     }
 
+    // Pure lookup: search term -> MovieInfo
+    // Try OMDB API first (fast) if key is configured, then fall back to DuckDuckGo -> IMDB scraping
+    nonisolated static func lookupMovie(_ searchTerm: String) async -> MovieInfo? {
+        let apiKey = await MainActor.run { AppSettings.shared.omdbAPIKey }
+        return await lookupMovieDetached(searchTerm, apiKey: apiKey)
+    }
+
     // Scrape IMDB page JSON-LD structured data
     nonisolated static func scrapeIMDB(id imdbID: String) async -> MovieInfo? {
         guard let url = URL(string: "https://www.imdb.com/title/\(imdbID)/") else { return nil }
@@ -309,7 +331,7 @@ class MovieManager {
         request.timeoutInterval = 15
 
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, _) = try await networkSession.data(for: request)
             guard let html = String(data: data, encoding: .utf8) else { return nil }
             return parseIMDBPage(html: html, imdbID: imdbID)
         } catch {
@@ -435,7 +457,7 @@ class MovieManager {
         request.timeoutInterval = 10
 
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, _) = try await networkSession.data(for: request)
             guard let html = String(data: data, encoding: .utf8) else { return nil }
             let pattern = /tt\d{7,}/
             if let match = try? pattern.firstMatch(in: html) {
@@ -456,7 +478,9 @@ class MovieManager {
         guard let url = URL(string: urlString) else { return nil }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 12
+            let (data, _) = try await networkSession.data(for: request)
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return nil
             }

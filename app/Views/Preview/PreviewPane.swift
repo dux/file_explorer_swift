@@ -196,7 +196,7 @@ struct NoPreviewView: View {
                     .font(.system(size: 32))
                     .foregroundColor(.secondary)
                 Text("No preview available")
-                    .font(.system(size: 13))
+                    .textStyle(.buttons)
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -212,12 +212,12 @@ struct PreviewHeader: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .textStyle(.default)
                 .foregroundColor(color)
                 .frame(width: 22)
 
             Text(title)
-                .font(.system(size: 13, weight: .medium))
+                .textStyle(.buttons)
                 .lineLimit(1)
 
             Spacer()

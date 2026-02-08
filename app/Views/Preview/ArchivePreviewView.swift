@@ -32,7 +32,7 @@ struct ArchivePreviewView: View {
                 VStack(spacing: 12) {
                     ProgressView()
                     Text("Reading archive...")
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -42,7 +42,7 @@ struct ArchivePreviewView: View {
                         .font(.system(size: 32))
                         .foregroundColor(.orange)
                     Text(error)
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -54,7 +54,7 @@ struct ArchivePreviewView: View {
                     Text("Size")
                         .frame(width: 80, alignment: .trailing)
                 }
-                .font(.system(size: 12, weight: .medium))
+                .textStyle(.small, weight: .medium)
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -86,7 +86,7 @@ struct ArchivePreviewView: View {
                     Spacer()
                     Text(totalSize)
                 }
-                .font(.system(size: 12))
+                .textStyle(.small)
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -305,14 +305,14 @@ struct ArchiveEntryRow: View {
                 .frame(width: 22, height: 22)
 
             Text(entry.name)
-                .font(.system(size: 14))
+                .textStyle(.default)
                 .lineLimit(1)
                 .foregroundColor(isSelected ? .white : .primary)
 
             Spacer()
 
             Text(entry.isDirectory ? "" : entry.displaySize)
-                .font(.system(size: 11))
+                .textStyle(.small)
                 .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
                 .frame(width: 60, alignment: .trailing)
         }
@@ -324,12 +324,12 @@ struct ArchiveEntryRow: View {
         .contentShape(Rectangle())
         .contextMenu {
             Button(action: { extractToCurrent() }) {
-                Label("Extract to folder", systemImage: "arrow.down.doc").font(.system(size: 15))
+                Label("Extract to folder", systemImage: "arrow.down.doc")
             }
             if archiveExt == "zip" {
                 Divider()
                 Button(role: .destructive, action: { deleteFromArchive() }) {
-                    Label("Delete from archive", systemImage: "trash").font(.system(size: 15))
+                    Label("Delete from archive", systemImage: "trash")
                 }
             }
         }

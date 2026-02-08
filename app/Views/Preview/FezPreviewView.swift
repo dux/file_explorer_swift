@@ -36,7 +36,7 @@ struct FezPreviewView: View {
                             Text("\u{2022}")
                                 .foregroundColor(.secondary)
                             Text(item)
-                                .font(.system(size: 11))
+                                .textStyle(.small)
                                 .foregroundColor(.secondary)
                         }
                     }

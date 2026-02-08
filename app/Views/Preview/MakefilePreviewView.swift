@@ -25,9 +25,9 @@ struct MakefilePreviewView: View {
                             Button(action: { runTarget(target) }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "play.fill")
-                                        .font(.system(size: 10))
+                                        .textStyle(.small)
                                     Text(target)
-                                        .font(.system(size: 12, weight: .medium))
+                                        .textStyle(.small, weight: .medium)
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)

@@ -6,7 +6,7 @@ import AppKit
 struct StyledInput: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .font(.system(size: 15))
+            .textStyle(.default)
             .padding(2)
             .textFieldStyle(.roundedBorder)
     }
@@ -50,14 +50,14 @@ struct FileListRow: View {
 
             // Name
             Text(url.lastPathComponent)
-                .font(.system(size: 14))
+                .textStyle(.default)
                 .foregroundColor(exists ? .primary : .secondary.opacity(0.5))
                 .strikethrough(!exists)
                 .lineLimit(1)
 
             // Parent path
             Text(parentPath)
-                .font(.system(size: 11))
+                .textStyle(.small)
                 .foregroundColor(.secondary)
                 .lineLimit(1)
                 .truncationMode(.head)
@@ -65,10 +65,10 @@ struct FileListRow: View {
             Spacer(minLength: 4)
 
             if showRemove && isHovered {
-                if let onRemove = onRemove {
+                if let onRemove {
                     Button(action: onRemove) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 12))
+                            .textStyle(.small)
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -104,7 +104,7 @@ struct FileDetailsView: View {
                     .foregroundColor(isDirectory ? Color(red: 0.35, green: 0.67, blue: 0.95) : .secondary)
 
                 Text(url.lastPathComponent)
-                    .font(.system(size: 18, weight: .semibold))
+                    .textStyle(.default, weight: .semibold)
                     .lineLimit(2)
 
                 Spacer()
@@ -205,7 +205,7 @@ struct FileItemDialog: View {
                     .frame(height: 22)
                 } else {
                     Text(url.lastPathComponent)
-                        .font(.system(size: 16, weight: .semibold))
+                        .textStyle(.default, weight: .semibold)
                         .lineLimit(2)
                         .textSelection(.enabled)
                 }
@@ -259,7 +259,7 @@ struct FileItemDialog: View {
                         Spacer()
                         if !isRenaming {
                             Text("R")
-                                .font(.system(size: 11))
+                                .textStyle(.small)
                                 .foregroundColor(.secondary)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
@@ -286,7 +286,7 @@ struct FileItemDialog: View {
                         Text(isInSelection ? "Remove from Selection" : "Add to Selection")
                         Spacer()
                         Text("Space")
-                            .font(.system(size: 11))
+                            .textStyle(.small)
                             .foregroundColor(.secondary)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
@@ -426,12 +426,12 @@ struct DetailRow: View {
     var body: some View {
         HStack(alignment: .top) {
             Text(label)
-                .font(.system(size: 13))
+                .textStyle(.buttons)
                 .foregroundColor(.secondary)
                 .frame(width: 80, alignment: .trailing)
 
             Text(value)
-                .font(.system(size: 13))
+                .textStyle(.buttons)
                 .textSelection(.enabled)
 
             Spacer()
@@ -447,7 +447,7 @@ struct EmptyFolderView: View {
                 .foregroundColor(.secondary)
 
             Text("This folder is empty")
-                .font(.system(size: 14))
+                .textStyle(.default)
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -464,7 +464,7 @@ struct EmptySearchResultsView: View {
                 .foregroundColor(.secondary)
 
             Text("No results for \"\(searchText)\"")
-                .font(.system(size: 14))
+                .textStyle(.default)
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

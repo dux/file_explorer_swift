@@ -45,7 +45,7 @@ struct VideoPreviewView: View {
                         // Controls row
                         HStack {
                             Text(formatTime(playerManager.currentTime))
-                                .font(.system(size: 12, design: .monospaced))
+                                .textStyle(.small, mono: true)
                                 .foregroundColor(.white)
 
                             Spacer()
@@ -77,7 +77,7 @@ struct VideoPreviewView: View {
 
                             HStack(spacing: 8) {
                                 Image(systemName: playerManager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                                    .font(.system(size: 12))
+                                    .textStyle(.small)
                                     .foregroundColor(.white)
                                     .onTapGesture {
                                         playerManager.toggleMute()
@@ -88,7 +88,7 @@ struct VideoPreviewView: View {
                                     .accentColor(.white)
 
                                 Text(formatTime(playerManager.duration))
-                                    .font(.system(size: 12, design: .monospaced))
+                                    .textStyle(.small, mono: true)
                                     .foregroundColor(.white)
                             }
                         }
@@ -97,7 +97,7 @@ struct VideoPreviewView: View {
                         if playerManager.duration > 0 {
                             HStack(spacing: 12) {
                                 Text("Trim:")
-                                    .font(.system(size: 12))
+                                    .textStyle(.small)
                                     .foregroundColor(.white.opacity(0.7))
 
                                 Button(action: {
@@ -109,7 +109,7 @@ struct VideoPreviewView: View {
                                         Image(systemName: "scissors")
                                         Text("Cut start")
                                     }
-                                    .font(.system(size: 12))
+                                    .textStyle(.small)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 4)
                                     .background(Color.orange.opacity(playerManager.currentTime > 1 ? 0.8 : 0.3))
@@ -128,7 +128,7 @@ struct VideoPreviewView: View {
                                         Image(systemName: "scissors")
                                         Text("Cut end")
                                     }
-                                    .font(.system(size: 12))
+                                    .textStyle(.small)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 4)
                                     .background(Color.orange.opacity(playerManager.currentTime > 0 && playerManager.currentTime < playerManager.duration - 1 ? 0.8 : 0.3))
@@ -143,13 +143,13 @@ struct VideoPreviewView: View {
                                         .scaleEffect(0.6)
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     Text("Processing...")
-                                        .font(.system(size: 10))
+                                        .textStyle(.small)
                                         .foregroundColor(.white.opacity(0.7))
                                 }
 
                                 if let msg = playerManager.cropMessage {
                                     Text(msg)
-                                        .font(.system(size: 10))
+                                        .textStyle(.small)
                                         .foregroundColor(playerManager.cropSuccess ? .green : .red)
                                 }
 

@@ -19,11 +19,11 @@ struct SelectionPane: View {
                     .font(.system(size: 16))
                     .foregroundColor(.green)
                 Text("Selection")
-                    .font(.system(size: 14, weight: .semibold))
+                    .textStyle(.default, weight: .semibold)
                 Spacer()
                 Button(action: { manager.currentPane = .browser }) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12))
+                        .textStyle(.small)
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -38,7 +38,7 @@ struct SelectionPane: View {
                 // Show selected items
                 VStack(alignment: .leading, spacing: 16) {
                     Text("\(selection.count) item\(selection.count == 1 ? "" : "s") selected")
-                        .font(.system(size: 14, weight: .medium))
+                        .textStyle(.default, weight: .medium)
 
                     ScrollView {
                         VStack(spacing: 8) {
@@ -67,10 +67,10 @@ struct SelectionPane: View {
                         .font(.system(size: 48))
                         .foregroundColor(.secondary)
                     Text("No file selected")
-                        .font(.system(size: 14))
+                        .textStyle(.default)
                         .foregroundColor(.secondary)
                     Text("Press Space on a file to select it")
-                        .font(.system(size: 12))
+                        .textStyle(.small)
                         .foregroundColor(.secondary.opacity(0.8))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -109,9 +109,9 @@ struct SelectionPaneItemRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name)
-                    .font(.system(size: 13))
+                    .textStyle(.buttons)
                 Text(item.displayPath)
-                    .font(.system(size: 10))
+                    .textStyle(.small)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
             }

@@ -5,17 +5,14 @@ REPO="dux/file_explorer_swift"
 INSTALL_DIR="/Applications"
 DOWNLOAD_URL="https://github.com/$REPO/releases/latest/download/$APP_NAME.app.tar.gz"
 
-info() { echo "* $1"; }
-fail() { echo "ERROR: $1"; exit 1; }
+[[ "$(uname)" == "Darwin" ]] || { echo "ERROR: macOS required"; exit 1; }
 
-[[ "$(uname)" == "Darwin" ]] || fail "macOS required"
-
-info "Installing $APP_NAME..."
+echo "* Installing $APP_NAME..."
 
 # install homebrew if missing
 if ! command -v brew &>/dev/null; then
-  info "Installing Homebrew..."
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || fail "Homebrew install failed"
+  echo "* Installing Homebrew..."
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || { echo "ERROR: Homebrew install failed"; exit 1; }
   if [[ "$(uname -m)" == "arm64" ]]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
   else
@@ -30,10 +27,10 @@ done
 
 # download app
 TMP_DIR="$(mktemp -d)"
-info "Downloading..."
-curl -fSL "$DOWNLOAD_URL" -o "$TMP_DIR/$APP_NAME.app.tar.gz" || fail "Download failed"
+echo "* Downloading..."
+curl -fSL "$DOWNLOAD_URL" -o "$TMP_DIR/$APP_NAME.app.tar.gz" || { echo "ERROR: Download failed"; exit 1; }
 tar -xzf "$TMP_DIR/$APP_NAME.app.tar.gz" -C "$TMP_DIR"
-[[ -d "$TMP_DIR/$APP_NAME.app" ]] || fail "Bad archive"
+[[ -d "$TMP_DIR/$APP_NAME.app" ]] || { echo "ERROR: Bad archive"; exit 1; }
 
 # install
 pkill -x "$APP_NAME" 2>/dev/null && sleep 0.3 || true
@@ -42,12 +39,19 @@ rm -rf "$INSTALL_DIR/$APP_NAME.app"
 cp -R "$TMP_DIR/$APP_NAME.app" "$INSTALL_DIR/"
 rm -rf "$TMP_DIR"
 
-info "Installed to $INSTALL_DIR/$APP_NAME.app"
+echo "* Installed to $INSTALL_DIR/$APP_NAME.app"
 
-# set as default folder handler
-if command -v duti &>/dev/null; then
-  info "Setting as default folder handler..."
-  duti -s com.dux.file-explorer public.folder all
+# create 'fe' shortcut command
+if [[ "$(uname -m)" == "arm64" ]]; then
+  FE_DIR="/opt/homebrew/bin"
+else
+  FE_DIR="/usr/local/bin"
 fi
+echo "* Creating 'fe' command in $FE_DIR..."
+cat > "$FE_DIR/fe" <<'SCRIPT'
+#!/bin/bash
+open -a FileExplorerByDux "${1:-.}"
+SCRIPT
+chmod +x "$FE_DIR/fe"
 
 open "$INSTALL_DIR/$APP_NAME.app"

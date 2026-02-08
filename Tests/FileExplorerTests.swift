@@ -41,6 +41,7 @@ struct EnumTests {
     func sortModeRawValues() {
         #expect(SortMode.name.rawValue == "Name")
         #expect(SortMode.modified.rawValue == "Modified")
+        #expect(SortMode.type.rawValue == "Type")
     }
 
     @Test("BrowserViewMode raw values")

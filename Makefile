@@ -30,6 +30,7 @@ clean:
 
 build: lint
 	@echo "Building $(APP_NAME)..."
+	@git rev-parse HEAD > app/Resources/build-commit.txt
 	@swift build
 	@echo "Creating app bundle..."
 	@mkdir -p $(APP_NAME).app/Contents/MacOS

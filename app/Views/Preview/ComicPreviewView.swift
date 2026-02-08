@@ -17,7 +17,7 @@ struct ComicPreviewView: View {
                 VStack(spacing: 12) {
                     ProgressView()
                     Text("Extracting pages...")
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -27,7 +27,7 @@ struct ComicPreviewView: View {
                         .font(.system(size: 32))
                         .foregroundColor(.secondary)
                     Text(error)
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -37,7 +37,7 @@ struct ComicPreviewView: View {
                         LazyVStack(spacing: 0) {
                             if totalPages > pages.count {
                                 Text("\(totalPages) pages")
-                                    .font(.system(size: 11))
+                                    .textStyle(.small)
                                     .foregroundColor(.secondary)
                                     .padding(.vertical, 4)
                             }

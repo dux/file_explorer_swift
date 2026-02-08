@@ -17,7 +17,11 @@ struct ShortcutsView: View {
         VStack(spacing: 0) {
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    SidebarSectionTitle(title: "Shortcuts", isFirst: true)
+                    if #available(macOS 14.0, *) {
+                        ShortcutsSectionTitle()
+                    } else {
+                        SidebarSectionTitle(title: "Shortcuts", isFirst: true)
+                    }
 
                     ForEach(Array(builtIn.enumerated()), id: \.element.id) { idx, item in
                         ShortcutRow(item: item, manager: manager, shortcutsManager: shortcutsManager, flatIndex: idx)
@@ -61,7 +65,7 @@ struct ShortcutsView: View {
                     }
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.vertical, 3)
             }
         }
         .background(Color(red: 0xfa / 255.0, green: 0xf9 / 255.0, blue: 0xf5 / 255.0))
@@ -92,13 +96,12 @@ struct ShortcutsView: View {
 struct SidebarSectionTitle: View {
     let title: String
     var isFirst: Bool = false
+    var onTap: (() -> Void)?
 
     var body: some View {
         HStack {
             Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.secondary)
-                .textCase(.uppercase)
+                .textStyle(.title)
 
             Spacer()
         }
@@ -106,6 +109,25 @@ struct SidebarSectionTitle: View {
         .padding(.trailing, 16)
         .padding(.top, isFirst ? 6 : 22)
         .padding(.bottom, 6)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap?()
+        }
+    }
+}
+
+@available(macOS 14.0, *)
+struct ShortcutsSectionTitle: View {
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        SidebarSectionTitle(title: "Shortcuts", isFirst: true, onTap: {
+            openSettings()
+            Task {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                NotificationCenter.default.post(name: .openSettingsTab, object: SettingsTab.shortcuts)
+            }
+        })
     }
 }
 
@@ -159,7 +181,7 @@ struct ShortcutRow: View {
             }
 
             Text(formatPath(item.url.path, full: !item.isBuiltIn))
-                .font(.system(size: 14))
+                .textStyle(.default)
                 .lineLimit(1)
                 .truncationMode(.middle)
 
@@ -176,7 +198,7 @@ struct ShortcutRow: View {
                     manager.selectCurrentFolder()
                 }) {
                     Text("local")
-                        .font(.system(size: 11, weight: isShowingLocalApps ? .semibold : .medium))
+                        .textStyle(.small, weight: isShowingLocalApps ? .semibold : .medium)
                         .foregroundColor(isShowingLocalApps ? .white : .secondary)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
@@ -199,7 +221,7 @@ struct ShortcutRow: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill((isSelected || (isApplicationsRow && isShowingLocalApps)) ? Color.accentColor.opacity(0.2) : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
@@ -269,10 +291,10 @@ struct DraggableShortcutRow: View {
 
             HStack(spacing: 4) {
                 Text(item.url.lastPathComponent)
-                    .font(.system(size: 14, weight: .semibold))
+                    .textStyle(.default, weight: .semibold)
                     .lineLimit(1)
                 Text(formatPath(item.url.deletingLastPathComponent().path, full: true))
-                    .font(.system(size: 11))
+                    .textStyle(.small)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -283,7 +305,7 @@ struct DraggableShortcutRow: View {
             if isHovered || showEmojiPicker {
                 Button(action: { showEmojiPicker = true }) {
                     Text("Icon")
-                        .font(.system(size: 10, weight: .medium))
+                        .textStyle(.small, weight: .medium)
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
@@ -316,7 +338,7 @@ struct DraggableShortcutRow: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isDragTarget ? Color.accentColor.opacity(0.3) :
@@ -382,7 +404,7 @@ struct iPhoneRow: View {
                 .frame(width: 20)
 
             Text(device.name)
-                .font(.system(size: 13))
+                .textStyle(.default, weight: .semibold)
                 .lineLimit(1)
                 .truncationMode(.middle)
 
@@ -395,7 +417,7 @@ struct iPhoneRow: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
@@ -438,7 +460,7 @@ struct VolumeRow: View {
                 .frame(width: 20)
 
             Text(volume.name)
-                .font(.system(size: 13))
+                .textStyle(.default, weight: .semibold)
                 .lineLimit(1)
                 .truncationMode(.middle)
 
@@ -446,7 +468,7 @@ struct VolumeRow: View {
 
             if !volume.capacityText.isEmpty {
                 Text(volume.capacityText)
-                    .font(.system(size: 11))
+                    .textStyle(.small)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
             }
@@ -461,7 +483,7 @@ struct VolumeRow: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
@@ -503,7 +525,7 @@ struct ColorTagBoxes: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 4)
+        .padding(.vertical, 3)
     }
 
     private func isActive(_ color: TagColor) -> Bool {
@@ -528,7 +550,7 @@ struct ColorTagBox: View {
                 .shadow(color: isActive ? color.color.opacity(0.4) : .clear, radius: 3, y: 1)
 
             Text("\(count)")
-                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .textStyle(.buttons, weight: .bold)
                 .foregroundColor(.white)
         }
         .frame(maxWidth: .infinity)

@@ -15,19 +15,17 @@ struct iPhoneActionsPane: View {
             // Header
             VStack(alignment: .leading, spacing: 2) {
                 Text("iPhone Actions")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .textCase(.uppercase)
+                    .textStyle(.title)
 
                 if let file = selectedFile {
                     Text(file.name)
-                        .font(.system(size: 12))
+                        .textStyle(.small)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 } else {
                     Text("No file selected")
-                        .font(.system(size: 12))
+                        .textStyle(.small)
                         .foregroundColor(.secondary)
                 }
             }
@@ -77,9 +75,7 @@ struct iPhoneActionsPane: View {
             // Selection info & actions
             VStack(alignment: .leading, spacing: 2) {
                 Text("Selection (\(selection.count))")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .textCase(.uppercase)
+                    .textStyle(.title)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 6)
 
@@ -90,11 +86,11 @@ struct iPhoneActionsPane: View {
                 if iPhoneCount > 0 {
                     HStack(spacing: 10) {
                         Image(systemName: "iphone")
-                            .font(.system(size: 14))
+                            .textStyle(.default)
                             .foregroundColor(.pink)
                             .frame(width: 20)
                         Text("\(iPhoneCount) iPhone file(s)")
-                            .font(.system(size: 13))
+                            .textStyle(.buttons)
                         Spacer()
                     }
                     .padding(.horizontal, 10)
@@ -114,11 +110,11 @@ struct iPhoneActionsPane: View {
                 if localCount > 0 {
                     HStack(spacing: 10) {
                         Image(systemName: "desktopcomputer")
-                            .font(.system(size: 14))
+                            .textStyle(.default)
                             .foregroundColor(.blue)
                             .frame(width: 20)
                         Text("\(localCount) Mac file(s)")
-                            .font(.system(size: 13))
+                            .textStyle(.buttons)
                         Spacer()
                     }
                     .padding(.horizontal, 10)
@@ -148,7 +144,7 @@ struct iPhoneActionsPane: View {
 
                 if selection.isEmpty {
                     Text("No files selected")
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)

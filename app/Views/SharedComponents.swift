@@ -96,7 +96,7 @@ struct SheetHeader: View {
                 .font(.system(size: 18))
                 .foregroundColor(color)
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
+                .textStyle(.default, weight: .semibold)
             Spacer()
             SheetCloseButton(isPresented: $isPresented)
         }
@@ -130,7 +130,7 @@ struct SheetFooter: View {
     var body: some View {
         HStack {
             Text(filename)
-                .font(.system(size: 13))
+                .textStyle(.buttons)
                 .foregroundColor(.secondary)
                 .lineLimit(1)
             Spacer()
@@ -153,7 +153,7 @@ struct LoadingStateView: View {
         VStack {
             ProgressView()
             Text(message)
-                .font(.system(size: 14))
+                .textStyle(.default)
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -171,7 +171,7 @@ struct ErrorStateView: View {
                 .font(.system(size: 32))
                 .foregroundColor(.orange)
             Text(message)
-                .font(.system(size: 14))
+                .textStyle(.default)
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -190,7 +190,7 @@ struct EmptyStateView: View {
                 .font(.system(size: 32))
                 .foregroundColor(.secondary)
             Text(message)
-                .font(.system(size: 14))
+                .textStyle(.default)
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -208,11 +208,11 @@ struct MetadataTableView: View {
                 ForEach(items, id: \.key) { item in
                     HStack(alignment: .top) {
                         Text(item.key)
-                            .font(.system(size: 13, weight: .medium))
+                            .textStyle(.buttons)
                             .foregroundColor(.secondary)
                             .frame(width: 140, alignment: .trailing)
                         Text(item.value)
-                            .font(.system(size: 13))
+                            .textStyle(.buttons)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -240,7 +240,7 @@ struct FontSizeControls: View {
             }
             .buttonStyle(.borderless)
             Text("\(Int(settings.previewFontSize))px")
-                .font(.system(size: 12))
+                .textStyle(.small)
                 .foregroundColor(.secondary)
                 .frame(width: 32)
             Button(action: { settings.increaseFontSize() }) {
@@ -250,6 +250,76 @@ struct FontSizeControls: View {
             .buttonStyle(.borderless)
         }
         .padding(.trailing, 8)
+    }
+}
+
+// MARK: - File Context Menu Items
+
+struct FileContextMenuItems: View {
+    let url: URL
+    let isDirectory: Bool
+    let manager: FileExplorerManager
+    let tagManager: ColorTagManager
+    @Binding var showingDetails: Bool
+
+    var body: some View {
+        Button(action: { showingDetails = true }) {
+            Label("View Details", systemImage: "info.circle")
+        }
+        Button(action: { manager.toggleFileSelection(url) }) {
+            Label(manager.isInSelection(url) ? "Remove from Selection" : "Add to Selection",
+                  systemImage: manager.isInSelection(url) ? "minus.circle" : "checkmark.circle")
+        }
+        Button(action: {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(url.path, forType: .string)
+        }) {
+            Label("Copy Path", systemImage: "doc.on.clipboard")
+        }
+        Button(action: {
+            manager.selectedItem = url
+            manager.startRename()
+        }) {
+            Label("Rename", systemImage: "pencil")
+        }
+        Button(action: {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        }) {
+            Label("Show in Finder", systemImage: "folder")
+        }
+        Divider()
+        Button(action: { manager.duplicateFile(url) }) {
+            Label("Duplicate", systemImage: "doc.on.doc")
+        }
+        Button(action: { manager.addToZip(url) }) {
+            Label("Add to Zip", systemImage: "doc.zipper")
+        }
+        if ["zip", "tar", "tgz", "gz", "bz2", "xz", "rar", "7z"].contains(url.pathExtension.lowercased()) {
+            Button(action: { manager.extractArchive(url) }) {
+                Label("Extract to folder", systemImage: "arrow.down.doc")
+            }
+        }
+        if url.pathExtension.lowercased() == "app" && isDirectory {
+            Button(action: { manager.enableUnsafeApp(url) }) {
+                Label("Enable unsafe app", systemImage: "checkmark.shield")
+            }
+        }
+        if url.lastPathComponent.hasPrefix(".") {
+            Button(action: { manager.toggleHidden(url) }) {
+                Label("Make Visible", systemImage: "eye")
+            }
+        } else {
+            Button(action: { manager.toggleHidden(url) }) {
+                Label("Make Hidden", systemImage: "eye.slash")
+            }
+        }
+        Divider()
+        Button(role: .destructive, action: { manager.moveToTrash(url) }) {
+            Label("Move to Trash", systemImage: "trash")
+        }
+        Divider()
+        ColorTagMenuItems(url: url, tagManager: tagManager)
     }
 }
 

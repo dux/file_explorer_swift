@@ -123,7 +123,7 @@ class GitRepoManager: ObservableObject {
             serviceName = "git \(host)"
         }
 
-        let displayLabel = "Go to \(serviceName) Home (\(repoPath))"
+        let displayLabel = "\(serviceName) Home (\(repoPath))"
 
         return GitRepoInfo(
             webURL: webURL,

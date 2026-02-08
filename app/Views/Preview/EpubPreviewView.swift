@@ -16,7 +16,7 @@ struct EpubPreviewView: View {
                 VStack(spacing: 12) {
                     ProgressView()
                     Text("Extracting preview...")
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -26,7 +26,7 @@ struct EpubPreviewView: View {
                         .font(.system(size: 32))
                         .foregroundColor(.orange)
                     Text(error)
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

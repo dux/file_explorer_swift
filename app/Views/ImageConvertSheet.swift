@@ -103,20 +103,18 @@ struct ImageConvertSheet: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Source")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .textCase(.uppercase)
+                        .textStyle(.title)
                     Spacer()
                 }
 
                 HStack(spacing: 12) {
                     Label(sourceExtension.uppercased(), systemImage: "doc.fill")
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                     Text("\(Int(originalSize.width)) x \(Int(originalSize.height))")
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                     Text(originalFileSize)
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                         .foregroundColor(.secondary)
                 }
             }
@@ -129,9 +127,7 @@ struct ImageConvertSheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Convert to")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .textCase(.uppercase)
+                        .textStyle(.title)
                     Spacer()
                 }
 
@@ -139,7 +135,7 @@ struct ImageConvertSheet: View {
                     ForEach(availableFormats) { format in
                         Button(action: { selectedFormat = format }) {
                             Text(format.rawValue)
-                                .font(.system(size: 13, weight: selectedFormat == format ? .semibold : .regular))
+                                .textStyle(.buttons, weight: selectedFormat == format ? .semibold : .regular)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 7)
                                 .background(
@@ -156,20 +152,20 @@ struct ImageConvertSheet: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text("Quality")
-                                .font(.system(size: 13))
+                                .textStyle(.buttons)
                             Spacer()
                             Text("\(Int(quality * 100))%")
-                                .font(.system(size: 13, weight: .medium))
+                                .textStyle(.buttons)
                                 .foregroundColor(.secondary)
                         }
                         Slider(value: $quality, in: 0.1...1.0, step: 0.05)
                         HStack {
                             Text("Smaller file")
-                                .font(.system(size: 10))
+                                .textStyle(.small)
                                 .foregroundColor(.secondary)
                             Spacer()
                             Text("Better quality")
-                                .font(.system(size: 10))
+                                .textStyle(.small)
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -177,7 +173,7 @@ struct ImageConvertSheet: View {
 
                 if selectedFormat.supportsAlpha {
                     Toggle("Preserve transparency", isOn: $preserveAlpha)
-                        .font(.system(size: 13))
+                        .textStyle(.buttons)
                 }
             }
             .padding(.horizontal, 16)
@@ -193,7 +189,7 @@ struct ImageConvertSheet: View {
                     Image(systemName: msg.contains("Error") ? "xmark.circle.fill" : "checkmark.circle.fill")
                         .foregroundColor(msg.contains("Error") ? .red : .green)
                     Text(msg)
-                        .font(.system(size: 12))
+                        .textStyle(.small)
                     Spacer()
                 }
                 .padding(.horizontal, 16)
