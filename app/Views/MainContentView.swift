@@ -304,6 +304,12 @@ class KeyCaptureView: NSView {
             return
         }
 
+        // Cmd+T: toggle tree/flat view from any focus mode
+        if event.keyCode == 17 && event.modifierFlags.contains(.command) {
+            AppSettings.shared.flatFolders.toggle()
+            return
+        }
+
         if handleContextMenuNavigation(event) { return }
         if handleRenameMode(event, manager: manager) { return }
         if handleTabCycle(event, manager: manager) { return }

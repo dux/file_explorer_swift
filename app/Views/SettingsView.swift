@@ -260,6 +260,7 @@ struct HelpSettingsView: View {
                     shortcutRow("Space", "Add / remove from selection")
                     shortcutRow("Cmd+A", "Select all files")
                     shortcutRow("Ctrl+R", "Refresh directory")
+                    shortcutRow("Cmd+T", "Toggle tree / flat view")
                 }
 
                 helpSection("Focus (Tab Cycling)") {

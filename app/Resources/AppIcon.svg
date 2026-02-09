@@ -1,47 +1,50 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="folderBody" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#5B9BD5"/>
-      <stop offset="100%" stop-color="#2E75B6"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E8E8ED"/>
     </linearGradient>
-    <linearGradient id="folderTab" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#6CAEE0"/>
-      <stop offset="100%" stop-color="#4A90C4"/>
+    <linearGradient id="folderBack" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F0A030"/>
+      <stop offset="100%" stop-color="#D08820"/>
     </linearGradient>
     <linearGradient id="folderFront" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#7EC4F0"/>
-      <stop offset="100%" stop-color="#4A9AD8"/>
+      <stop offset="0%" stop-color="#FDDEA0"/>
+      <stop offset="100%" stop-color="#F0C060"/>
     </linearGradient>
-    <linearGradient id="arrowGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#FF6B35"/>
-      <stop offset="100%" stop-color="#E04520"/>
+    <linearGradient id="folderTab" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F0A030"/>
+      <stop offset="100%" stop-color="#E09828"/>
     </linearGradient>
-    <filter id="shadow" x="-5%" y="-5%" width="115%" height="120%">
-      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000" flood-opacity="0.25"/>
-    </filter>
-    <filter id="arrowShadow" x="-10%" y="-10%" width="130%" height="130%">
-      <feDropShadow dx="2" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.3"/>
+    <linearGradient id="shine" x1="0.3" y1="0" x2="0.7" y2="1">
+      <stop offset="0%" stop-color="white" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="folderShadow" x="-5%" y="-2%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#000" flood-opacity="0.18"/>
     </filter>
   </defs>
-  <!-- Folder back -->
-  <g filter="url(#shadow)">
+  <!-- Squircle background -->
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <!-- Folder group - scaled up to fill -->
+  <g filter="url(#folderShadow)">
+    <!-- Dark outline/shadow layer -->
+    <rect x="112" y="270" width="800" height="540" rx="52" fill="#4A4A50" opacity="0.9"/>
     <!-- Tab -->
-    <path d="M140 260 L140 210 Q140 180 170 180 L380 180 Q400 180 415 200 L460 260 Z" fill="url(#folderTab)"/>
+    <path d="M162 270 L162 218 Q162 190 192 190 L400 190 Q428 190 442 214 L488 270 Z" fill="#4A4A50" opacity="0.9"/>
+    <!-- Tab inner -->
+    <path d="M172 264 L172 228 Q172 206 196 206 L395 206 Q418 206 430 228 L472 264 Z" fill="url(#folderTab)"/>
     <!-- Body back -->
-    <rect x="140" y="260" width="744" height="520" rx="30" fill="url(#folderBody)"/>
-    <!-- Body front (slightly raised) -->
-    <rect x="140" y="310" width="744" height="480" rx="28" fill="url(#folderFront)"/>
-    <!-- Subtle shine -->
-    <rect x="160" y="320" width="704" height="60" rx="16" fill="white" opacity="0.12"/>
-  </g>
-  <!-- Arrow striking through folder diagonally -->
-  <g filter="url(#arrowShadow)">
-    <!-- Arrow shaft -->
-    <line x1="680" y1="140" x2="340" y2="680" stroke="url(#arrowGrad)" stroke-width="52" stroke-linecap="round"/>
-    <!-- Arrow head -->
-    <polygon points="310,720 280,580 420,650" fill="#E04520"/>
-    <!-- Arrow tail feathers -->
-    <line x1="710" y1="100" x2="740" y2="190" stroke="#FF6B35" stroke-width="28" stroke-linecap="round"/>
-    <line x1="710" y1="100" x2="630" y2="120" stroke="#FF6B35" stroke-width="28" stroke-linecap="round"/>
+    <rect x="120" y="270" width="784" height="528" rx="46" fill="url(#folderBack)"/>
+    <!-- Divider line -->
+    <rect x="120" y="314" width="784" height="3" fill="#C08018" opacity="0.5"/>
+    <!-- Body front -->
+    <rect x="120" y="318" width="784" height="472" rx="40" fill="url(#folderFront)"/>
+    <!-- Label bar -->
+    <rect x="285" y="232" width="270" height="32" rx="6" fill="#D0EEF8" opacity="0.85"/>
+    <!-- Shine overlay -->
+    <path d="M120 318 L580 318 L120 670 Z" fill="url(#shine)" opacity="0.5"/>
+    <!-- Bottom right shadow -->
+    <rect x="856" y="318" width="48" height="472" rx="40" fill="#B08020" opacity="0.25"/>
   </g>
 </svg>

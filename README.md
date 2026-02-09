@@ -127,6 +127,7 @@ curl -fsSL https://raw.githubusercontent.com/dux/file_explorer_swift/main/instal
 - Cmd+F: search
 - Cmd+O: open with preferred app
 - Ctrl+C: toggle file in selection
+- Cmd+T: toggle tree / flat view
 - Ctrl+R: refresh folder contents
 - `.` or Ctrl+M: open context menu for selected file (navigate with Up/Down, Enter to activate, Escape to dismiss)
 - Backspace: navigate back in history

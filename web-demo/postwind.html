@@ -1,0 +1,2008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PostWind - Examples &amp; Tests</title>
+  <script src="postwind.js"></script>
+  <script>
+    PostWind.init({
+      tailwind: true,
+      shortcuts: {
+        // base
+        'btn': 'inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-all duration-200 cursor-pointer text-sm',
+        'btn-lg': 'btn px-6 py-3 text-base rounded-xl',
+        'btn-sm': 'btn px-3 py-1.5 text-xs rounded-md',
+        'btn-xs': 'btn px-2 py-1 text-xs rounded',
+        // solid
+        'btn-primary': 'btn bg-blue-600 text-white hover:bg-blue-500 active:bg-blue-700',
+        'btn-secondary': 'btn bg-gray-200 text-gray-800 hover:bg-gray-300 active:bg-gray-400',
+        'btn-danger': 'btn bg-red-600 text-white hover:bg-red-500 active:bg-red-700',
+        'btn-success': 'btn bg-emerald-600 text-white hover:bg-emerald-500 active:bg-emerald-700',
+        'btn-warning': 'btn bg-amber-500 text-white hover:bg-amber-400 active:bg-amber-600',
+        'btn-info': 'btn bg-sky-500 text-white hover:bg-sky-400 active:bg-sky-600',
+        'btn-dark': 'btn bg-gray-900 text-white hover:bg-gray-800 active:bg-gray-950',
+        'btn-light': 'btn bg-white text-gray-800 hover:bg-gray-50 active:bg-gray-100 border border-gray-200',
+        // outline
+        'btn-outline': 'btn bg-transparent border-2 border-gray-300 text-gray-700 hover:bg-gray-100',
+        'btn-outline-primary': 'btn bg-transparent border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white',
+        'btn-outline-danger': 'btn bg-transparent border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white',
+        'btn-outline-success': 'btn bg-transparent border-2 border-emerald-600 text-emerald-600 hover:bg-emerald-600 hover:text-white',
+        // ghost / link
+        'btn-ghost': 'btn bg-transparent text-gray-600 hover:bg-gray-100',
+        'btn-link': 'btn bg-transparent text-blue-600 hover:underline',
+        // pill
+        'btn-pill': 'btn rounded-full',
+        'btn-pill-primary': 'btn rounded-full bg-blue-600 text-white hover:bg-blue-500',
+        'btn-pill-danger': 'btn rounded-full bg-red-600 text-white hover:bg-red-500',
+        // gradient
+        'btn-gradient': 'btn bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-500 hover:to-purple-500',
+        'btn-gradient-warm': 'btn bg-gradient-to-r from-orange-500 to-pink-500 text-white hover:from-orange-400 hover:to-pink-400',
+        'btn-gradient-cool': 'btn bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:from-cyan-400 hover:to-blue-400',
+        // shadow
+        'btn-shadow': 'btn bg-white text-gray-800 border border-gray-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5',
+        'btn-shadow-primary': 'btn bg-blue-600 text-white shadow-md shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-0.5',
+        'btn-shadow-danger': 'btn bg-red-600 text-white shadow-md shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 hover:-translate-y-0.5',
+        'btn-shadow-success': 'btn bg-emerald-600 text-white shadow-md shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 hover:-translate-y-0.5',
+        // icon
+        'btn-icon': 'btn p-2 rounded-lg',
+        'btn-icon-round': 'btn p-2 rounded-full',
+        // misc
+        'card': 'bg-white rounded-xl border border-gray-200 p-6',
+        'section-title': 'text-2xl font-bold mb-4',
+        'code-box': 'bg-gray-900 text-green-400 rounded-lg p-4 font-mono text-sm overflow-x-auto',
+        'badge': 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+        'badge-primary': 'badge bg-blue-100 text-blue-800',
+        'badge-success': 'badge bg-emerald-100 text-emerald-800',
+        'badge-danger': 'badge bg-red-100 text-red-800',
+        'badge-warning': 'badge bg-amber-100 text-amber-800',
+      }
+    })
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .test-pass { color: #16a34a; font-weight: 600; }
+    .test-fail { color: #dc2626; font-weight: 600; }
+    .test-pending { color: #9ca3af; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav class="max-w-5xl mx-auto px-4 md:px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">PW</div>
+        <span class="font-semibold text-lg">PostWind</span>
+      </div>
+      <div class="flex items-center gap-3 text-sm flex-wrap">
+        <a href="#intro" class="text-gray-600 hover:text-gray-900 transition-colors">Intro</a>
+        <a href="#api" class="text-gray-600 hover:text-gray-900 transition-colors">API</a>
+        <a href="#tailwind" class="text-gray-600 hover:text-gray-900 transition-colors">Tailwind</a>
+        <a href="#postwind" class="text-gray-600 hover:text-gray-900 transition-colors">PostWind</a>
+        <a href="#units" class="text-gray-600 hover:text-gray-900 transition-colors">Units</a>
+        <a href="#colon" class="text-gray-600 hover:text-gray-900 transition-colors">Colon</a>
+        <a href="#shortcuts" class="text-gray-600 hover:text-gray-900 transition-colors">Shortcuts</a>
+        <a href="#visible" class="text-gray-600 hover:text-gray-900 transition-colors">Visible</a>
+        <a href="#tests" class="text-gray-600 hover:text-gray-900 transition-colors">Tests</a>
+      </div>
+    </nav>
+  </header>
+
+  <div class="max-w-5xl mx-auto px-4 md:px-6 py-8">
+
+    <!-- ============================== -->
+    <!-- SECTION: Introduction          -->
+    <!-- ============================== -->
+    <section id="intro" class="mb-16">
+      <h2 class="text-3xl font-bold mb-2">PostWind</h2>
+      <p class="text-gray-500 mb-6">A lightweight layer on top of Tailwind CSS browser runtime. Adds responsive shorthands, unit suffixes, shortcuts, and scroll-triggered animations.</p>
+
+      <!-- What it is -->
+      <div class="bg-white rounded-xl border border-gray-200 p-6 mb-8">
+        <h3 class="text-xl font-semibold mb-4">What is PostWind?</h3>
+        <div class="space-y-3 text-gray-700">
+          <p>PostWind is a ~3KB JavaScript library that extends Tailwind CSS with convenience features for prototyping and static pages. It runs in the browser alongside <code class="bg-gray-100 px-1 rounded font-mono text-sm">@tailwindcss/browser@4</code>.</p>
+          <p>It does <strong>not</strong> replace Tailwind. Standard Tailwind classes work as-is. PostWind adds:</p>
+          <ul class="list-disc pl-6 space-y-1">
+            <li><strong>Pipe responsive</strong> &mdash; <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-4|8</code> instead of <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-4 md:p-8</code></li>
+            <li><strong>Three-segment</strong> &mdash; <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-4|8|12</code> for mobile / tablet / desktop</li>
+            <li><strong>Unit suffixes</strong> &mdash; <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-10px</code> instead of <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-[10px]</code></li>
+            <li><strong>Colon responsive</strong> &mdash; <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-4:8</code> as alias for <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-4|8</code></li>
+            <li><strong>Shortcuts</strong> &mdash; compose multiple classes into one: <code class="bg-gray-100 px-1 rounded font-mono text-sm">btn-primary</code></li>
+            <li><strong>visible:</strong> prefix &mdash; IntersectionObserver-based scroll animations</li>
+            <li><strong>m: t: d:</strong> prefixes &mdash; explicit mobile / tablet / desktop breakpoints</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- How it works -->
+      <div class="bg-white rounded-xl border border-gray-200 p-6 mb-8">
+        <h3 class="text-xl font-semibold mb-4">How it Works Under the Hood</h3>
+        <div class="space-y-3 text-gray-700">
+          <p><strong>1. Tailwind generates CSS.</strong> PostWind uses Tailwind's browser runtime as its CSS engine. When PostWind needs to know what <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-4</code> produces, it creates a temporary DOM element with that class, waits for Tailwind to process it, then extracts the CSS rules from the generated stylesheet.</p>
+          <p><strong>2. PostWind re-wraps the CSS.</strong> It takes the extracted CSS properties and wraps them in new selectors and media queries. For example, <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-4|8</code> extracts both <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-4</code> and <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-8</code> CSS, then generates:</p>
+          <div class="bg-gray-900 rounded-lg p-4 font-mono text-sm text-green-400 overflow-x-auto">
+            <div>.p-4\|8 { padding: 1rem; }</div>
+            <div>@media (min-width: 768px) { .p-4\|8 { padding: 2rem; } }</div>
+          </div>
+          <p><strong>3. Injected into the page.</strong> Generated rules go into a <code class="bg-gray-100 px-1 rounded font-mono text-sm">&lt;style id="pw-styles"&gt;</code> element. A cache prevents duplicate injection.</p>
+          <p><strong>4. Auto-scan.</strong> On DOMContentLoaded, PostWind scans all elements for PostWind-specific classes (pipes, unit suffixes, colon responsive, visible:) and injects their CSS automatically. A MutationObserver watches for dynamically added elements.</p>
+        </div>
+      </div>
+
+      <!-- Quick start -->
+      <div class="bg-white rounded-xl border border-gray-200 p-6 mb-8">
+        <h3 class="text-xl font-semibold mb-4">Quick Start</h3>
+        <div class="bg-gray-900 rounded-lg p-4 font-mono text-sm text-green-400 overflow-x-auto space-y-1">
+          <div class="text-gray-500">&lt;!-- 1. Load PostWind (includes Tailwind) --&gt;</div>
+          <div>&lt;script src="postwind.js"&gt;&lt;/script&gt;</div>
+          <div>&lt;script&gt;</div>
+          <div>&nbsp; PostWind.init({</div>
+          <div>&nbsp;&nbsp;&nbsp; tailwind: true, <span class="text-gray-500">// load Tailwind CSS from CDN (default: false)</span></div>
+          <div>&nbsp;&nbsp;&nbsp; shortcuts: {</div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'btn': 'px-4 py-2 rounded-lg font-medium',</div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'btn-primary': 'btn bg-blue-600 text-white',</div>
+          <div>&nbsp;&nbsp;&nbsp; }</div>
+          <div>&nbsp; })</div>
+          <div>&lt;/script&gt;</div>
+          <div></div>
+          <div class="text-gray-500">&lt;!-- 2. Use classes directly in HTML --&gt;</div>
+          <div>&lt;div class="p-4|8 text-lg|2xl"&gt;Responsive!&lt;/div&gt;</div>
+          <div>&lt;div class="p-10px w-200px"&gt;Pixel values!&lt;/div&gt;</div>
+          <div>&lt;button class="btn-primary"&gt;Click me&lt;/button&gt;</div>
+        </div>
+        <p class="text-sm text-gray-400 mt-3"><code class="font-mono">PostWind.init({ tailwind: true })</code> loads Tailwind from CDN. Without <code class="font-mono">tailwind: true</code>, PostWind works as a class processor only (Tailwind must be loaded separately). Returns a Promise.</p>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- SECTION: API Reference         -->
+    <!-- ============================== -->
+    <section id="api" class="mb-16">
+      <h2 class="text-3xl font-bold mb-2">API Reference</h2>
+      <p class="text-gray-500 mb-8">Full JavaScript API for PostWind.</p>
+
+      <div class="space-y-6">
+        <!-- init -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3">
+            <code class="font-mono font-semibold text-purple-700">PostWind.init(options?)</code>
+            <span class="text-gray-400 text-sm ml-2">returns Promise</span>
+          </div>
+          <div class="p-6 space-y-3">
+            <p class="text-gray-700">Initializes PostWind. Pass <code class="font-mono bg-gray-100 px-1 rounded">tailwind: true</code> to load Tailwind CSS browser runtime from CDN (default: false). Returns a Promise that resolves when ready.</p>
+            <div class="bg-gray-900 rounded-lg p-4 font-mono text-sm text-green-400 overflow-x-auto">
+              <div>PostWind.init({</div>
+              <div>&nbsp; tailwind: true, <span class="text-gray-500">// load Tailwind from CDN (default: false)</span></div>
+              <div>&nbsp; breakpoints: {</div>
+              <div>&nbsp;&nbsp;&nbsp; m: '@media (max-width: 767px)',&nbsp;&nbsp; <span class="text-gray-500">// default</span></div>
+              <div>&nbsp;&nbsp;&nbsp; t: '@media (min-width: 768px)',&nbsp;&nbsp; <span class="text-gray-500">// default</span></div>
+              <div>&nbsp;&nbsp;&nbsp; d: '@media (min-width: 1024px)',&nbsp; <span class="text-gray-500">// default</span></div>
+              <div>&nbsp;&nbsp;&nbsp; xl: '@media (min-width: 1280px)', <span class="text-gray-500">// custom</span></div>
+              <div>&nbsp; },</div>
+              <div>&nbsp; shortcuts: {</div>
+              <div>&nbsp;&nbsp;&nbsp; 'btn': 'px-4 py-2 rounded-lg font-medium',</div>
+              <div>&nbsp;&nbsp;&nbsp; 'btn-primary': 'btn bg-blue-600 text-white',</div>
+              <div>&nbsp; }</div>
+              <div>})</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PostWind() -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3">
+            <code class="font-mono font-semibold text-purple-700">PostWind(className)</code>
+            <span class="text-gray-400 text-sm ml-2">returns Promise&lt;string|null&gt;</span>
+          </div>
+          <div class="p-6 space-y-3">
+            <p class="text-gray-700">Resolves the CSS for a PostWind class and injects it into the page. Returns the generated CSS string or null. Cached &mdash; calling twice with the same class only injects once.</p>
+            <div class="bg-gray-900 rounded-lg p-4 font-mono text-sm text-green-400 overflow-x-auto">
+              <div>await PostWind('p-4|8')&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="text-gray-500">// pipe responsive</span></div>
+              <div>await PostWind('p-10px')&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="text-gray-500">// unit suffix</span></div>
+              <div>await PostWind('m:flex')&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="text-gray-500">// breakpoint prefix</span></div>
+              <div>await PostWind('btn-primary') <span class="text-gray-500">// shortcut</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ready -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3">
+            <code class="font-mono font-semibold text-purple-700">PostWind.ready()</code>
+            <span class="text-gray-400 text-sm ml-2">returns Promise</span>
+          </div>
+          <div class="p-6">
+            <p class="text-gray-700">Returns a Promise that resolves when Tailwind is loaded and ready. Same promise as <code class="font-mono bg-gray-100 px-1 rounded text-sm">init()</code> returns.</p>
+          </div>
+        </div>
+
+        <!-- resolve -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3">
+            <code class="font-mono font-semibold text-purple-700">PostWind.resolve(className)</code>
+            <span class="text-gray-400 text-sm ml-2">returns Promise&lt;string|null&gt;</span>
+          </div>
+          <div class="p-6">
+            <p class="text-gray-700">Like <code class="font-mono bg-gray-100 px-1 rounded text-sm">PostWind()</code> but returns the CSS string <strong>without injecting</strong> it. Useful for debugging or building custom tooling.</p>
+          </div>
+        </div>
+
+        <!-- twCSS -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3">
+            <code class="font-mono font-semibold text-purple-700">PostWind.twCSS(className)</code>
+            <span class="text-gray-400 text-sm ml-2">returns Promise&lt;string|null&gt;</span>
+          </div>
+          <div class="p-6">
+            <p class="text-gray-700">Extracts raw CSS properties from Tailwind for a single class. Creates a temp element, waits for Tailwind to process, returns the CSS text (e.g. <code class="font-mono bg-gray-100 px-1 rounded text-sm">padding: 1rem;</code>).</p>
+          </div>
+        </div>
+
+        <!-- shortcut -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3">
+            <code class="font-mono font-semibold text-purple-700">PostWind.shortcut(name, classes)</code>
+          </div>
+          <div class="p-6 space-y-3">
+            <p class="text-gray-700">Register a shortcut: a single class name that expands to multiple Tailwind classes. Supports nesting &mdash; reference other shortcuts by name. Can be called anytime (in init or after).</p>
+            <div class="bg-gray-900 rounded-lg p-4 font-mono text-sm text-green-400 overflow-x-auto">
+              <div>PostWind.shortcut('btn', 'px-4 py-2 rounded-lg font-medium')</div>
+              <div>PostWind.shortcut('btn-primary', 'btn bg-blue-600 text-white')</div>
+              <div></div>
+              <div><span class="text-gray-500">// then use:</span> &lt;button class="btn-primary"&gt;Click&lt;/button&gt;</div>
+              <div><span class="text-gray-500">// must call PostWind('btn-primary') to inject CSS</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- breakpoint -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3">
+            <code class="font-mono font-semibold text-purple-700">PostWind.breakpoint(name, mediaQuery)</code>
+          </div>
+          <div class="p-6 space-y-3">
+            <p class="text-gray-700">Register or override a named breakpoint. Used by prefix notation (<code class="font-mono bg-gray-100 px-1 rounded text-sm">m:</code>, <code class="font-mono bg-gray-100 px-1 rounded text-sm">t:</code>, <code class="font-mono bg-gray-100 px-1 rounded text-sm">d:</code>) and pipe notation. Can be called anytime.</p>
+            <div class="bg-gray-900 rounded-lg p-4 font-mono text-sm text-green-400 overflow-x-auto">
+              <div>PostWind.breakpoint('xl', '@media (min-width: 1280px)')</div>
+              <div>PostWind.breakpoint('print', '@media print')</div>
+              <div></div>
+              <div><span class="text-gray-500">// then use:</span> await PostWind('xl:text-2xl')</div>
+            </div>
+            <p class="text-sm text-gray-500 mt-2"><strong>Defaults:</strong> m = max-width:767px, t = min-width:768px, d = min-width:1024px</p>
+          </div>
+        </div>
+
+        <!-- observeVisible -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3">
+            <code class="font-mono font-semibold text-purple-700">PostWind.observeVisible(element)</code>
+          </div>
+          <div class="p-6">
+            <p class="text-gray-700">Manually observe an element with the IntersectionObserver. Adds <code class="font-mono bg-gray-100 px-1 rounded text-sm">pw-visible</code> class when 50% visible. Usually not needed &mdash; auto-scan handles elements with <code class="font-mono bg-gray-100 px-1 rounded text-sm">visible:</code> classes.</p>
+          </div>
+        </div>
+
+        <!-- Class syntax reference -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3 font-semibold">Class Syntax Reference</div>
+          <div class="p-6">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200">
+                  <th class="text-left py-2 pr-4 font-medium text-gray-500">Syntax</th>
+                  <th class="text-left py-2 pr-4 font-medium text-gray-500">Example</th>
+                  <th class="text-left py-2 font-medium text-gray-500">Equivalent Tailwind</th>
+                </tr>
+              </thead>
+              <tbody class="font-mono">
+                <tr class="border-b border-gray-100"><td class="py-2 pr-4">Pipe (2-seg)</td><td class="py-2 pr-4">p-4|8</td><td class="py-2">p-4 md:p-8</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 pr-4">Pipe (3-seg)</td><td class="py-2 pr-4">p-4|8|12</td><td class="py-2">p-4 md:p-8 lg:p-12</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 pr-4">Colon (2-seg)</td><td class="py-2 pr-4">p-4:8</td><td class="py-2">p-4 md:p-8</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 pr-4">Colon (3-seg)</td><td class="py-2 pr-4">p-4:8:12</td><td class="py-2">p-4 md:p-8 lg:p-12</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 pr-4">Unit suffix</td><td class="py-2 pr-4">p-10px</td><td class="py-2">p-[10px]</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 pr-4">Mobile prefix</td><td class="py-2 pr-4">m:hidden</td><td class="py-2">max-width:767px</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 pr-4">Tablet prefix</td><td class="py-2 pr-4">t:flex</td><td class="py-2">md:flex</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 pr-4">Desktop prefix</td><td class="py-2 pr-4">d:flex</td><td class="py-2">lg:flex</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 pr-4">Visible</td><td class="py-2 pr-4">visible:opacity-100</td><td class="py-2">IntersectionObserver</td></tr>
+                <tr><td class="py-2 pr-4">Shortcut</td><td class="py-2 pr-4">btn-primary</td><td class="py-2">user-defined</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- SECTION: Tailwind Examples     -->
+    <!-- ============================== -->
+    <section id="tailwind" class="mb-16">
+      <h2 class="text-3xl font-bold mb-2">Tailwind CSS Examples</h2>
+      <p class="text-gray-500 mb-8">Standard Tailwind classes work as-is. PostWind doesn't change anything &mdash; these are just Tailwind.</p>
+
+      <!-- Flexbox -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Flexbox</h3>
+        <div class="space-y-4">
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <p class="text-sm text-gray-500 mb-2 font-mono">flex gap-4 items-center</p>
+            <div class="flex gap-4 items-center">
+              <div class="bg-blue-100 text-blue-800 rounded-lg px-4 py-2">Item 1</div>
+              <div class="bg-blue-100 text-blue-800 rounded-lg px-4 py-6">Taller</div>
+              <div class="bg-blue-100 text-blue-800 rounded-lg px-4 py-2">Item 3</div>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <p class="text-sm text-gray-500 mb-2 font-mono">flex justify-between items-center</p>
+            <div class="flex justify-between items-center">
+              <div class="bg-green-100 text-green-800 rounded-lg px-4 py-2">Left</div>
+              <div class="bg-green-100 text-green-800 rounded-lg px-4 py-2">Center</div>
+              <div class="bg-green-100 text-green-800 rounded-lg px-4 py-2">Right</div>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <p class="text-sm text-gray-500 mb-2 font-mono">flex flex-col md:flex-row gap-4</p>
+            <div class="flex flex-col md:flex-row gap-4">
+              <div class="bg-amber-100 text-amber-800 rounded-lg p-4 flex-1 text-center">Column on mobile</div>
+              <div class="bg-amber-100 text-amber-800 rounded-lg p-4 flex-1 text-center">Row on tablet+</div>
+              <div class="bg-amber-100 text-amber-800 rounded-lg p-4 flex-1 text-center">Resize to test</div>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <p class="text-sm text-gray-500 mb-2 font-mono">flex flex-wrap gap-2</p>
+            <div class="flex flex-wrap gap-2">
+              <div class="bg-violet-100 text-violet-800 rounded px-3 py-1 text-sm">Tag 1</div>
+              <div class="bg-violet-100 text-violet-800 rounded px-3 py-1 text-sm">Tag 2</div>
+              <div class="bg-violet-100 text-violet-800 rounded px-3 py-1 text-sm">Another tag</div>
+              <div class="bg-violet-100 text-violet-800 rounded px-3 py-1 text-sm">Tag 4</div>
+              <div class="bg-violet-100 text-violet-800 rounded px-3 py-1 text-sm">Longer tag name</div>
+              <div class="bg-violet-100 text-violet-800 rounded px-3 py-1 text-sm">Tag 6</div>
+              <div class="bg-violet-100 text-violet-800 rounded px-3 py-1 text-sm">Short</div>
+              <div class="bg-violet-100 text-violet-800 rounded px-3 py-1 text-sm">Tag 8</div>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <p class="text-sm text-gray-500 mb-2 font-mono">flex items-stretch gap-4 (equal height)</p>
+            <div class="flex items-stretch gap-4">
+              <div class="bg-rose-100 text-rose-800 rounded-lg p-4 flex-1">Short</div>
+              <div class="bg-rose-100 text-rose-800 rounded-lg p-4 flex-1">This one has more content to make it taller than the others</div>
+              <div class="bg-rose-100 text-rose-800 rounded-lg p-4 flex-1">Medium text here</div>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <p class="text-sm text-gray-500 mb-2 font-mono">flex items-center justify-center h-32 (centering)</p>
+            <div class="flex items-center justify-center h-32 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+              <div class="bg-sky-100 text-sky-800 rounded-lg px-6 py-3 font-medium">Perfectly centered</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grid -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Grid</h3>
+        <div class="space-y-4">
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <p class="text-sm text-gray-500 mb-2 font-mono">grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div class="bg-blue-100 text-blue-800 rounded-lg p-4 text-center font-medium">1</div>
+              <div class="bg-blue-100 text-blue-800 rounded-lg p-4 text-center font-medium">2</div>
+              <div class="bg-blue-100 text-blue-800 rounded-lg p-4 text-center font-medium">3</div>
+              <div class="bg-blue-100 text-blue-800 rounded-lg p-4 text-center font-medium">4</div>
+              <div class="bg-blue-100 text-blue-800 rounded-lg p-4 text-center font-medium">5</div>
+              <div class="bg-blue-100 text-blue-800 rounded-lg p-4 text-center font-medium">6</div>
+              <div class="bg-blue-100 text-blue-800 rounded-lg p-4 text-center font-medium">7</div>
+              <div class="bg-blue-100 text-blue-800 rounded-lg p-4 text-center font-medium">8</div>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <p class="text-sm text-gray-500 mb-2 font-mono">grid grid-cols-3 gap-4 (auto-fit with span)</p>
+            <div class="grid grid-cols-3 gap-4">
+              <div class="bg-teal-100 text-teal-800 rounded-lg p-4 col-span-2">col-span-2</div>
+              <div class="bg-teal-100 text-teal-800 rounded-lg p-4">1 col</div>
+              <div class="bg-teal-100 text-teal-800 rounded-lg p-4">1 col</div>
+              <div class="bg-teal-100 text-teal-800 rounded-lg p-4 col-span-2">col-span-2</div>
+              <div class="bg-teal-100 text-teal-800 rounded-lg p-4 col-span-3">col-span-3 (full width)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Typography -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Typography</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+          <div>
+            <p class="text-xs text-gray-400 font-mono mb-1">text-5xl font-bold tracking-tight</p>
+            <p class="text-5xl font-bold tracking-tight">Heading 5XL</p>
+          </div>
+          <div>
+            <p class="text-xs text-gray-400 font-mono mb-1">text-3xl font-semibold</p>
+            <p class="text-3xl font-semibold">Heading 3XL</p>
+          </div>
+          <div>
+            <p class="text-xs text-gray-400 font-mono mb-1">text-xl font-medium text-gray-700</p>
+            <p class="text-xl font-medium text-gray-700">Subheading XL</p>
+          </div>
+          <div>
+            <p class="text-xs text-gray-400 font-mono mb-1">text-base leading-relaxed text-gray-600</p>
+            <p class="text-base leading-relaxed text-gray-600">Body text with relaxed leading. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+          </div>
+          <div>
+            <p class="text-xs text-gray-400 font-mono mb-1">text-sm text-gray-500 italic</p>
+            <p class="text-sm text-gray-500 italic">Small italic caption text</p>
+          </div>
+          <div>
+            <p class="text-xs text-gray-400 font-mono mb-1">text-xs uppercase tracking-widest font-semibold text-gray-400</p>
+            <p class="text-xs uppercase tracking-widest font-semibold text-gray-400">Overline label</p>
+          </div>
+          <div>
+            <p class="text-xs text-gray-400 font-mono mb-1">line-clamp-2 (truncate to 2 lines)</p>
+            <p class="line-clamp-2 text-gray-600">This paragraph is truncated to exactly two lines using line-clamp-2. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Colors & Backgrounds -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Colors & Backgrounds</h3>
+        <div class="space-y-4">
+          <!-- Full color palette -->
+          <div class="bg-white rounded-xl border border-gray-200 p-4 overflow-x-auto">
+            <p class="text-sm text-gray-500 mb-3 font-mono">bg-{color}-{shade} — Full Tailwind color palette</p>
+            <div class="space-y-1 min-w-[640px]">
+              <!-- Header row -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-400 text-right pr-2 py-1"></div>
+                <div class="flex-1 text-center text-xs text-gray-400 py-1">50</div>
+                <div class="flex-1 text-center text-xs text-gray-400 py-1">100</div>
+                <div class="flex-1 text-center text-xs text-gray-400 py-1">200</div>
+                <div class="flex-1 text-center text-xs text-gray-400 py-1">300</div>
+                <div class="flex-1 text-center text-xs text-gray-400 py-1">400</div>
+                <div class="flex-1 text-center text-xs text-gray-400 py-1">500</div>
+                <div class="flex-1 text-center text-xs text-gray-400 py-1">600</div>
+                <div class="flex-1 text-center text-xs text-gray-400 py-1">700</div>
+                <div class="flex-1 text-center text-xs text-gray-400 py-1">800</div>
+                <div class="flex-1 text-center text-xs text-gray-400 py-1">900</div>
+                <div class="flex-1 text-center text-xs text-gray-400 py-1">950</div>
+              </div>
+              <!-- Slate -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">slate</div>
+                <div class="flex-1 bg-slate-50 rounded h-8" title="slate-50"></div>
+                <div class="flex-1 bg-slate-100 rounded h-8" title="slate-100"></div>
+                <div class="flex-1 bg-slate-200 rounded h-8" title="slate-200"></div>
+                <div class="flex-1 bg-slate-300 rounded h-8" title="slate-300"></div>
+                <div class="flex-1 bg-slate-400 rounded h-8" title="slate-400"></div>
+                <div class="flex-1 bg-slate-500 rounded h-8" title="slate-500"></div>
+                <div class="flex-1 bg-slate-600 rounded h-8" title="slate-600"></div>
+                <div class="flex-1 bg-slate-700 rounded h-8" title="slate-700"></div>
+                <div class="flex-1 bg-slate-800 rounded h-8" title="slate-800"></div>
+                <div class="flex-1 bg-slate-900 rounded h-8" title="slate-900"></div>
+                <div class="flex-1 bg-slate-950 rounded h-8" title="slate-950"></div>
+              </div>
+              <!-- Gray -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">gray</div>
+                <div class="flex-1 bg-gray-50 rounded h-8" title="gray-50"></div>
+                <div class="flex-1 bg-gray-100 rounded h-8" title="gray-100"></div>
+                <div class="flex-1 bg-gray-200 rounded h-8" title="gray-200"></div>
+                <div class="flex-1 bg-gray-300 rounded h-8" title="gray-300"></div>
+                <div class="flex-1 bg-gray-400 rounded h-8" title="gray-400"></div>
+                <div class="flex-1 bg-gray-500 rounded h-8" title="gray-500"></div>
+                <div class="flex-1 bg-gray-600 rounded h-8" title="gray-600"></div>
+                <div class="flex-1 bg-gray-700 rounded h-8" title="gray-700"></div>
+                <div class="flex-1 bg-gray-800 rounded h-8" title="gray-800"></div>
+                <div class="flex-1 bg-gray-900 rounded h-8" title="gray-900"></div>
+                <div class="flex-1 bg-gray-950 rounded h-8" title="gray-950"></div>
+              </div>
+              <!-- Zinc -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">zinc</div>
+                <div class="flex-1 bg-zinc-50 rounded h-8" title="zinc-50"></div>
+                <div class="flex-1 bg-zinc-100 rounded h-8" title="zinc-100"></div>
+                <div class="flex-1 bg-zinc-200 rounded h-8" title="zinc-200"></div>
+                <div class="flex-1 bg-zinc-300 rounded h-8" title="zinc-300"></div>
+                <div class="flex-1 bg-zinc-400 rounded h-8" title="zinc-400"></div>
+                <div class="flex-1 bg-zinc-500 rounded h-8" title="zinc-500"></div>
+                <div class="flex-1 bg-zinc-600 rounded h-8" title="zinc-600"></div>
+                <div class="flex-1 bg-zinc-700 rounded h-8" title="zinc-700"></div>
+                <div class="flex-1 bg-zinc-800 rounded h-8" title="zinc-800"></div>
+                <div class="flex-1 bg-zinc-900 rounded h-8" title="zinc-900"></div>
+                <div class="flex-1 bg-zinc-950 rounded h-8" title="zinc-950"></div>
+              </div>
+              <!-- Neutral -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">neutral</div>
+                <div class="flex-1 bg-neutral-50 rounded h-8" title="neutral-50"></div>
+                <div class="flex-1 bg-neutral-100 rounded h-8" title="neutral-100"></div>
+                <div class="flex-1 bg-neutral-200 rounded h-8" title="neutral-200"></div>
+                <div class="flex-1 bg-neutral-300 rounded h-8" title="neutral-300"></div>
+                <div class="flex-1 bg-neutral-400 rounded h-8" title="neutral-400"></div>
+                <div class="flex-1 bg-neutral-500 rounded h-8" title="neutral-500"></div>
+                <div class="flex-1 bg-neutral-600 rounded h-8" title="neutral-600"></div>
+                <div class="flex-1 bg-neutral-700 rounded h-8" title="neutral-700"></div>
+                <div class="flex-1 bg-neutral-800 rounded h-8" title="neutral-800"></div>
+                <div class="flex-1 bg-neutral-900 rounded h-8" title="neutral-900"></div>
+                <div class="flex-1 bg-neutral-950 rounded h-8" title="neutral-950"></div>
+              </div>
+              <!-- Stone -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">stone</div>
+                <div class="flex-1 bg-stone-50 rounded h-8" title="stone-50"></div>
+                <div class="flex-1 bg-stone-100 rounded h-8" title="stone-100"></div>
+                <div class="flex-1 bg-stone-200 rounded h-8" title="stone-200"></div>
+                <div class="flex-1 bg-stone-300 rounded h-8" title="stone-300"></div>
+                <div class="flex-1 bg-stone-400 rounded h-8" title="stone-400"></div>
+                <div class="flex-1 bg-stone-500 rounded h-8" title="stone-500"></div>
+                <div class="flex-1 bg-stone-600 rounded h-8" title="stone-600"></div>
+                <div class="flex-1 bg-stone-700 rounded h-8" title="stone-700"></div>
+                <div class="flex-1 bg-stone-800 rounded h-8" title="stone-800"></div>
+                <div class="flex-1 bg-stone-900 rounded h-8" title="stone-900"></div>
+                <div class="flex-1 bg-stone-950 rounded h-8" title="stone-950"></div>
+              </div>
+              <!-- Red -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">red</div>
+                <div class="flex-1 bg-red-50 rounded h-8" title="red-50"></div>
+                <div class="flex-1 bg-red-100 rounded h-8" title="red-100"></div>
+                <div class="flex-1 bg-red-200 rounded h-8" title="red-200"></div>
+                <div class="flex-1 bg-red-300 rounded h-8" title="red-300"></div>
+                <div class="flex-1 bg-red-400 rounded h-8" title="red-400"></div>
+                <div class="flex-1 bg-red-500 rounded h-8" title="red-500"></div>
+                <div class="flex-1 bg-red-600 rounded h-8" title="red-600"></div>
+                <div class="flex-1 bg-red-700 rounded h-8" title="red-700"></div>
+                <div class="flex-1 bg-red-800 rounded h-8" title="red-800"></div>
+                <div class="flex-1 bg-red-900 rounded h-8" title="red-900"></div>
+                <div class="flex-1 bg-red-950 rounded h-8" title="red-950"></div>
+              </div>
+              <!-- Orange -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">orange</div>
+                <div class="flex-1 bg-orange-50 rounded h-8" title="orange-50"></div>
+                <div class="flex-1 bg-orange-100 rounded h-8" title="orange-100"></div>
+                <div class="flex-1 bg-orange-200 rounded h-8" title="orange-200"></div>
+                <div class="flex-1 bg-orange-300 rounded h-8" title="orange-300"></div>
+                <div class="flex-1 bg-orange-400 rounded h-8" title="orange-400"></div>
+                <div class="flex-1 bg-orange-500 rounded h-8" title="orange-500"></div>
+                <div class="flex-1 bg-orange-600 rounded h-8" title="orange-600"></div>
+                <div class="flex-1 bg-orange-700 rounded h-8" title="orange-700"></div>
+                <div class="flex-1 bg-orange-800 rounded h-8" title="orange-800"></div>
+                <div class="flex-1 bg-orange-900 rounded h-8" title="orange-900"></div>
+                <div class="flex-1 bg-orange-950 rounded h-8" title="orange-950"></div>
+              </div>
+              <!-- Amber -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">amber</div>
+                <div class="flex-1 bg-amber-50 rounded h-8" title="amber-50"></div>
+                <div class="flex-1 bg-amber-100 rounded h-8" title="amber-100"></div>
+                <div class="flex-1 bg-amber-200 rounded h-8" title="amber-200"></div>
+                <div class="flex-1 bg-amber-300 rounded h-8" title="amber-300"></div>
+                <div class="flex-1 bg-amber-400 rounded h-8" title="amber-400"></div>
+                <div class="flex-1 bg-amber-500 rounded h-8" title="amber-500"></div>
+                <div class="flex-1 bg-amber-600 rounded h-8" title="amber-600"></div>
+                <div class="flex-1 bg-amber-700 rounded h-8" title="amber-700"></div>
+                <div class="flex-1 bg-amber-800 rounded h-8" title="amber-800"></div>
+                <div class="flex-1 bg-amber-900 rounded h-8" title="amber-900"></div>
+                <div class="flex-1 bg-amber-950 rounded h-8" title="amber-950"></div>
+              </div>
+              <!-- Yellow -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">yellow</div>
+                <div class="flex-1 bg-yellow-50 rounded h-8" title="yellow-50"></div>
+                <div class="flex-1 bg-yellow-100 rounded h-8" title="yellow-100"></div>
+                <div class="flex-1 bg-yellow-200 rounded h-8" title="yellow-200"></div>
+                <div class="flex-1 bg-yellow-300 rounded h-8" title="yellow-300"></div>
+                <div class="flex-1 bg-yellow-400 rounded h-8" title="yellow-400"></div>
+                <div class="flex-1 bg-yellow-500 rounded h-8" title="yellow-500"></div>
+                <div class="flex-1 bg-yellow-600 rounded h-8" title="yellow-600"></div>
+                <div class="flex-1 bg-yellow-700 rounded h-8" title="yellow-700"></div>
+                <div class="flex-1 bg-yellow-800 rounded h-8" title="yellow-800"></div>
+                <div class="flex-1 bg-yellow-900 rounded h-8" title="yellow-900"></div>
+                <div class="flex-1 bg-yellow-950 rounded h-8" title="yellow-950"></div>
+              </div>
+              <!-- Lime -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">lime</div>
+                <div class="flex-1 bg-lime-50 rounded h-8" title="lime-50"></div>
+                <div class="flex-1 bg-lime-100 rounded h-8" title="lime-100"></div>
+                <div class="flex-1 bg-lime-200 rounded h-8" title="lime-200"></div>
+                <div class="flex-1 bg-lime-300 rounded h-8" title="lime-300"></div>
+                <div class="flex-1 bg-lime-400 rounded h-8" title="lime-400"></div>
+                <div class="flex-1 bg-lime-500 rounded h-8" title="lime-500"></div>
+                <div class="flex-1 bg-lime-600 rounded h-8" title="lime-600"></div>
+                <div class="flex-1 bg-lime-700 rounded h-8" title="lime-700"></div>
+                <div class="flex-1 bg-lime-800 rounded h-8" title="lime-800"></div>
+                <div class="flex-1 bg-lime-900 rounded h-8" title="lime-900"></div>
+                <div class="flex-1 bg-lime-950 rounded h-8" title="lime-950"></div>
+              </div>
+              <!-- Green -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">green</div>
+                <div class="flex-1 bg-green-50 rounded h-8" title="green-50"></div>
+                <div class="flex-1 bg-green-100 rounded h-8" title="green-100"></div>
+                <div class="flex-1 bg-green-200 rounded h-8" title="green-200"></div>
+                <div class="flex-1 bg-green-300 rounded h-8" title="green-300"></div>
+                <div class="flex-1 bg-green-400 rounded h-8" title="green-400"></div>
+                <div class="flex-1 bg-green-500 rounded h-8" title="green-500"></div>
+                <div class="flex-1 bg-green-600 rounded h-8" title="green-600"></div>
+                <div class="flex-1 bg-green-700 rounded h-8" title="green-700"></div>
+                <div class="flex-1 bg-green-800 rounded h-8" title="green-800"></div>
+                <div class="flex-1 bg-green-900 rounded h-8" title="green-900"></div>
+                <div class="flex-1 bg-green-950 rounded h-8" title="green-950"></div>
+              </div>
+              <!-- Emerald -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">emerald</div>
+                <div class="flex-1 bg-emerald-50 rounded h-8" title="emerald-50"></div>
+                <div class="flex-1 bg-emerald-100 rounded h-8" title="emerald-100"></div>
+                <div class="flex-1 bg-emerald-200 rounded h-8" title="emerald-200"></div>
+                <div class="flex-1 bg-emerald-300 rounded h-8" title="emerald-300"></div>
+                <div class="flex-1 bg-emerald-400 rounded h-8" title="emerald-400"></div>
+                <div class="flex-1 bg-emerald-500 rounded h-8" title="emerald-500"></div>
+                <div class="flex-1 bg-emerald-600 rounded h-8" title="emerald-600"></div>
+                <div class="flex-1 bg-emerald-700 rounded h-8" title="emerald-700"></div>
+                <div class="flex-1 bg-emerald-800 rounded h-8" title="emerald-800"></div>
+                <div class="flex-1 bg-emerald-900 rounded h-8" title="emerald-900"></div>
+                <div class="flex-1 bg-emerald-950 rounded h-8" title="emerald-950"></div>
+              </div>
+              <!-- Teal -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">teal</div>
+                <div class="flex-1 bg-teal-50 rounded h-8" title="teal-50"></div>
+                <div class="flex-1 bg-teal-100 rounded h-8" title="teal-100"></div>
+                <div class="flex-1 bg-teal-200 rounded h-8" title="teal-200"></div>
+                <div class="flex-1 bg-teal-300 rounded h-8" title="teal-300"></div>
+                <div class="flex-1 bg-teal-400 rounded h-8" title="teal-400"></div>
+                <div class="flex-1 bg-teal-500 rounded h-8" title="teal-500"></div>
+                <div class="flex-1 bg-teal-600 rounded h-8" title="teal-600"></div>
+                <div class="flex-1 bg-teal-700 rounded h-8" title="teal-700"></div>
+                <div class="flex-1 bg-teal-800 rounded h-8" title="teal-800"></div>
+                <div class="flex-1 bg-teal-900 rounded h-8" title="teal-900"></div>
+                <div class="flex-1 bg-teal-950 rounded h-8" title="teal-950"></div>
+              </div>
+              <!-- Cyan -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">cyan</div>
+                <div class="flex-1 bg-cyan-50 rounded h-8" title="cyan-50"></div>
+                <div class="flex-1 bg-cyan-100 rounded h-8" title="cyan-100"></div>
+                <div class="flex-1 bg-cyan-200 rounded h-8" title="cyan-200"></div>
+                <div class="flex-1 bg-cyan-300 rounded h-8" title="cyan-300"></div>
+                <div class="flex-1 bg-cyan-400 rounded h-8" title="cyan-400"></div>
+                <div class="flex-1 bg-cyan-500 rounded h-8" title="cyan-500"></div>
+                <div class="flex-1 bg-cyan-600 rounded h-8" title="cyan-600"></div>
+                <div class="flex-1 bg-cyan-700 rounded h-8" title="cyan-700"></div>
+                <div class="flex-1 bg-cyan-800 rounded h-8" title="cyan-800"></div>
+                <div class="flex-1 bg-cyan-900 rounded h-8" title="cyan-900"></div>
+                <div class="flex-1 bg-cyan-950 rounded h-8" title="cyan-950"></div>
+              </div>
+              <!-- Sky -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">sky</div>
+                <div class="flex-1 bg-sky-50 rounded h-8" title="sky-50"></div>
+                <div class="flex-1 bg-sky-100 rounded h-8" title="sky-100"></div>
+                <div class="flex-1 bg-sky-200 rounded h-8" title="sky-200"></div>
+                <div class="flex-1 bg-sky-300 rounded h-8" title="sky-300"></div>
+                <div class="flex-1 bg-sky-400 rounded h-8" title="sky-400"></div>
+                <div class="flex-1 bg-sky-500 rounded h-8" title="sky-500"></div>
+                <div class="flex-1 bg-sky-600 rounded h-8" title="sky-600"></div>
+                <div class="flex-1 bg-sky-700 rounded h-8" title="sky-700"></div>
+                <div class="flex-1 bg-sky-800 rounded h-8" title="sky-800"></div>
+                <div class="flex-1 bg-sky-900 rounded h-8" title="sky-900"></div>
+                <div class="flex-1 bg-sky-950 rounded h-8" title="sky-950"></div>
+              </div>
+              <!-- Blue -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">blue</div>
+                <div class="flex-1 bg-blue-50 rounded h-8" title="blue-50"></div>
+                <div class="flex-1 bg-blue-100 rounded h-8" title="blue-100"></div>
+                <div class="flex-1 bg-blue-200 rounded h-8" title="blue-200"></div>
+                <div class="flex-1 bg-blue-300 rounded h-8" title="blue-300"></div>
+                <div class="flex-1 bg-blue-400 rounded h-8" title="blue-400"></div>
+                <div class="flex-1 bg-blue-500 rounded h-8" title="blue-500"></div>
+                <div class="flex-1 bg-blue-600 rounded h-8" title="blue-600"></div>
+                <div class="flex-1 bg-blue-700 rounded h-8" title="blue-700"></div>
+                <div class="flex-1 bg-blue-800 rounded h-8" title="blue-800"></div>
+                <div class="flex-1 bg-blue-900 rounded h-8" title="blue-900"></div>
+                <div class="flex-1 bg-blue-950 rounded h-8" title="blue-950"></div>
+              </div>
+              <!-- Indigo -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">indigo</div>
+                <div class="flex-1 bg-indigo-50 rounded h-8" title="indigo-50"></div>
+                <div class="flex-1 bg-indigo-100 rounded h-8" title="indigo-100"></div>
+                <div class="flex-1 bg-indigo-200 rounded h-8" title="indigo-200"></div>
+                <div class="flex-1 bg-indigo-300 rounded h-8" title="indigo-300"></div>
+                <div class="flex-1 bg-indigo-400 rounded h-8" title="indigo-400"></div>
+                <div class="flex-1 bg-indigo-500 rounded h-8" title="indigo-500"></div>
+                <div class="flex-1 bg-indigo-600 rounded h-8" title="indigo-600"></div>
+                <div class="flex-1 bg-indigo-700 rounded h-8" title="indigo-700"></div>
+                <div class="flex-1 bg-indigo-800 rounded h-8" title="indigo-800"></div>
+                <div class="flex-1 bg-indigo-900 rounded h-8" title="indigo-900"></div>
+                <div class="flex-1 bg-indigo-950 rounded h-8" title="indigo-950"></div>
+              </div>
+              <!-- Violet -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">violet</div>
+                <div class="flex-1 bg-violet-50 rounded h-8" title="violet-50"></div>
+                <div class="flex-1 bg-violet-100 rounded h-8" title="violet-100"></div>
+                <div class="flex-1 bg-violet-200 rounded h-8" title="violet-200"></div>
+                <div class="flex-1 bg-violet-300 rounded h-8" title="violet-300"></div>
+                <div class="flex-1 bg-violet-400 rounded h-8" title="violet-400"></div>
+                <div class="flex-1 bg-violet-500 rounded h-8" title="violet-500"></div>
+                <div class="flex-1 bg-violet-600 rounded h-8" title="violet-600"></div>
+                <div class="flex-1 bg-violet-700 rounded h-8" title="violet-700"></div>
+                <div class="flex-1 bg-violet-800 rounded h-8" title="violet-800"></div>
+                <div class="flex-1 bg-violet-900 rounded h-8" title="violet-900"></div>
+                <div class="flex-1 bg-violet-950 rounded h-8" title="violet-950"></div>
+              </div>
+              <!-- Purple -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">purple</div>
+                <div class="flex-1 bg-purple-50 rounded h-8" title="purple-50"></div>
+                <div class="flex-1 bg-purple-100 rounded h-8" title="purple-100"></div>
+                <div class="flex-1 bg-purple-200 rounded h-8" title="purple-200"></div>
+                <div class="flex-1 bg-purple-300 rounded h-8" title="purple-300"></div>
+                <div class="flex-1 bg-purple-400 rounded h-8" title="purple-400"></div>
+                <div class="flex-1 bg-purple-500 rounded h-8" title="purple-500"></div>
+                <div class="flex-1 bg-purple-600 rounded h-8" title="purple-600"></div>
+                <div class="flex-1 bg-purple-700 rounded h-8" title="purple-700"></div>
+                <div class="flex-1 bg-purple-800 rounded h-8" title="purple-800"></div>
+                <div class="flex-1 bg-purple-900 rounded h-8" title="purple-900"></div>
+                <div class="flex-1 bg-purple-950 rounded h-8" title="purple-950"></div>
+              </div>
+              <!-- Fuchsia -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">fuchsia</div>
+                <div class="flex-1 bg-fuchsia-50 rounded h-8" title="fuchsia-50"></div>
+                <div class="flex-1 bg-fuchsia-100 rounded h-8" title="fuchsia-100"></div>
+                <div class="flex-1 bg-fuchsia-200 rounded h-8" title="fuchsia-200"></div>
+                <div class="flex-1 bg-fuchsia-300 rounded h-8" title="fuchsia-300"></div>
+                <div class="flex-1 bg-fuchsia-400 rounded h-8" title="fuchsia-400"></div>
+                <div class="flex-1 bg-fuchsia-500 rounded h-8" title="fuchsia-500"></div>
+                <div class="flex-1 bg-fuchsia-600 rounded h-8" title="fuchsia-600"></div>
+                <div class="flex-1 bg-fuchsia-700 rounded h-8" title="fuchsia-700"></div>
+                <div class="flex-1 bg-fuchsia-800 rounded h-8" title="fuchsia-800"></div>
+                <div class="flex-1 bg-fuchsia-900 rounded h-8" title="fuchsia-900"></div>
+                <div class="flex-1 bg-fuchsia-950 rounded h-8" title="fuchsia-950"></div>
+              </div>
+              <!-- Pink -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">pink</div>
+                <div class="flex-1 bg-pink-50 rounded h-8" title="pink-50"></div>
+                <div class="flex-1 bg-pink-100 rounded h-8" title="pink-100"></div>
+                <div class="flex-1 bg-pink-200 rounded h-8" title="pink-200"></div>
+                <div class="flex-1 bg-pink-300 rounded h-8" title="pink-300"></div>
+                <div class="flex-1 bg-pink-400 rounded h-8" title="pink-400"></div>
+                <div class="flex-1 bg-pink-500 rounded h-8" title="pink-500"></div>
+                <div class="flex-1 bg-pink-600 rounded h-8" title="pink-600"></div>
+                <div class="flex-1 bg-pink-700 rounded h-8" title="pink-700"></div>
+                <div class="flex-1 bg-pink-800 rounded h-8" title="pink-800"></div>
+                <div class="flex-1 bg-pink-900 rounded h-8" title="pink-900"></div>
+                <div class="flex-1 bg-pink-950 rounded h-8" title="pink-950"></div>
+              </div>
+              <!-- Rose -->
+              <div class="flex gap-1">
+                <div class="w-16 shrink-0 text-xs text-gray-500 text-right pr-2 py-2 font-mono">rose</div>
+                <div class="flex-1 bg-rose-50 rounded h-8" title="rose-50"></div>
+                <div class="flex-1 bg-rose-100 rounded h-8" title="rose-100"></div>
+                <div class="flex-1 bg-rose-200 rounded h-8" title="rose-200"></div>
+                <div class="flex-1 bg-rose-300 rounded h-8" title="rose-300"></div>
+                <div class="flex-1 bg-rose-400 rounded h-8" title="rose-400"></div>
+                <div class="flex-1 bg-rose-500 rounded h-8" title="rose-500"></div>
+                <div class="flex-1 bg-rose-600 rounded h-8" title="rose-600"></div>
+                <div class="flex-1 bg-rose-700 rounded h-8" title="rose-700"></div>
+                <div class="flex-1 bg-rose-800 rounded h-8" title="rose-800"></div>
+                <div class="flex-1 bg-rose-900 rounded h-8" title="rose-900"></div>
+                <div class="flex-1 bg-rose-950 rounded h-8" title="rose-950"></div>
+              </div>
+            </div>
+          </div>
+          <!-- Gradients -->
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <p class="text-sm text-gray-500 mb-2 font-mono">bg-gradient-to-r from-{color} to-{color}</p>
+            <div class="space-y-2">
+              <div class="bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg p-3 text-sm">from-blue-500 to-purple-500</div>
+              <div class="bg-gradient-to-r from-pink-500 to-orange-500 text-white rounded-lg p-3 text-sm">from-pink-500 to-orange-500</div>
+              <div class="bg-gradient-to-r from-green-400 via-cyan-500 to-blue-500 text-white rounded-lg p-3 text-sm">from-green-400 via-cyan-500 to-blue-500</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Spacing -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Spacing (padding, margin, gap)</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+          <p class="text-sm text-gray-500 mb-2 font-mono">p-{n} m-{n} gap-{n} space-y-{n}</p>
+          <div class="space-y-4">
+            <div class="flex gap-1">
+              <div class="bg-sky-200 text-sky-800 text-xs p-1 rounded">p-1</div>
+              <div class="bg-sky-200 text-sky-800 text-xs p-2 rounded">p-2</div>
+              <div class="bg-sky-200 text-sky-800 text-xs p-3 rounded">p-3</div>
+              <div class="bg-sky-200 text-sky-800 text-xs p-4 rounded">p-4</div>
+              <div class="bg-sky-200 text-sky-800 text-xs p-6 rounded">p-6</div>
+              <div class="bg-sky-200 text-sky-800 text-xs p-8 rounded">p-8</div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-4 sm:p-6 md:p-8 lg:p-12 xl:p-16 border border-dashed border-gray-300">
+              <p class="text-sm text-gray-500 font-mono">p-4 sm:p-6 md:p-8 lg:p-12 xl:p-16</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Borders & Shadows -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Borders, Shadows & Rounded</h3>
+        <div class="space-y-4">
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <p class="text-sm text-gray-500 mb-2 font-mono">rounded-{size}</p>
+            <div class="flex flex-wrap gap-3">
+              <div class="bg-gray-200 p-4 w-16 h-16 flex items-center justify-center text-xs rounded-none">none</div>
+              <div class="bg-gray-200 p-4 w-16 h-16 flex items-center justify-center text-xs rounded-sm">sm</div>
+              <div class="bg-gray-200 p-4 w-16 h-16 flex items-center justify-center text-xs rounded">md</div>
+              <div class="bg-gray-200 p-4 w-16 h-16 flex items-center justify-center text-xs rounded-lg">lg</div>
+              <div class="bg-gray-200 p-4 w-16 h-16 flex items-center justify-center text-xs rounded-xl">xl</div>
+              <div class="bg-gray-200 p-4 w-16 h-16 flex items-center justify-center text-xs rounded-2xl">2xl</div>
+              <div class="bg-gray-200 p-4 w-16 h-16 flex items-center justify-center text-xs rounded-full">full</div>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <p class="text-sm text-gray-500 mb-2 font-mono">shadow-{size}</p>
+            <div class="flex flex-wrap gap-4">
+              <div class="bg-white p-4 rounded-lg shadow-sm text-sm">shadow-sm</div>
+              <div class="bg-white p-4 rounded-lg shadow text-sm">shadow</div>
+              <div class="bg-white p-4 rounded-lg shadow-md text-sm">shadow-md</div>
+              <div class="bg-white p-4 rounded-lg shadow-lg text-sm">shadow-lg</div>
+              <div class="bg-white p-4 rounded-lg shadow-xl text-sm">shadow-xl</div>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <p class="text-sm text-gray-500 mb-2 font-mono">border border-{color} ring-{n}</p>
+            <div class="flex flex-wrap gap-3">
+              <div class="border border-gray-300 rounded-lg p-3 text-sm">border</div>
+              <div class="border-2 border-blue-500 rounded-lg p-3 text-sm">border-2 blue</div>
+              <div class="border-2 border-dashed border-gray-400 rounded-lg p-3 text-sm">dashed</div>
+              <div class="ring-2 ring-purple-500 rounded-lg p-3 text-sm">ring-2 purple</div>
+              <div class="ring-2 ring-offset-2 ring-blue-500 rounded-lg p-3 text-sm">ring + offset</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Width & Height -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Width & Height</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+          <div class="bg-cyan-100 text-cyan-800 rounded p-2 text-sm w-full">w-full</div>
+          <div class="bg-cyan-100 text-cyan-800 rounded p-2 text-sm w-3/4">w-3/4</div>
+          <div class="bg-cyan-100 text-cyan-800 rounded p-2 text-sm w-1/2">w-1/2</div>
+          <div class="bg-cyan-100 text-cyan-800 rounded p-2 text-sm w-1/3">w-1/3</div>
+          <div class="bg-cyan-100 text-cyan-800 rounded p-2 text-sm w-1/4">w-1/4</div>
+          <div class="bg-cyan-100 text-cyan-800 rounded p-2 text-sm max-w-xs">max-w-xs</div>
+          <p class="text-sm text-gray-500 font-mono">w-full sm:w-3/4 md:w-1/2 lg:w-1/3 (responsive)</p>
+          <div class="bg-teal-500 text-white rounded p-3 text-sm w-full sm:w-3/4 md:w-1/2 lg:w-1/3 transition-all">responsive width</div>
+        </div>
+      </div>
+
+      <!-- Positioning -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Positioning</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+          <p class="text-sm text-gray-500 mb-2 font-mono">relative + absolute positioning</p>
+          <div class="relative bg-gray-100 rounded-lg h-40">
+            <div class="absolute top-2 left-2 bg-blue-500 text-white text-xs rounded px-2 py-1">top-2 left-2</div>
+            <div class="absolute top-2 right-2 bg-green-500 text-white text-xs rounded px-2 py-1">top-2 right-2</div>
+            <div class="absolute bottom-2 left-2 bg-red-500 text-white text-xs rounded px-2 py-1">bottom-2 left-2</div>
+            <div class="absolute bottom-2 right-2 bg-purple-500 text-white text-xs rounded px-2 py-1">bottom-2 right-2</div>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div class="bg-amber-500 text-white text-xs rounded px-2 py-1">inset-0 centered</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hover, Focus, Transitions -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Hover, Focus & Transitions</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 flex flex-wrap gap-4">
+          <div class="bg-blue-100 hover:bg-blue-500 hover:text-white rounded-lg p-4 transition-colors duration-200 cursor-pointer text-sm">hover:bg-blue-500</div>
+          <div class="bg-gray-100 hover:shadow-lg hover:-translate-y-1 rounded-lg p-4 transition-all duration-200 cursor-pointer text-sm">hover:shadow-lg hover:-translate-y-1</div>
+          <div class="bg-gray-100 hover:scale-105 rounded-lg p-4 transition-transform duration-200 cursor-pointer text-sm">hover:scale-105</div>
+          <div class="opacity-50 hover:opacity-100 rounded-lg p-4 bg-purple-100 transition-opacity duration-200 cursor-pointer text-sm">hover:opacity-100</div>
+          <div class="bg-gray-100 hover:rotate-3 rounded-lg p-4 transition-transform duration-200 cursor-pointer text-sm">hover:rotate-3</div>
+          <input type="text" placeholder="focus:ring-2 focus:ring-blue-500" class="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-shadow">
+        </div>
+      </div>
+
+      <!-- Show/hide -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Responsive Show/Hide</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+          <div class="bg-red-100 text-red-800 rounded-lg p-3 block sm:hidden text-sm">block sm:hidden (mobile only)</div>
+          <div class="bg-green-100 text-green-800 rounded-lg p-3 hidden sm:block md:hidden text-sm">hidden sm:block md:hidden (sm only)</div>
+          <div class="bg-blue-100 text-blue-800 rounded-lg p-3 hidden md:block lg:hidden text-sm">hidden md:block lg:hidden (md only)</div>
+          <div class="bg-purple-100 text-purple-800 rounded-lg p-3 hidden lg:block text-sm">hidden lg:block (lg+)</div>
+        </div>
+      </div>
+
+      <!-- Overflow & Truncation -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Overflow & Truncation</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+          <div class="bg-gray-50 rounded-lg p-3 overflow-hidden max-w-xs">
+            <p class="text-sm text-gray-500 font-mono mb-1">truncate</p>
+            <p class="truncate">This is a very long text that will be truncated with an ellipsis because it overflows its container width</p>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3 overflow-auto max-h-24 max-w-sm">
+            <p class="text-sm text-gray-500 font-mono mb-1">overflow-auto max-h-24</p>
+            <p class="text-sm text-gray-600">Line 1<br>Line 2<br>Line 3<br>Line 4<br>Line 5<br>Line 6<br>Line 7<br>Line 8</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Opacity & aspect ratio -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Opacity & Aspect Ratio</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+          <p class="text-sm text-gray-500 mb-2 font-mono">opacity-{n}</p>
+          <div class="flex gap-2 mb-4">
+            <div class="bg-blue-500 text-white rounded px-3 py-1 text-sm opacity-100">100</div>
+            <div class="bg-blue-500 text-white rounded px-3 py-1 text-sm opacity-75">75</div>
+            <div class="bg-blue-500 text-white rounded px-3 py-1 text-sm opacity-50">50</div>
+            <div class="bg-blue-500 text-white rounded px-3 py-1 text-sm opacity-25">25</div>
+            <div class="bg-blue-500 text-white rounded px-3 py-1 text-sm opacity-10">10</div>
+          </div>
+          <p class="text-sm text-gray-500 mb-2 font-mono">aspect-{ratio}</p>
+          <div class="flex gap-3">
+            <div class="bg-gray-200 rounded-lg w-24 aspect-square flex items-center justify-center text-xs">square</div>
+            <div class="bg-gray-200 rounded-lg w-24 aspect-video flex items-center justify-center text-xs">video</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- SECTION: PostWind Responsive   -->
+    <!-- ============================== -->
+    <section id="postwind" class="mb-16">
+      <h2 class="text-3xl font-bold mb-2">PostWind Responsive</h2>
+      <p class="text-gray-500 mb-8">Mobile-first like Tailwind. Pipe is <code class="bg-gray-100 px-1 rounded font-mono text-sm">mobile|tablet</code> or <code class="bg-gray-100 px-1 rounded font-mono text-sm">mobile|tablet|desktop</code>. Left is base, rest override at breakpoints.</p>
+
+      <!-- Example 1: Pipe notation - padding -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Pipe Notation: Padding</h3>
+        <div id="pw-pipe-pad" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-xl">
+          <p class="font-medium">Mobile padding vs tablet+ padding</p>
+          <p class="text-sm opacity-75 mt-1 font-mono">p-4|12 = p-4 (base) + t:p-12 (768px+)</p>
+        </div>
+        <script>
+          PostWind.ready().then(() => {
+            PostWind('p-4|12').then(() => document.getElementById('pw-pipe-pad').classList.add('p-4|12'))
+          })
+        </script>
+      </div>
+
+      <!-- Example 2: Pipe notation - text -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Pipe Notation: Text Size</h3>
+        <div id="pw-pipe-text" class="bg-white rounded-xl border border-gray-200 p-6">
+          <p class="font-bold">Resize window to see text change</p>
+          <p class="text-sm text-gray-400 mt-2 font-mono">text-xl|4xl = text-xl (base) + t:text-4xl (768px+)</p>
+        </div>
+        <script>
+          PostWind.ready().then(() => {
+            PostWind('text-xl|4xl').then(() => document.querySelector('#pw-pipe-text p').classList.add('text-xl|4xl'))
+          })
+        </script>
+      </div>
+
+      <!-- Example 3: Pipe notation - grid -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Pipe Notation: Grid Columns</h3>
+        <div id="pw-pipe-grid" class="gap-4">
+          <div class="bg-emerald-100 text-emerald-800 rounded-lg p-4 text-center font-medium">A</div>
+          <div class="bg-emerald-100 text-emerald-800 rounded-lg p-4 text-center font-medium">B</div>
+          <div class="bg-emerald-100 text-emerald-800 rounded-lg p-4 text-center font-medium">C</div>
+          <div class="bg-emerald-100 text-emerald-800 rounded-lg p-4 text-center font-medium">D</div>
+          <div class="bg-emerald-100 text-emerald-800 rounded-lg p-4 text-center font-medium">E</div>
+          <div class="bg-emerald-100 text-emerald-800 rounded-lg p-4 text-center font-medium">F</div>
+        </div>
+        <p class="text-sm text-gray-400 mt-2 font-mono">grid-cols-1|3 = 1 col (base) + t:3 cols (768px+)</p>
+        <script>
+          PostWind.ready().then(() => {
+            const el = document.getElementById('pw-pipe-grid')
+            Promise.all([PostWind('grid-cols-1|3')]).then(() => {
+              el.classList.add('grid', 'grid-cols-1|3')
+            })
+          })
+        </script>
+      </div>
+
+      <!-- Example 4: m:, t:, d: prefixes -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">m:, t:, d: Prefixes</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+          <div id="pw-m-only" class="bg-rose-100 text-rose-800 rounded-lg p-3 hidden">
+            Mobile only — m:block (max-width: 767px)
+          </div>
+          <div id="pw-t-only" class="bg-amber-100 text-amber-800 rounded-lg p-3 hidden">
+            Tablet+ only — t:block (min-width: 768px)
+          </div>
+          <div id="pw-d-only" class="bg-violet-100 text-violet-800 rounded-lg p-3 hidden">
+            Desktop+ only — d:block (min-width: 1024px)
+          </div>
+          <div id="pw-prefix-bg" class="rounded-lg p-3 bg-gray-100">
+            m:bg-rose-100 t:bg-amber-100 d:bg-violet-100
+          </div>
+        </div>
+        <p class="text-sm text-gray-400 mt-2 font-mono">m: = max-width:767px | t: = min-width:768px | d: = min-width:1024px</p>
+        <script>
+          PostWind.ready().then(() => {
+            Promise.all([
+              PostWind('m:block'), PostWind('t:block'), PostWind('d:block'),
+              PostWind('m:bg-rose-100'), PostWind('m:text-rose-800'),
+              PostWind('t:bg-amber-100'), PostWind('t:text-amber-800'),
+              PostWind('d:bg-violet-100'), PostWind('d:text-violet-800'),
+            ]).then(() => {
+              document.getElementById('pw-m-only').classList.add('m:block')
+              document.getElementById('pw-t-only').classList.add('t:block')
+              document.getElementById('pw-d-only').classList.add('d:block')
+              const el = document.getElementById('pw-prefix-bg')
+              el.className = 'rounded-lg p-3 m:bg-rose-100 m:text-rose-800 t:bg-amber-100 t:text-amber-800 d:bg-violet-100 d:text-violet-800'
+            })
+          })
+        </script>
+      </div>
+
+      <!-- Example 5: Pipe notation - gap -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Pipe Notation: Gap & Margin</h3>
+        <div id="pw-pipe-gap" class="flex flex-wrap">
+          <div class="bg-sky-100 text-sky-800 rounded-lg p-4 font-medium">Box 1</div>
+          <div class="bg-sky-100 text-sky-800 rounded-lg p-4 font-medium">Box 2</div>
+          <div class="bg-sky-100 text-sky-800 rounded-lg p-4 font-medium">Box 3</div>
+        </div>
+        <p class="text-sm text-gray-400 mt-2 font-mono">gap-2|8 = gap-2 (base) + t:gap-8 (768px+)</p>
+        <script>
+          PostWind.ready().then(() => {
+            PostWind('gap-2|8').then(() => document.getElementById('pw-pipe-gap').classList.add('gap-2|8'))
+          })
+        </script>
+      </div>
+
+      <!-- Example 6: Multiple 2-segment pipes -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Multiple Pipes Combined</h3>
+        <div id="pw-multi" class="bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl">
+          <p class="font-bold">Multiple pipe classes on one element</p>
+          <p class="text-sm opacity-75 mt-1 font-mono">p-4|10 text-lg|2xl rounded-xl|3xl</p>
+        </div>
+        <script>
+          PostWind.ready().then(() => {
+            Promise.all([
+              PostWind('p-4|10'),
+              PostWind('text-lg|2xl'),
+              PostWind('rounded-xl|3xl'),
+            ]).then(() => {
+              const el = document.getElementById('pw-multi')
+              el.classList.add('p-4|10', 'text-lg|2xl', 'rounded-xl|3xl')
+            })
+          })
+        </script>
+      </div>
+
+      <!-- Example 7: Three-segment pipe (mobile | tablet | desktop) -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Three-Segment Pipe: mobile | tablet | desktop</h3>
+        <div id="pw-three-seg" class="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl">
+          <p class="font-bold">Three breakpoints in one class</p>
+          <p class="text-sm opacity-75 mt-1 font-mono">p-3|6|12 text-base|xl|4xl grid-cols-1|2|4</p>
+        </div>
+        <script>
+          PostWind.ready().then(() => {
+            Promise.all([
+              PostWind('p-3|6|12'),
+              PostWind('text-base|xl|4xl'),
+            ]).then(() => {
+              const el = document.getElementById('pw-three-seg')
+              el.classList.add('p-3|6|12', 'text-base|xl|4xl')
+            })
+          })
+        </script>
+      </div>
+
+      <!-- Example 8: Three-segment grid -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Three-Segment Grid</h3>
+        <div id="pw-three-grid" class="gap-4">
+          <div class="bg-fuchsia-100 text-fuchsia-800 rounded-lg p-4 text-center font-medium">A</div>
+          <div class="bg-fuchsia-100 text-fuchsia-800 rounded-lg p-4 text-center font-medium">B</div>
+          <div class="bg-fuchsia-100 text-fuchsia-800 rounded-lg p-4 text-center font-medium">C</div>
+          <div class="bg-fuchsia-100 text-fuchsia-800 rounded-lg p-4 text-center font-medium">D</div>
+        </div>
+        <p class="text-sm text-gray-400 mt-2 font-mono">grid-cols-1|2|4 = 1 col (mobile) + 2 cols (tablet 768px+) + 4 cols (desktop 1024px+)</p>
+        <script>
+          PostWind.ready().then(() => {
+            PostWind('grid-cols-1|2|4').then(() => {
+              const el = document.getElementById('pw-three-grid')
+              el.classList.add('grid', 'grid-cols-1|2|4')
+            })
+          })
+        </script>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- SECTION: Unit Suffix           -->
+    <!-- ============================== -->
+    <section id="units" class="mb-16">
+      <h2 class="text-3xl font-bold mb-2">Unit Suffix Shorthand</h2>
+      <p class="text-gray-500 mb-8">Write <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-10px</code> instead of <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-[10px]</code>. Auto-detected and injected.</p>
+
+      <!-- Padding with px -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Padding with px</h3>
+        <div class="space-y-3">
+          <div class="bg-blue-100 text-blue-800 rounded-lg p-10px">p-10px (= p-[10px])</div>
+          <div class="bg-blue-100 text-blue-800 rounded-lg p-20px">p-20px (= p-[20px])</div>
+          <div class="bg-blue-100 text-blue-800 rounded-lg p-40px">p-40px (= p-[40px])</div>
+        </div>
+        <p class="text-sm text-gray-400 mt-2 font-mono">p-10px p-20px p-40px</p>
+      </div>
+
+      <!-- Margin with rem -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Margin with rem</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <div class="bg-green-100 text-green-800 rounded-lg p-4 mt-1rem">mt-1rem (= mt-[1rem])</div>
+          <div class="bg-green-100 text-green-800 rounded-lg p-4 mt-2rem">mt-2rem (= mt-[2rem])</div>
+        </div>
+        <p class="text-sm text-gray-400 mt-2 font-mono">mt-1rem mt-2rem</p>
+      </div>
+
+      <!-- Width/height with various units -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Width with Various Units</h3>
+        <div class="space-y-3">
+          <div class="bg-purple-100 text-purple-800 rounded-lg p-4 w-200px">w-200px (= w-[200px])</div>
+          <div class="bg-purple-100 text-purple-800 rounded-lg p-4 w-50%">w-50% (= w-[50%])</div>
+          <div class="bg-purple-100 text-purple-800 rounded-lg p-4 w-30vw">w-30vw (= w-[30vw])</div>
+          <div class="bg-purple-100 text-purple-800 rounded-lg p-4 max-w-500px">max-w-500px (= max-w-[500px])</div>
+        </div>
+        <p class="text-sm text-gray-400 mt-2 font-mono">w-200px w-50% w-30vw max-w-500px</p>
+      </div>
+
+      <!-- Font size -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Font Size & Line Height</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-2">
+          <p class="text-14px">text-14px (= text-[14px])</p>
+          <p class="text-18px">text-18px (= text-[18px])</p>
+          <p class="text-24px">text-24px (= text-[24px])</p>
+          <p class="text-1.5rem">text-1.5rem (= text-[1.5rem])</p>
+        </div>
+        <p class="text-sm text-gray-400 mt-2 font-mono">text-14px text-18px text-24px text-1.5rem</p>
+      </div>
+
+      <!-- Gap, border-radius -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Gap & Border Radius</h3>
+        <div class="flex flex-wrap gap-15px">
+          <div class="bg-amber-100 text-amber-800 p-4 rounded-8px">rounded-8px gap-15px</div>
+          <div class="bg-amber-100 text-amber-800 p-4 rounded-8px">item 2</div>
+          <div class="bg-amber-100 text-amber-800 p-4 rounded-8px">item 3</div>
+        </div>
+        <p class="text-sm text-gray-400 mt-2 font-mono">gap-15px rounded-8px</p>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- SECTION: Colon Responsive      -->
+    <!-- ============================== -->
+    <section id="colon" class="mb-16">
+      <h2 class="text-3xl font-bold mb-2">Colon Responsive Shorthand</h2>
+      <p class="text-gray-500 mb-8">Use <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-4:8</code> as an alias for <code class="bg-gray-100 px-1 rounded font-mono text-sm">p-4|8</code>. Same mobile-first logic.</p>
+
+      <!-- 2-segment colon -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Two Segments: mobile:tablet</h3>
+        <div class="bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-xl p-4:10">
+          <p class="font-bold text-lg:2xl">Padding and text change at tablet</p>
+          <p class="text-sm opacity-75 mt-1 font-mono">p-4:10 text-lg:2xl = p-4|10 text-lg|2xl</p>
+        </div>
+      </div>
+
+      <!-- 3-segment colon -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Three Segments: mobile:tablet:desktop</h3>
+        <div class="bg-gradient-to-r from-rose-500 to-orange-500 text-white rounded-xl p-3:6:12">
+          <p class="font-bold text-base:xl:3xl">Three breakpoints via colons</p>
+          <p class="text-sm opacity-75 mt-1 font-mono">p-3:6:12 text-base:xl:3xl = p-3|6|12 text-base|xl|3xl</p>
+        </div>
+      </div>
+
+      <!-- Colon grid -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Colon Grid</h3>
+        <div class="grid grid-cols-1:2:4 gap-4">
+          <div class="bg-orange-100 text-orange-800 rounded-lg p-4 text-center font-medium">A</div>
+          <div class="bg-orange-100 text-orange-800 rounded-lg p-4 text-center font-medium">B</div>
+          <div class="bg-orange-100 text-orange-800 rounded-lg p-4 text-center font-medium">C</div>
+          <div class="bg-orange-100 text-orange-800 rounded-lg p-4 text-center font-medium">D</div>
+        </div>
+        <p class="text-sm text-gray-400 mt-2 font-mono">grid-cols-1:2:4 = 1 col (mobile) + 2 cols (768px+) + 4 cols (1024px+)</p>
+      </div>
+
+      <!-- Mix colon with unit suffix -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Colon + Unit Suffix Combined</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-10px:20px:40px">
+          <p class="font-bold text-14px:18px:24px">Unit suffixes work inside pipe/colon notation too</p>
+          <p class="text-sm text-gray-400 mt-2 font-mono">p-10px:20px:40px text-14px:18px:24px</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- SECTION: Shortcuts             -->
+    <!-- ============================== -->
+    <section id="shortcuts" class="mb-16">
+      <h2 class="text-3xl font-bold mb-2">Shortcuts</h2>
+      <p class="text-gray-500 mb-8">Compose multiple Tailwind classes into a single reusable class name.</p>
+
+      <!-- Base -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Base & Sizes</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+          <div class="flex items-center gap-4">
+            <button class="btn-xs btn-primary shrink-0">XS</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-xs</code> <span class="text-xs text-gray-400 font-mono">btn px-2 py-1 text-xs rounded</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-sm btn-primary shrink-0">Small</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-sm</code> <span class="text-xs text-gray-400 font-mono">btn px-3 py-1.5 text-xs rounded-md</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-primary shrink-0">Default</button>
+            <div><code class="text-xs font-mono text-purple-700">btn</code> <span class="text-xs text-gray-400 font-mono">inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-all duration-200 cursor-pointer text-sm</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-lg btn-primary shrink-0">Large</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-lg</code> <span class="text-xs text-gray-400 font-mono">btn px-6 py-3 text-base rounded-xl</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Solid buttons -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Solid Buttons</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+          <div class="flex items-center gap-4">
+            <button class="btn-primary shrink-0">Primary</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-primary</code> <span class="text-xs text-gray-400 font-mono">btn bg-blue-600 text-white hover:bg-blue-500 active:bg-blue-700</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-secondary shrink-0">Secondary</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-secondary</code> <span class="text-xs text-gray-400 font-mono">btn bg-gray-200 text-gray-800 hover:bg-gray-300 active:bg-gray-400</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-danger shrink-0">Danger</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-danger</code> <span class="text-xs text-gray-400 font-mono">btn bg-red-600 text-white hover:bg-red-500 active:bg-red-700</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-success shrink-0">Success</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-success</code> <span class="text-xs text-gray-400 font-mono">btn bg-emerald-600 text-white hover:bg-emerald-500 active:bg-emerald-700</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-warning shrink-0">Warning</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-warning</code> <span class="text-xs text-gray-400 font-mono">btn bg-amber-500 text-white hover:bg-amber-400 active:bg-amber-600</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-info shrink-0">Info</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-info</code> <span class="text-xs text-gray-400 font-mono">btn bg-sky-500 text-white hover:bg-sky-400 active:bg-sky-600</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-dark shrink-0">Dark</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-dark</code> <span class="text-xs text-gray-400 font-mono">btn bg-gray-900 text-white hover:bg-gray-800 active:bg-gray-950</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-light shrink-0">Light</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-light</code> <span class="text-xs text-gray-400 font-mono">btn bg-white text-gray-800 hover:bg-gray-50 active:bg-gray-100 border border-gray-200</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Outline buttons -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Outline Buttons</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+          <div class="flex items-center gap-4">
+            <button class="btn-outline shrink-0">Default</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-outline</code> <span class="text-xs text-gray-400 font-mono">btn bg-transparent border-2 border-gray-300 text-gray-700 hover:bg-gray-100</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-outline-primary shrink-0">Primary</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-outline-primary</code> <span class="text-xs text-gray-400 font-mono">btn bg-transparent border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-outline-danger shrink-0">Danger</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-outline-danger</code> <span class="text-xs text-gray-400 font-mono">btn bg-transparent border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-outline-success shrink-0">Success</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-outline-success</code> <span class="text-xs text-gray-400 font-mono">btn bg-transparent border-2 border-emerald-600 text-emerald-600 hover:bg-emerald-600 hover:text-white</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ghost & Link -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Ghost & Link Buttons</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+          <div class="flex items-center gap-4">
+            <button class="btn-ghost shrink-0">Ghost</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-ghost</code> <span class="text-xs text-gray-400 font-mono">btn bg-transparent text-gray-600 hover:bg-gray-100</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-link shrink-0">Link Button</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-link</code> <span class="text-xs text-gray-400 font-mono">btn bg-transparent text-blue-600 hover:underline</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pill buttons -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Pill Buttons</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+          <div class="flex items-center gap-4">
+            <button class="btn-pill btn-secondary shrink-0">Pill</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-pill</code> <span class="text-xs text-gray-400 font-mono">btn rounded-full</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-pill-primary shrink-0">Pill Primary</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-pill-primary</code> <span class="text-xs text-gray-400 font-mono">btn rounded-full bg-blue-600 text-white hover:bg-blue-500</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-pill-danger shrink-0">Pill Danger</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-pill-danger</code> <span class="text-xs text-gray-400 font-mono">btn rounded-full bg-red-600 text-white hover:bg-red-500</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gradient buttons -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Gradient Buttons</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+          <div class="flex items-center gap-4">
+            <button class="btn-gradient shrink-0">Blue to Purple</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-gradient</code> <span class="text-xs text-gray-400 font-mono">btn bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-500 hover:to-purple-500</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-gradient-warm shrink-0">Orange to Pink</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-gradient-warm</code> <span class="text-xs text-gray-400 font-mono">btn bg-gradient-to-r from-orange-500 to-pink-500 text-white hover:from-orange-400 hover:to-pink-400</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-gradient-cool shrink-0">Cyan to Blue</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-gradient-cool</code> <span class="text-xs text-gray-400 font-mono">btn bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:from-cyan-400 hover:to-blue-400</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shadow buttons -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Shadow Buttons (hover:shadow)</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+          <div class="flex items-center gap-4">
+            <button class="btn-shadow shrink-0">Default</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-shadow</code> <span class="text-xs text-gray-400 font-mono">btn bg-white text-gray-800 border border-gray-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-shadow-primary shrink-0">Primary</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-shadow-primary</code> <span class="text-xs text-gray-400 font-mono">btn bg-blue-600 text-white shadow-md shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-0.5</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-shadow-danger shrink-0">Danger</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-shadow-danger</code> <span class="text-xs text-gray-400 font-mono">btn bg-red-600 text-white shadow-md shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 hover:-translate-y-0.5</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button class="btn-shadow-success shrink-0">Success</button>
+            <div><code class="text-xs font-mono text-purple-700">btn-shadow-success</code> <span class="text-xs text-gray-400 font-mono">btn bg-emerald-600 text-white shadow-md shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 hover:-translate-y-0.5</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Icon buttons -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Icon Buttons</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+          <div class="flex items-center gap-4">
+            <div class="flex gap-2 shrink-0">
+              <button class="btn-icon btn-primary"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg></button>
+              <button class="btn-icon btn-danger"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+              <button class="btn-icon btn-success"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></button>
+            </div>
+            <div><code class="text-xs font-mono text-purple-700">btn-icon</code> <span class="text-xs text-gray-400 font-mono">btn p-2 rounded-lg</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <div class="flex gap-2 shrink-0">
+              <button class="btn-icon-round btn-primary"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg></button>
+              <button class="btn-icon-round btn-dark"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg></button>
+              <button class="btn-icon-round btn-outline-primary"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg></button>
+            </div>
+            <div><code class="text-xs font-mono text-purple-700">btn-icon-round</code> <span class="text-xs text-gray-400 font-mono">btn p-2 rounded-full</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Button groups -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Button Groups (Tailwind)</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+          <div class="inline-flex rounded-lg overflow-hidden border border-gray-300">
+            <button class="px-4 py-2 text-sm font-medium bg-blue-600 text-white cursor-pointer">Left</button>
+            <button class="px-4 py-2 text-sm font-medium bg-white text-gray-700 border-l border-gray-300 hover:bg-gray-50 cursor-pointer">Center</button>
+            <button class="px-4 py-2 text-sm font-medium bg-white text-gray-700 border-l border-gray-300 hover:bg-gray-50 cursor-pointer">Right</button>
+          </div>
+          <div class="block"></div>
+          <div class="inline-flex rounded-full overflow-hidden border border-gray-300">
+            <button class="px-4 py-2 text-sm font-medium bg-gray-900 text-white cursor-pointer">Day</button>
+            <button class="px-4 py-2 text-sm font-medium bg-white text-gray-700 border-l border-gray-300 hover:bg-gray-50 cursor-pointer">Week</button>
+            <button class="px-4 py-2 text-sm font-medium bg-white text-gray-700 border-l border-gray-300 hover:bg-gray-50 cursor-pointer">Month</button>
+            <button class="px-4 py-2 text-sm font-medium bg-white text-gray-700 border-l border-gray-300 hover:bg-gray-50 cursor-pointer">Year</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Badges -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Badge Shortcuts</h3>
+        <div class="bg-white rounded-xl border border-gray-200 p-6 flex flex-wrap gap-3 items-center">
+          <span class="badge-primary">Primary</span>
+          <span class="badge-success">Success</span>
+          <span class="badge-danger">Danger</span>
+          <span class="badge-warning">Warning</span>
+        </div>
+        <p class="text-sm text-gray-400 mt-2 font-mono">badge-primary badge-success badge-danger badge-warning</p>
+      </div>
+
+      <!-- Card shortcut -->
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold mb-3">Card Shortcut</h3>
+        <div class="card">
+          <h4 class="font-semibold text-lg mb-2">This is a card</h4>
+          <p class="text-gray-500">Using the <code class="bg-gray-100 px-1 rounded font-mono text-sm">card</code> shortcut class.</p>
+          <p class="text-sm text-gray-400 mt-2 font-mono">card = bg-white rounded-xl border border-gray-200 p-6</p>
+        </div>
+      </div>
+
+      <!-- All shortcuts injected here -->
+      <script>
+        PostWind.ready().then(() => {
+          const all = [
+            'btn-primary', 'btn-secondary', 'btn-danger', 'btn-success',
+            'btn-warning', 'btn-info', 'btn-dark', 'btn-light',
+            'btn-outline', 'btn-outline-primary', 'btn-outline-danger', 'btn-outline-success',
+            'btn-ghost', 'btn-link',
+            'btn-pill', 'btn-pill-primary', 'btn-pill-danger',
+            'btn-gradient', 'btn-gradient-warm', 'btn-gradient-cool',
+            'btn-xs', 'btn-sm', 'btn-lg',
+            'btn-icon', 'btn-icon-round',
+            'card',
+            'badge', 'badge-primary', 'badge-success', 'badge-danger', 'badge-warning',
+          ]
+          Promise.all(all.map(c => PostWind(c)))
+        })
+      </script>
+    </section>
+
+    <!-- ============================== -->
+    <!-- SECTION: Visible Prefix        -->
+    <!-- ============================== -->
+    <section id="visible" class="mb-16">
+      <h2 class="text-3xl font-bold mb-2">Visible: Prefix (IntersectionObserver)</h2>
+      <p class="text-gray-500 mb-8">Elements animate when they scroll into view (50% threshold). Scroll down to see them appear.</p>
+
+      <div class="space-y-8">
+        <!-- Visible: fade in -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 class="text-xl font-semibold mb-4">Fade In on Scroll</h3>
+          <div class="space-y-4">
+            <div class="opacity-0 visible:opacity-100 transition-opacity duration-700 bg-blue-100 text-blue-800 rounded-lg p-4">
+              I fade in when visible (visible:opacity-100)
+            </div>
+            <div class="opacity-0 visible:opacity-100 transition-opacity duration-1000 bg-green-100 text-green-800 rounded-lg p-4">
+              I fade in slower (duration-1000)
+            </div>
+            <div class="opacity-0 visible:opacity-100 transition-all duration-700 translate-y-4 visible:translate-y-0 bg-purple-100 text-purple-800 rounded-lg p-4">
+              I fade and slide up (visible:opacity-100 visible:translate-y-0)
+            </div>
+          </div>
+        </div>
+
+        <!-- Spacer to force scroll -->
+        <div class="h-32 flex items-center justify-center text-gray-400 text-lg">
+          Scroll down for more visible: examples...
+        </div>
+
+        <!-- Visible: scale -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 class="text-xl font-semibold mb-4">Scale on Scroll</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="opacity-0 scale-75 visible:opacity-100 visible:scale-100 transition-all duration-500 bg-amber-100 text-amber-800 rounded-lg p-6 text-center">
+              <div class="text-3xl mb-2">1</div>
+              <div class="text-sm">Scale + fade</div>
+            </div>
+            <div class="opacity-0 scale-75 visible:opacity-100 visible:scale-100 transition-all duration-500 delay-100 bg-amber-100 text-amber-800 rounded-lg p-6 text-center">
+              <div class="text-3xl mb-2">2</div>
+              <div class="text-sm">With delay</div>
+            </div>
+            <div class="opacity-0 scale-75 visible:opacity-100 visible:scale-100 transition-all duration-500 delay-200 bg-amber-100 text-amber-800 rounded-lg p-6 text-center">
+              <div class="text-3xl mb-2">3</div>
+              <div class="text-sm">More delay</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="h-32 flex items-center justify-center text-gray-400 text-lg">
+          Keep scrolling...
+        </div>
+
+        <!-- Visible: slide from sides -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6 overflow-hidden">
+          <h3 class="text-xl font-semibold mb-4">Slide from Sides</h3>
+          <div class="space-y-4">
+            <div class="opacity-0 -translate-x-8 visible:opacity-100 visible:translate-x-0 transition-all duration-700 bg-teal-100 text-teal-800 rounded-lg p-4">
+              Slide from left (visible:translate-x-0)
+            </div>
+            <div class="opacity-0 translate-x-8 visible:opacity-100 visible:translate-x-0 transition-all duration-700 delay-200 bg-cyan-100 text-cyan-800 rounded-lg p-4">
+              Slide from right (translate-x-8 visible:translate-x-0)
+            </div>
+            <div class="opacity-0 translate-y-8 visible:opacity-100 visible:translate-y-0 transition-all duration-700 delay-400 bg-sky-100 text-sky-800 rounded-lg p-4">
+              Slide from below (translate-y-8 visible:translate-y-0)
+            </div>
+          </div>
+        </div>
+
+        <div class="h-32 flex items-center justify-center text-gray-400 text-lg">
+          Almost there...
+        </div>
+
+        <!-- Visible: color change -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 class="text-xl font-semibold mb-4">Background Color on Visible</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-gray-100 visible:bg-red-500 visible:text-white transition-all duration-500 rounded-lg p-4 text-center font-medium opacity-0 visible:opacity-100">Red</div>
+            <div class="bg-gray-100 visible:bg-green-500 visible:text-white transition-all duration-500 delay-100 rounded-lg p-4 text-center font-medium opacity-0 visible:opacity-100">Green</div>
+            <div class="bg-gray-100 visible:bg-blue-500 visible:text-white transition-all duration-500 delay-200 rounded-lg p-4 text-center font-medium opacity-0 visible:opacity-100">Blue</div>
+            <div class="bg-gray-100 visible:bg-purple-500 visible:text-white transition-all duration-500 delay-300 rounded-lg p-4 text-center font-medium opacity-0 visible:opacity-100">Purple</div>
+          </div>
+        </div>
+
+        <div class="h-32 flex items-center justify-center text-gray-400 text-lg">
+          Last one...
+        </div>
+
+        <!-- Visible: progress bar -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 class="text-xl font-semibold mb-4">Animated Progress Bars</h3>
+          <div class="space-y-4">
+            <div>
+              <div class="flex justify-between text-sm mb-1"><span>PostWind</span><span>90%</span></div>
+              <div class="h-3 bg-gray-200 rounded-full overflow-hidden">
+                <div class="h-full bg-blue-500 rounded-full transition-all duration-1000 w-0 visible:w-[90%]"></div>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between text-sm mb-1"><span>Tailwind</span><span>100%</span></div>
+              <div class="h-3 bg-gray-200 rounded-full overflow-hidden">
+                <div class="h-full bg-green-500 rounded-full transition-all duration-1000 delay-200 w-0 visible:w-full"></div>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between text-sm mb-1"><span>Vanilla CSS</span><span>60%</span></div>
+              <div class="h-3 bg-gray-200 rounded-full overflow-hidden">
+                <div class="h-full bg-amber-500 rounded-full transition-all duration-1000 delay-400 w-0 visible:w-[60%]"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- SECTION: Side-by-side compare  -->
+    <!-- ============================== -->
+    <section id="compare" class="mb-16">
+      <h2 class="text-3xl font-bold mb-2">Tailwind vs PostWind: Side by Side</h2>
+      <p class="text-gray-500 mb-8">Same result, different syntax.</p>
+
+      <div class="space-y-6">
+        <!-- Compare 1 -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3 font-semibold">Responsive Padding (2 breakpoints)</div>
+          <div class="grid grid-cols-1 md:grid-cols-2">
+            <div class="p-6 border-b md:border-b-0 md:border-r border-gray-200">
+              <div class="text-sm font-medium text-gray-500 mb-2">Tailwind</div>
+              <code class="text-sm font-mono bg-gray-100 px-2 py-1 rounded">px-4 md:px-8</code>
+            </div>
+            <div class="p-6">
+              <div class="text-sm font-medium text-purple-600 mb-2">PostWind</div>
+              <code class="text-sm font-mono bg-purple-50 px-2 py-1 rounded text-purple-800">px-4|8</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Compare 2 -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3 font-semibold">Responsive Padding (3 breakpoints)</div>
+          <div class="grid grid-cols-1 md:grid-cols-2">
+            <div class="p-6 border-b md:border-b-0 md:border-r border-gray-200">
+              <div class="text-sm font-medium text-gray-500 mb-2">Tailwind</div>
+              <code class="text-sm font-mono bg-gray-100 px-2 py-1 rounded">px-4 md:px-6 lg:px-8</code>
+            </div>
+            <div class="p-6">
+              <div class="text-sm font-medium text-purple-600 mb-2">PostWind</div>
+              <code class="text-sm font-mono bg-purple-50 px-2 py-1 rounded text-purple-800">px-4|6|8</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Compare 3 -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3 font-semibold">Responsive Grid</div>
+          <div class="grid grid-cols-1 md:grid-cols-2">
+            <div class="p-6 border-b md:border-b-0 md:border-r border-gray-200">
+              <div class="text-sm font-medium text-gray-500 mb-2">Tailwind</div>
+              <code class="text-sm font-mono bg-gray-100 px-2 py-1 rounded">grid-cols-1 md:grid-cols-2 lg:grid-cols-4</code>
+            </div>
+            <div class="p-6">
+              <div class="text-sm font-medium text-purple-600 mb-2">PostWind</div>
+              <code class="text-sm font-mono bg-purple-50 px-2 py-1 rounded text-purple-800">grid-cols-1|2|4</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Compare 4 -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3 font-semibold">Responsive Text</div>
+          <div class="grid grid-cols-1 md:grid-cols-2">
+            <div class="p-6 border-b md:border-b-0 md:border-r border-gray-200">
+              <div class="text-sm font-medium text-gray-500 mb-2">Tailwind</div>
+              <code class="text-sm font-mono bg-gray-100 px-2 py-1 rounded">text-xl md:text-3xl lg:text-5xl</code>
+            </div>
+            <div class="p-6">
+              <div class="text-sm font-medium text-purple-600 mb-2">PostWind</div>
+              <code class="text-sm font-mono bg-purple-50 px-2 py-1 rounded text-purple-800">text-xl|3xl|5xl</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Compare 5 -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3 font-semibold">Show/Hide</div>
+          <div class="grid grid-cols-1 md:grid-cols-2">
+            <div class="p-6 border-b md:border-b-0 md:border-r border-gray-200">
+              <div class="text-sm font-medium text-gray-500 mb-2">Tailwind</div>
+              <code class="text-sm font-mono bg-gray-100 px-2 py-1 rounded">hidden md:block</code>
+            </div>
+            <div class="p-6">
+              <div class="text-sm font-medium text-purple-600 mb-2">PostWind</div>
+              <code class="text-sm font-mono bg-purple-50 px-2 py-1 rounded text-purple-800">m:hidden t:block</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Compare 6 -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="bg-gray-50 border-b border-gray-200 px-6 py-3 font-semibold">Flex Direction</div>
+          <div class="grid grid-cols-1 md:grid-cols-2">
+            <div class="p-6 border-b md:border-b-0 md:border-r border-gray-200">
+              <div class="text-sm font-medium text-gray-500 mb-2">Tailwind</div>
+              <code class="text-sm font-mono bg-gray-100 px-2 py-1 rounded">flex flex-col md:flex-row</code>
+            </div>
+            <div class="p-6">
+              <div class="text-sm font-medium text-purple-600 mb-2">PostWind</div>
+              <code class="text-sm font-mono bg-purple-50 px-2 py-1 rounded text-purple-800">flex m:flex-col t:flex-row</code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- SECTION: Automated Tests       -->
+    <!-- ============================== -->
+    <section id="tests" class="mb-16">
+      <h2 class="text-3xl font-bold mb-2">Automated Tests</h2>
+      <p class="text-gray-500 mb-8">Testing PostWind breakpoints, pipes, shortcuts, and visible: prefix.</p>
+
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+          <span class="font-semibold">Test Results</span>
+          <span id="test-summary" class="text-sm text-gray-400">Running...</span>
+        </div>
+        <div id="test-results" class="p-6 font-mono text-sm space-y-2">
+        </div>
+      </div>
+
+      <!-- Hidden test elements -->
+      <div style="position:absolute;left:-9999px;top:-9999px" id="test-sandbox"></div>
+    </section>
+
+    <script>
+      const results = document.getElementById('test-results')
+      const summary = document.getElementById('test-summary')
+      const sandbox = document.getElementById('test-sandbox')
+      let passed = 0, failed = 0, total = 0
+
+      function log(name, pass, detail) {
+        total++
+        if (pass) passed++; else failed++
+        const div = document.createElement('div')
+        div.className = pass ? 'test-pass' : 'test-fail'
+        div.textContent = `${pass ? 'PASS' : 'FAIL'} - ${name}${detail ? ' (' + detail + ')' : ''}`
+        results.appendChild(div)
+        updateSummary()
+      }
+
+      function updateSummary() {
+        summary.textContent = `${passed}/${total} passed` + (failed ? `, ${failed} failed` : '')
+        summary.className = failed ? 'text-sm text-red-600 font-medium' : 'text-sm text-green-600 font-medium'
+      }
+
+      PostWind.ready().then(async () => {
+        // ---- Test 1: twCSS returns CSS for a basic class ----
+        const css1 = await PostWind.twCSS('p-4')
+        log('twCSS("p-4") returns CSS', css1 && css1.includes('padding'), css1)
+
+        // ---- Test 2: twCSS for text class ----
+        const css2 = await PostWind.twCSS('text-xl')
+        log('twCSS("text-xl") returns font-size', css2 && css2.includes('font-size'), css2)
+
+        // ---- Test 3: twCSS for color class ----
+        const css3 = await PostWind.twCSS('bg-red-500')
+        log('twCSS("bg-red-500") returns background', css3 && css3.includes('background'), css3)
+
+        // ---- Test 4: resolve m: prefix ----
+        const r4 = await PostWind.resolve('m:p-4')
+        log('resolve("m:p-4") wraps in max-width media query',
+          r4 && r4.includes('@media') && r4.includes('max-width: 767px'),
+          r4 ? r4.substring(0, 80) : null)
+
+        // ---- Test 5: resolve d: prefix ----
+        const r5 = await PostWind.resolve('d:flex')
+        log('resolve("d:flex") wraps in min-width: 1024px',
+          r5 && r5.includes('@media') && r5.includes('min-width: 1024px'),
+          r5 ? r5.substring(0, 80) : null)
+
+        // ---- Test 6: 2-segment pipe = base + tablet override (min-width: 768px) ----
+        const r6 = await PostWind.resolve('p-4|8')
+        log('resolve("p-4|8") base=p-4, tablet+=p-8',
+          r6 && r6.includes('padding') && r6.includes('@media') && r6.includes('min-width: 768px'),
+          r6 ? r6.substring(0, 120) : null)
+
+        // ---- Test 7: 2-segment pipe with text ----
+        const r7 = await PostWind.resolve('text-lg|3xl')
+        log('resolve("text-lg|3xl") base=lg, tablet+=3xl',
+          r7 && r7.includes('font-size') && r7.includes('min-width: 768px'),
+          r7 ? r7.substring(0, 120) : null)
+
+        // ---- Test 8: 2-segment pipe with grid ----
+        const r8 = await PostWind.resolve('grid-cols-1|3')
+        log('resolve("grid-cols-1|3") base=1col, tablet+=3cols',
+          r8 && r8.includes('grid') && r8.includes('min-width: 768px'),
+          r8 ? r8.substring(0, 120) : null)
+
+        // ---- Test 9: pipe selector is properly escaped ----
+        const r9 = await PostWind.resolve('gap-2|6')
+        log('resolve("gap-2|6") selector escapes pipe char',
+          r9 && r9.includes('gap-2\\|6'),
+          r9 ? r9.substring(0, 80) : null)
+
+        // ---- Test 9b: 3-segment pipe = base + tablet + desktop ----
+        const r9b = await PostWind.resolve('p-2|6|12')
+        log('resolve("p-2|6|12") base=p-2, tablet+=p-6, desktop+=p-12',
+          r9b && r9b.includes('padding') && r9b.includes('min-width: 768px') && r9b.includes('min-width: 1024px'),
+          r9b ? r9b.substring(0, 150) : null)
+
+        // ---- Test 9c: t: prefix wraps in min-width: 768px ----
+        const r9c = await PostWind.resolve('t:flex')
+        log('resolve("t:flex") wraps in min-width: 768px',
+          r9c && r9c.includes('@media') && r9c.includes('min-width: 768px'),
+          r9c ? r9c.substring(0, 80) : null)
+
+        // ---- Test 10: shortcut resolves ----
+        const r10 = await PostWind.resolve('btn')
+        log('resolve("btn") shortcut returns CSS',
+          r10 && r10.includes('padding') && r10.includes('border-radius'),
+          r10 ? r10.substring(0, 100) : null)
+
+        // ---- Test 11: nested shortcut resolves ----
+        const r11 = await PostWind.resolve('btn-primary')
+        log('resolve("btn-primary") nested shortcut contains btn styles',
+          r11 && r11.includes('padding') && r11.includes('border-radius') && r11.includes('background'),
+          r11 ? r11.substring(0, 120) : null)
+
+        // ---- Test 12: shortcut "card" resolves ----
+        const r12 = await PostWind.resolve('card')
+        log('resolve("card") shortcut returns CSS',
+          r12 && r12.includes('border-radius') && r12.includes('padding'),
+          r12 ? r12.substring(0, 100) : null)
+
+        // ---- Test 13: unknown class returns null ----
+        const r13 = await PostWind.resolve('zzz-nonexistent-yyy')
+        log('resolve("zzz-nonexistent-yyy") returns null for unknown class',
+          r13 === null, String(r13))
+
+        // ---- Test 14: visible: prefix generates correct selector ----
+        const r14 = await PostWind.resolve('visible:opacity-100')
+        log('resolve("visible:opacity-100") generates .pw-visible selector',
+          r14 && r14.includes('.pw-visible'),
+          r14 ? r14.substring(0, 100) : null)
+
+        // ---- Test 15: visible: prefix includes CSS property ----
+        log('resolve("visible:opacity-100") includes opacity CSS',
+          r14 && r14.includes('opacity'),
+          r14 ? r14.substring(0, 80) : null)
+
+        // ---- Test 16: visible: translate generates correct CSS ----
+        const r16 = await PostWind.resolve('visible:translate-y-0')
+        log('resolve("visible:translate-y-0") generates translate CSS',
+          r16 && r16.includes('.pw-visible') && r16.includes('translate'),
+          r16 ? r16.substring(0, 100) : null)
+
+        // ---- Test 17: visible: scale ----
+        const r17 = await PostWind.resolve('visible:scale-100')
+        log('resolve("visible:scale-100") generates scale CSS',
+          r17 && r17.includes('.pw-visible'),
+          r17 ? r17.substring(0, 100) : null)
+
+        // ---- Test 18: breakpoint defaults exist ----
+        log('Default breakpoint "m" is set',
+          true, '@media (max-width: 767px)')
+        log('Default breakpoint "d" is set',
+          true, '@media (min-width: 768px)')
+
+        // ---- Test 19: PostWind.ready() resolves ----
+        const ready = await PostWind.ready()
+        log('PostWind.ready() resolves successfully', true)
+
+        // ---- Test 20: cache deduplication ----
+        await PostWind('p-4')
+        await PostWind('p-4')
+        const styleEl = document.getElementById('pw-styles')
+        const matches = (styleEl.textContent.match(/\.p-4\s*\{/g) || []).length
+        log('Cache deduplication: p-4 injected only once',
+          matches <= 1, `found ${matches} occurrence(s)`)
+
+        // ---- Test 21: IntersectionObserver fires for visible elements ----
+        const testEl = document.createElement('div')
+        testEl.className = 'visible:opacity-100'
+        testEl.style.cssText = 'width:10px;height:10px;position:fixed;top:0;left:0;'
+        document.body.appendChild(testEl)
+        PostWind.observeVisible(testEl)
+        await PostWind('visible:opacity-100')
+        // wait for observer to fire
+        await new Promise(r => setTimeout(r, 200))
+        const hasVisible = testEl.classList.contains('pw-visible')
+        log('IntersectionObserver adds pw-visible class to visible element',
+          hasVisible, `classList: ${testEl.className}`)
+        testEl.remove()
+
+        // ---- Test 22: visible: bg-color ----
+        const r22 = await PostWind.resolve('visible:bg-red-500')
+        log('resolve("visible:bg-red-500") generates background CSS',
+          r22 && r22.includes('.pw-visible') && r22.includes('background'),
+          r22 ? r22.substring(0, 100) : null)
+
+        // ---- Test 23: visible: text-white ----
+        const r23 = await PostWind.resolve('visible:text-white')
+        log('resolve("visible:text-white") generates color CSS',
+          r23 && r23.includes('.pw-visible'),
+          r23 ? r23.substring(0, 100) : null)
+
+        // ---- Test 24: visible: w-full ----
+        const r24 = await PostWind.resolve('visible:w-full')
+        log('resolve("visible:w-full") generates width CSS',
+          r24 && r24.includes('.pw-visible') && r24.includes('width'),
+          r24 ? r24.substring(0, 100) : null)
+
+        // ---- Test 25: unit suffix p-10px resolves to padding ----
+        const r25 = await PostWind.resolve('p-10px')
+        log('resolve("p-10px") generates padding: 10px',
+          r25 && r25.includes('padding') && r25.includes('10px'),
+          r25 ? r25.substring(0, 100) : null)
+
+        // ---- Test 26: unit suffix w-200px resolves to width ----
+        const r26 = await PostWind.resolve('w-200px')
+        log('resolve("w-200px") generates width: 200px',
+          r26 && r26.includes('width') && r26.includes('200px'),
+          r26 ? r26.substring(0, 100) : null)
+
+        // ---- Test 27: unit suffix mt-2rem resolves to margin-top ----
+        const r27 = await PostWind.resolve('mt-2rem')
+        log('resolve("mt-2rem") generates margin with 2rem',
+          r27 && r27.includes('margin') && r27.includes('2rem'),
+          r27 ? r27.substring(0, 100) : null)
+
+        // ---- Test 28: unit suffix text-14px resolves to font-size ----
+        const r28 = await PostWind.resolve('text-14px')
+        log('resolve("text-14px") generates font-size: 14px',
+          r28 && r28.includes('font-size') && r28.includes('14px'),
+          r28 ? r28.substring(0, 100) : null)
+
+        // ---- Test 29: unit suffix w-50% resolves to width: 50% ----
+        const r29 = await PostWind.resolve('w-50%')
+        log('resolve("w-50%") generates width: 50%',
+          r29 && r29.includes('width') && r29.includes('50%'),
+          r29 ? r29.substring(0, 100) : null)
+
+        // ---- Test 30: unit suffix with decimal text-1.5rem ----
+        const r30 = await PostWind.resolve('text-1.5rem')
+        log('resolve("text-1.5rem") generates font-size: 1.5rem',
+          r30 && r30.includes('font-size') && r30.includes('1.5rem'),
+          r30 ? r30.substring(0, 100) : null)
+
+        // ---- Test 31: colon responsive p-4:8 = p-4|8 ----
+        const r31 = await PostWind.resolve('p-4:8')
+        log('resolve("p-4:8") colon responsive = base + tablet override',
+          r31 && r31.includes('padding') && r31.includes('min-width: 768px'),
+          r31 ? r31.substring(0, 120) : null)
+
+        // ---- Test 32: colon responsive 3 segments p-4:8:12 ----
+        const r32 = await PostWind.resolve('p-4:8:12')
+        log('resolve("p-4:8:12") colon 3-seg = base + tablet + desktop',
+          r32 && r32.includes('padding') && r32.includes('min-width: 768px') && r32.includes('min-width: 1024px'),
+          r32 ? r32.substring(0, 150) : null)
+
+        // ---- Test 33: colon responsive grid-cols-1:3 ----
+        const r33 = await PostWind.resolve('grid-cols-1:3')
+        log('resolve("grid-cols-1:3") colon grid = base 1col + tablet 3cols',
+          r33 && r33.includes('grid') && r33.includes('min-width: 768px'),
+          r33 ? r33.substring(0, 120) : null)
+
+        // ---- Test 34: colon with unit suffix p-10px:20px ----
+        const r34 = await PostWind.resolve('p-10px:20px')
+        log('resolve("p-10px:20px") colon + units = 10px base + 20px tablet',
+          r34 && r34.includes('10px') && r34.includes('20px') && r34.includes('min-width: 768px'),
+          r34 ? r34.substring(0, 140) : null)
+
+        // ---- Test 35: unit suffix auto-scan - check pw-styles has p-10px rule ----
+        const pw = document.getElementById('pw-styles').textContent
+        log('Auto-scan: pw-styles contains p-10px rule',
+          pw.includes('p-10px'), 'checked pw-styles')
+
+        // ---- Test 36: auto-scan: pw-styles contains colon responsive rule ----
+        log('Auto-scan: pw-styles contains p-4\\:10 rule',
+          pw.includes('p-4\\:10') || pw.includes('p-4\\\\:10'),
+          'checked pw-styles for colon class')
+
+        // ---- Test 37: m:prefix still works (not treated as colon responsive) ----
+        const r37 = await PostWind.resolve('m:flex')
+        log('resolve("m:flex") still wraps in max-width (not colon responsive)',
+          r37 && r37.includes('@media') && r37.includes('max-width: 767px'),
+          r37 ? r37.substring(0, 80) : null)
+
+        // ---- Done ----
+        const doneDiv = document.createElement('div')
+        doneDiv.className = 'mt-4 pt-4 border-t border-gray-200 font-bold'
+        doneDiv.textContent = `Done: ${passed}/${total} passed, ${failed} failed`
+        doneDiv.style.color = failed ? '#dc2626' : '#16a34a'
+        results.appendChild(doneDiv)
+      })
+    </script>
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-200 py-8 mt-8">
+    <div class="max-w-5xl mx-auto px-4 md:px-6 text-center text-sm text-gray-400">
+      PostWind - Tailwind CSS layer for desktop-first responsive design
+    </div>
+  </footer>
+
+</body>
+</html>

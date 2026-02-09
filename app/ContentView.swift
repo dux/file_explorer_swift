@@ -10,7 +10,7 @@ struct ContentView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
-            Divider()
+            Color(NSColor.separatorColor).frame(height: 0.5)
             HStack(spacing: 0) {
                 // Left pane (shortcuts)
                 ShortcutsView(manager: manager)
