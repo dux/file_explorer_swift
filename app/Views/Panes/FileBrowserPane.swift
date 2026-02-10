@@ -5,8 +5,6 @@ struct FileBrowserPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SelectionBar(manager: manager)
-
             ActionButtonBar(manager: manager)
             Divider()
 
@@ -279,6 +277,7 @@ struct SelectionBarButton: View {
     let title: String
     let icon: String
     let color: Color
+    var shortcut: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -296,6 +295,7 @@ struct SelectionBarButton: View {
             .cornerRadius(4)
         }
         .buttonStyle(.plain)
+        .help(shortcut ?? title)
     }
 }
 

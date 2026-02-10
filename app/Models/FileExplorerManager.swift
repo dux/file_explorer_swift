@@ -160,7 +160,7 @@ class FileExplorerManager: ObservableObject {
 
     func loadContents() {
         do {
-            let resourceKeys: Set<URLResourceKey> = [.isDirectoryKey, .contentModificationDateKey, .fileSizeKey]
+            let resourceKeys: Set<URLResourceKey> = [.isDirectoryKey, .contentModificationDateKey, .fileSizeKey, .isHiddenKey]
 
             // For Trash folder, show all files including hidden
             let isTrash = currentPath.lastPathComponent == ".Trash"
@@ -178,13 +178,13 @@ class FileExplorerManager: ObservableObject {
             var hiddenSkipped = 0
 
             for url in contents {
-                let hidden = url.lastPathComponent.hasPrefix(".")
+                let values = try? url.resourceValues(forKeys: resourceKeys)
+                let hidden = url.lastPathComponent.hasPrefix(".") || (values?.isHidden ?? false)
                 if !showAll && hidden {
                     hiddenSkipped += 1
                     continue
                 }
 
-                let values = try? url.resourceValues(forKeys: resourceKeys)
                 let isDir = values?.isDirectory ?? false
                 let size = Int64(values?.fileSize ?? 0)
                 let modDate = values?.contentModificationDate
@@ -788,7 +788,7 @@ class FileExplorerManager: ObservableObject {
                     return
                 }
 
-                let resourceKeys: Set<URLResourceKey> = [.isDirectoryKey, .contentModificationDateKey, .fileSizeKey]
+                let resourceKeys: Set<URLResourceKey> = [.isDirectoryKey, .contentModificationDateKey, .fileSizeKey, .isHiddenKey]
                 let results: [CachedFileInfo] = output.split(separator: "\n").compactMap { line in
                     let path = String(line)
                     guard !path.isEmpty else { return nil }
@@ -797,7 +797,7 @@ class FileExplorerManager: ObservableObject {
                     let isDir = values?.isDirectory ?? false
                     let size = Int64(values?.fileSize ?? 0)
                     let modDate = values?.contentModificationDate
-                    let hidden = url.lastPathComponent.hasPrefix(".")
+                    let hidden = url.lastPathComponent.hasPrefix(".") || (values?.isHidden ?? false)
                     return CachedFileInfo(url: url, isDirectory: isDir, size: size, modDate: modDate, isHidden: hidden)
                 }
 

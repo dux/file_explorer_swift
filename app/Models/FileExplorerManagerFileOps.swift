@@ -240,31 +240,19 @@ extension FileExplorerManager {
     }
 
     func toggleHidden(_ url: URL) {
-        let fileName = url.lastPathComponent
-        let isHidden = fileName.hasPrefix(".")
-        
-        var newName: String
-        if isHidden {
-            // Make visible: remove the leading "."
-            newName = String(fileName.dropFirst())
-        } else {
-            // Make hidden: add a leading "."
-            newName = ".\(fileName)"
-        }
-        
-        let newURL = url.deletingLastPathComponent().appendingPathComponent(newName)
-        
         do {
-            try fileManager.moveItem(at: url, to: newURL)
-            // Update path in selection if it was selected
-            SelectionManager.shared.updateLocalPath(from: url.path, to: newURL.path)
+            let resourceValues = try url.resourceValues(forKeys: [.isHiddenKey])
+            let isCurrentlyHidden = resourceValues.isHidden ?? url.lastPathComponent.hasPrefix(".")
+            var newValues = URLResourceValues()
+            newValues.isHidden = !isCurrentlyHidden
+            var mutableURL = url
+            try mutableURL.setResourceValues(newValues)
             loadContents()
-            // Select the renamed item
-            selectedItem = newURL
-            if let index = allItems.firstIndex(where: { $0.url == newURL }) {
+            selectedItem = url
+            if let index = allItems.firstIndex(where: { $0.url == url }) {
                 selectedIndex = index
             }
-            ToastManager.shared.show(isHidden ? "Made visible" : "Made hidden")
+            ToastManager.shared.show(isCurrentlyHidden ? "Made visible" : "Made hidden")
         } catch {
             ToastManager.shared.showError("Error toggling hidden: \(error.localizedDescription)")
         }

@@ -147,6 +147,11 @@ struct ActionsPane: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
 
+            // Selection section (shown when items are selected)
+            if !selection.items.isEmpty {
+                SelectionSection(manager: manager, selection: selection)
+            }
+
             Divider()
 
             VStack(spacing: 1) {
@@ -643,5 +648,185 @@ struct PreferredAppButton: View {
             }
             return handleFileDrop(providers: providers, appURL: appURL)
         }
+    }
+}
+
+// MARK: - Selection Section (in right pane)
+
+struct SelectionSection: View {
+    @ObservedObject var manager: FileExplorerManager
+    @ObservedObject var selection: SelectionManager
+
+    private var selectedItems: [FileItem] {
+        let _ = selection.version
+        return Array(selection.items).sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    private var localItems: [FileItem] {
+        selectedItems.filter { if case .local = $0.source { return true } else { return false } }
+    }
+
+    private var iPhoneItems: [FileItem] {
+        selectedItems.filter { if case .iPhone = $0.source { return true } else { return false } }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Divider()
+
+            // Action buttons row
+            HStack(spacing: 5) {
+                if !localItems.isEmpty {
+                    SelectionBarButton(title: "Copy", icon: "doc.on.doc", color: .blue, shortcut: "Copy here (Cmd+C)") {
+                        let count = selection.copyLocalItems(to: manager.currentPath)
+                        selection.clear()
+                        ToastManager.shared.show("Pasted \(count) file(s)")
+                        manager.refresh()
+                    }
+                    SelectionBarButton(title: "Move", icon: "folder", color: .orange, shortcut: "Move here (Cmd+M)") {
+                        let count = selection.moveLocalItems(to: manager.currentPath)
+                        selection.clear()
+                        ToastManager.shared.show("Moved \(count) file(s)")
+                        manager.refresh()
+                    }
+                    SelectionBarButton(title: "Trash", icon: "trash", color: .red) {
+                        let items = localItems
+                        var failed = 0
+                        for item in items {
+                            if let url = item.localURL {
+                                do {
+                                    try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                                } catch {
+                                    failed += 1
+                                }
+                            }
+                            selection.remove(item)
+                        }
+                        if failed > 0 {
+                            ToastManager.shared.showError("Failed to trash \(failed) file(s)")
+                        } else {
+                            ToastManager.shared.show("Trashed \(items.count) file(s)")
+                        }
+                        manager.refresh()
+                    }
+                }
+
+                if !iPhoneItems.isEmpty {
+                    SelectionBarButton(title: "Download", icon: "arrow.down.doc", color: .pink) {
+                        Task {
+                            let count = await selection.downloadIPhoneItems(to: manager.currentPath, move: false)
+                            ToastManager.shared.show("Downloaded \(count) file(s)")
+                            for item in iPhoneItems { selection.remove(item) }
+                            manager.refresh()
+                        }
+                    }
+                }
+
+                if localItems.count == 1, let url = localItems.first?.localURL {
+                    SelectionBarButton(title: "Duplicate", icon: "plus.square.on.square", color: .purple, shortcut: "Duplicate (Cmd+D)") {
+                        manager.duplicateFile(url)
+                        selection.clear()
+                    }
+                }
+
+                Spacer()
+
+                Text("\(selectedItems.count)")
+                    .textStyle(.small, weight: .bold)
+                    .foregroundColor(.green)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(4)
+
+                Button(action: { selection.clear() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .textStyle(.small)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+
+            // Selection file list
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    ForEach(selectedItems, id: \.id) { item in
+                        SelectionSectionRow(item: item, selection: selection)
+                    }
+                }
+            }
+            .frame(maxHeight: CGFloat(min(selectedItems.count, 6)) * 26)
+        }
+        .background(Color.green.opacity(0.05))
+    }
+}
+
+private struct SelectionSectionRow: View {
+    let item: FileItem
+    @ObservedObject var selection: SelectionManager
+    @State private var isHovered = false
+
+    private var sourceFolder: String {
+        switch item.source {
+        case .local:
+            let parent = (item.path as NSString).deletingLastPathComponent
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
+            if parent.hasPrefix(home) {
+                return "~" + parent.dropFirst(home.count)
+            }
+            return parent
+        case .iPhone(_, _, let appName):
+            return "iPhone: \(appName)"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let url = item.localURL {
+                if item.isDirectory {
+                    FolderIconView(url: url, size: 16)
+                } else {
+                    Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: false))
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 16, height: 16)
+                }
+            } else {
+                Image(systemName: "iphone")
+                    .font(.system(size: 12))
+                    .foregroundColor(.pink)
+                    .frame(width: 16, height: 16)
+            }
+
+            Text(item.name)
+                .textStyle(.small)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Text(sourceFolder)
+                .textStyle(.small)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.head)
+
+            Spacer()
+
+            if isHovered {
+                Button(action: { selection.remove(item) }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(isHovered ? Color.green.opacity(0.06) : Color.clear)
+        .onHover { isHovered = $0 }
     }
 }

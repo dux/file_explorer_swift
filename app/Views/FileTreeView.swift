@@ -68,6 +68,7 @@ struct FileTreeView: View {
                 }
                 Spacer()
             }
+            .folderBackgroundContextMenu(url: manager.currentPath)
             .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
                 handleDrop(providers: providers)
                 return true
@@ -143,6 +144,13 @@ struct FileTreeView: View {
                             }
                         }
                     }
+
+                    // Empty space area for folder right-click
+                    Color.clear
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 200)
+                        .contentShape(Rectangle())
+                        .folderBackgroundContextMenu(url: manager.currentPath)
                 }
                 .id("\(manager.currentPath.absoluteString)_\(settings.flatFolders)")
                 .onChange(of: manager.selectedIndex) { newIndex in

@@ -104,7 +104,10 @@ struct MainContentView: View {
     var body: some View {
         HStack(spacing: 0) {
             // Main pane (browser, selection, or search)
-            MainPane(manager: manager)
+            ZStack {
+                MainPane(manager: manager)
+                CustomContextMenuOverlay(manager: manager)
+            }
 
                 // Draggable divider for right pane
                 Rectangle()
@@ -514,6 +517,15 @@ class KeyCaptureView: NSView {
                 return true
             }
         case 8:
+            if event.modifierFlags.contains(.command) {
+                let selection = SelectionManager.shared
+                guard !selection.items.isEmpty else { return false }
+                let count = selection.copyLocalItems(to: manager.currentPath)
+                selection.clear()
+                ToastManager.shared.show("Pasted \(count) file(s)")
+                manager.refresh()
+                return true
+            }
             if event.modifierFlags.contains(.control) {
                 if let item = manager.selectedItem {
                     manager.toggleFileSelection(item)
@@ -576,9 +588,27 @@ class KeyCaptureView: NSView {
         case 47: // Period key - show context menu
             showContextMenuForSelected(manager)
             return true
-        case 46: // M key with Ctrl - show context menu
+        case 46: // M key
+            if event.modifierFlags.contains(.command) {
+                let selection = SelectionManager.shared
+                guard !selection.items.isEmpty else { return false }
+                let count = selection.moveLocalItems(to: manager.currentPath)
+                selection.clear()
+                ToastManager.shared.show("Moved \(count) file(s)")
+                manager.refresh()
+                return true
+            }
             if event.modifierFlags.contains(.control) {
                 showContextMenuForSelected(manager)
+                return true
+            }
+        case 2: // D key
+            if event.modifierFlags.contains(.command) {
+                let selection = SelectionManager.shared
+                let locals = selection.items.filter { if case .local = $0.source { return true } else { return false } }
+                guard locals.count == 1, let url = locals.first?.localURL else { return false }
+                manager.duplicateFile(url)
+                selection.clear()
                 return true
             }
         default:
@@ -621,7 +651,7 @@ class KeyCaptureView: NSView {
             position = CGPoint(x: 300, y: 200)
         }
         Task { @MainActor in
-            ContextMenuManager.shared.show(url: item, isDirectory: isDir.boolValue, at: position)
+            ContextMenuManager.shared.show(url: item, isDirectory: isDir.boolValue, at: position, keyboardTriggered: true)
         }
     }
 }
@@ -861,7 +891,8 @@ struct ActionButtonBar: View {
 
             Spacer()
         }
-        .padding(.horizontal, 16)
+        .padding(.leading, 13)
+        .padding(.trailing, 16)
         .padding(.vertical, 6)
         .sheet(isPresented: $showNewFolderDialog) {
             NewFolderDialog(folderName: $newFolderName, isPresented: $showNewFolderDialog) {
