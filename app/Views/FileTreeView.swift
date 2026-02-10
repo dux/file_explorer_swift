@@ -38,11 +38,40 @@ struct FileTreeView: View {
 
     var body: some View {
         if manager.allItems.isEmpty {
-            EmptyFolderView()
-                .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
-                    handleDrop(providers: providers)
-                    return true
+            VStack(spacing: 0) {
+                // Show navigation even in empty folders
+                LazyVStack(spacing: 0) {
+                    Spacer().frame(height: 2)
+                    if settings.flatFolders {
+                        FlatBreadcrumbRow(ancestors: ancestors, manager: manager)
+                    } else {
+                        let ancestorList = ancestors
+                        ForEach(Array(ancestorList.enumerated()), id: \.element.url) { depth, ancestor in
+                            let isCurrent = ancestor.url.path == manager.currentPath.path
+                            AncestorRow(
+                                name: ancestor.name,
+                                url: ancestor.url,
+                                depth: depth,
+                                isCurrent: isCurrent,
+                                indentStep: indentStep,
+                                manager: manager
+                            )
+                        }
+                    }
+                    let childIndent = settings.flatFolders ? 1 : ancestors.count
+                    Text("Folder is empty")
+                        .textStyle(.small)
+                        .foregroundColor(.secondary)
+                        .padding(.leading, CGFloat(childIndent) * indentStep + 16)
+                        .padding(.top, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                Spacer()
+            }
+            .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
+                handleDrop(providers: providers)
+                return true
+            }
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
