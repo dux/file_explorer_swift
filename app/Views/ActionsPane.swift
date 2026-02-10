@@ -55,6 +55,57 @@ struct ActionsPane: View {
         targetURL.pathExtension.lowercased() == "app" && isDirectory
     }
 
+    private var hasActionButtons: Bool {
+        isAppBundle || isImageFile || isOfficeFile || gitRepo.gitRepoInfo != nil || npmPackage.npmPackageInfo != nil
+    }
+
+    @ViewBuilder
+    private var actionButtonsSection: some View {
+        if hasActionButtons {
+            Divider()
+            VStack(spacing: 1) {
+                if isAppBundle {
+                    ActionButton(icon: "checkmark.shield", title: "Enable unsafe app", color: .green, flatIndex: 1, manager: manager) {
+                        manager.enableUnsafeApp(targetURL)
+                    }
+                    ActionButton(icon: "trash", title: "Uninstall \(targetURL.deletingPathExtension().lastPathComponent)", color: .red, flatIndex: 2, manager: manager) {
+                        appDataPaths = AppUninstaller.findAppData(for: targetURL)
+                        showUninstallConfirm = true
+                    }
+                }
+                if isImageFile {
+                    let base = 1
+                    ActionButton(icon: "camera.aperture", title: "EXIF / Metadata", color: .teal, flatIndex: base, manager: manager) {
+                        showExifSheet = true
+                    }
+                    ActionButton(icon: "arrow.up.left.and.arrow.down.right", title: "Resize / Crop", color: .pink, flatIndex: base + 1, manager: manager) {
+                        showImageResizeSheet = true
+                    }
+                    ActionButton(icon: "arrow.triangle.2.circlepath", title: "Convert to...", color: .cyan, flatIndex: base + 2, manager: manager) {
+                        showImageConvertSheet = true
+                    }
+                }
+                if isOfficeFile {
+                    ActionButton(icon: "doc.text.magnifyingglass", title: "Document Info", color: .indigo, flatIndex: 1, manager: manager) {
+                        showOfficeMetadataSheet = true
+                    }
+                }
+                if let gitInfo = gitRepo.gitRepoInfo {
+                    ActionButton(icon: "arrow.up.right.square", title: gitInfo.displayLabel, color: .secondary, manager: manager) {
+                        NSWorkspace.shared.open(gitInfo.webURL)
+                    }
+                }
+                if let npmInfo = npmPackage.npmPackageInfo {
+                    ActionButton(icon: "shippingbox", title: "\(npmInfo.displayLabel) (\(npmInfo.packageName))", color: .red, manager: manager) {
+                        NSWorkspace.shared.open(npmInfo.webURL)
+                    }
+                }
+            }
+            .padding(.horizontal, 2)
+            .padding(.vertical, 8)
+        }
+    }
+
     private var openWithLabel: String {
         if isDirectory {
             return "Open folder with"
@@ -88,10 +139,6 @@ struct ActionsPane: View {
     private func buildRightPaneItems() -> [RightPaneItem] {
         var items: [RightPaneItem] = []
         let url = targetURL
-        let inSelection = manager.isInSelection(url)
-        items.append(RightPaneItem(id: "selection", title: inSelection ? "Remove from selection" : "Add to selection") { [url] in
-            self.manager.toggleFileSelection(url)
-        })
 
         if isImageFile {
             items.append(RightPaneItem(id: "exif", title: "EXIF / Metadata") {
@@ -152,137 +199,7 @@ struct ActionsPane: View {
                 SelectionSection(manager: manager, selection: selection)
             }
 
-            Divider()
-
-            VStack(spacing: 1) {
-                ActionButton(
-                    icon: selection.containsLocal(targetURL) ? "minus.circle" : "checkmark.circle",
-                    title: selection.containsLocal(targetURL) ? "Remove from selection" : "Add to selection",
-                    color: selection.containsLocal(targetURL) ? .red : .green,
-                    flatIndex: 0,
-                    manager: manager
-                ) {
-                    manager.toggleFileSelection(targetURL)
-                }
-
-                if isDirectory && !isAppBundle {
-                    ActionButton(
-                        icon: "face.smiling",
-                        title: "Assign icon",
-                        color: .purple,
-                        flatIndex: 1,
-                        manager: manager
-                    ) {
-                        showEmojiPicker = true
-                    }
-                    .popover(isPresented: $showEmojiPicker, arrowEdge: .leading) {
-                        EmojiPickerView(
-                            folderURL: targetURL,
-                            onSelect: { emoji in
-                                folderIconManager.setEmoji(emoji, for: targetURL)
-                            },
-                            onRemove: {
-                                folderIconManager.removeEmoji(for: targetURL)
-                            },
-                            onDismiss: { showEmojiPicker = false },
-                            hasExisting: folderIconManager.emoji(for: targetURL) != nil
-                        )
-                        .interactiveDismissDisabled()
-                    }
-                }
-
-                if isAppBundle {
-                    ActionButton(
-                        icon: "checkmark.shield",
-                        title: "Enable unsafe app",
-                        color: .green,
-                        flatIndex: 1,
-                        manager: manager
-                    ) {
-                        manager.enableUnsafeApp(targetURL)
-                    }
-                    ActionButton(
-                        icon: "trash",
-                        title: "Uninstall \(targetURL.deletingPathExtension().lastPathComponent)",
-                        color: .red,
-                        flatIndex: 2,
-                        manager: manager
-                    ) {
-                        appDataPaths = AppUninstaller.findAppData(for: targetURL)
-                        showUninstallConfirm = true
-                    }
-                }
-
-                if isImageFile {
-                    let base = 1
-                    ActionButton(
-                        icon: "camera.aperture",
-                        title: "EXIF / Metadata",
-                        color: .teal,
-                        flatIndex: base,
-                        manager: manager
-                    ) {
-                        showExifSheet = true
-                    }
-
-                    ActionButton(
-                        icon: "arrow.up.left.and.arrow.down.right",
-                        title: "Resize / Crop",
-                        color: .pink,
-                        flatIndex: base + 1,
-                        manager: manager
-                    ) {
-                        showImageResizeSheet = true
-                    }
-
-                    ActionButton(
-                        icon: "arrow.triangle.2.circlepath",
-                        title: "Convert to...",
-                        color: .cyan,
-                        flatIndex: base + 2,
-                        manager: manager
-                    ) {
-                        showImageConvertSheet = true
-                    }
-                }
-
-                if isOfficeFile {
-                    let base = 1
-                    ActionButton(
-                        icon: "doc.text.magnifyingglass",
-                        title: "Document Info",
-                        color: .indigo,
-                        flatIndex: base,
-                        manager: manager
-                    ) {
-                        showOfficeMetadataSheet = true
-                    }
-                }
-
-                if let gitInfo = gitRepo.gitRepoInfo {
-                    ActionButton(
-                        icon: "arrow.up.right.square",
-                        title: gitInfo.displayLabel,
-                        color: .secondary,
-                        manager: manager
-                    ) {
-                        NSWorkspace.shared.open(gitInfo.webURL)
-                    }
-                }
-
-                if let npmInfo = npmPackage.npmPackageInfo {
-                    ActionButton(
-                        icon: "shippingbox",
-                        title: "\(npmInfo.displayLabel) (\(npmInfo.packageName))",
-                        color: .red,
-                        manager: manager
-                    ) {
-                        NSWorkspace.shared.open(npmInfo.webURL)
-                    }
-                }
-            }
-            .padding(.horizontal, 2)
-            .padding(.vertical, 8)
+            actionButtonsSection
 
             Divider()
 

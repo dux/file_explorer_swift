@@ -14,8 +14,10 @@ class ContextMenuManager: ObservableObject {
     @Published var position: CGPoint = .zero
     @Published var focusedIndex: Int = 0
     @Published var showDetails = false
+    @Published var showEmojiPicker = false
     var detailsURL: URL?
     var detailsIsDirectory = false
+    var emojiPickerURL: URL?
     var itemCount: Int = 0
     var itemActions: [() -> Void] = []
     var pendingAction: (() -> Void)?
@@ -117,6 +119,22 @@ struct CustomContextMenuOverlay: View {
                 FileDetailsView(url: url, isDirectory: contextMenu.detailsIsDirectory)
             }
         }
+        .sheet(isPresented: $contextMenu.showEmojiPicker) {
+            if let url = contextMenu.emojiPickerURL {
+                EmojiPickerView(
+                    folderURL: url,
+                    onSelect: { emoji in
+                        FolderIconManager.shared.setEmoji(emoji, for: url)
+                    },
+                    onRemove: {
+                        FolderIconManager.shared.removeEmoji(for: url)
+                    },
+                    onDismiss: { contextMenu.showEmojiPicker = false },
+                    hasExisting: FolderIconManager.shared.emoji(for: url) != nil
+                )
+                .interactiveDismissDisabled()
+            }
+        }
     }
 }
 
@@ -170,6 +188,12 @@ private struct CustomContextMenuContent: View {
                 manager.toggleFileSelection(url)
             }
         ))
+        if isDirectory && !isApp {
+            items.append(MenuItem(icon: "face.smiling", label: "Assign Icon", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
+                contextMenu.emojiPickerURL = url
+                contextMenu.showEmojiPicker = true
+            }))
+        }
         items.append(MenuItem(icon: "doc.on.clipboard", label: "Copy Path", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
@@ -415,6 +439,10 @@ private struct FolderContextMenuContent: View {
                 contextMenu.detailsURL = url
                 contextMenu.detailsIsDirectory = true
                 contextMenu.showDetails = true
+            }),
+            MenuItem(icon: "face.smiling", label: "Assign Icon", action: act { [url] in
+                contextMenu.emojiPickerURL = url
+                contextMenu.showEmojiPicker = true
             }),
             MenuItem(icon: "folder.badge.plus", label: "Create Folder", action: act {
                 manager.createNewFolder()
