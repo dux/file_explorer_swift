@@ -42,13 +42,11 @@ struct ActionsPane: View {
     }
 
     private var isImageFile: Bool {
-        let imageExtensions = ["jpg", "jpeg", "png", "heic", "heif", "tiff", "tif", "gif", "bmp", "webp", "avif"]
-        return imageExtensions.contains(targetURL.pathExtension.lowercased())
+        FileExtensions.images.contains(targetURL.pathExtension.lowercased())
     }
 
     private var isOfficeFile: Bool {
-        let officeExtensions = ["docx", "xlsx", "pptx", "doc", "xls", "ppt"]
-        return officeExtensions.contains(targetURL.pathExtension.lowercased())
+        FileExtensions.office.contains(targetURL.pathExtension.lowercased())
     }
 
     private var isAppBundle: Bool {
@@ -574,20 +572,9 @@ struct SelectionSection: View {
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject var selection: SelectionManager
 
-    private var selectedItems: [FileItem] {
-        let _ = selection.version
-        return Array(selection.items).sorted {
-            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-        }
-    }
-
-    private var localItems: [FileItem] {
-        selectedItems.filter { if case .local = $0.source { return true } else { return false } }
-    }
-
-    private var iPhoneItems: [FileItem] {
-        selectedItems.filter { if case .iPhone = $0.source { return true } else { return false } }
-    }
+    private var selectedItems: [FileItem] { selection.sortedItems }
+    private var localItems: [FileItem] { selection.localItems }
+    private var iPhoneItems: [FileItem] { selection.iPhoneItems }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -609,22 +596,11 @@ struct SelectionSection: View {
                         manager.refresh()
                     }
                     SelectionBarButton(title: "Trash", icon: "trash", color: .red) {
-                        let items = localItems
-                        var failed = 0
-                        for item in items {
-                            if let url = item.localURL {
-                                do {
-                                    try FileManager.default.trashItem(at: url, resultingItemURL: nil)
-                                } catch {
-                                    failed += 1
-                                }
-                            }
-                            selection.remove(item)
-                        }
-                        if failed > 0 {
-                            ToastManager.shared.showError("Failed to trash \(failed) file(s)")
+                        let result = selection.trashLocalItems()
+                        if result.failed > 0 {
+                            ToastManager.shared.showError("Failed to trash \(result.failed) file(s)")
                         } else {
-                            ToastManager.shared.show("Trashed \(items.count) file(s)")
+                            ToastManager.shared.show("Trashed \(result.trashed) file(s)")
                         }
                         manager.refresh()
                     }

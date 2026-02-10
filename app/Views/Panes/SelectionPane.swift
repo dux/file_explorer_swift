@@ -4,12 +4,7 @@ struct SelectionPane: View {
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject var selection = SelectionManager.shared
 
-    private var selectedItems: [FileItem] {
-        let _ = selection.version
-        return Array(selection.items).sorted {
-            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-        }
-    }
+    private var selectedItems: [FileItem] { selection.sortedItems }
 
     var body: some View {
         VStack(spacing: 0) {

@@ -4,18 +4,63 @@ struct FileBrowserPane: View {
     @ObservedObject var manager: FileExplorerManager
 
     var body: some View {
-        VStack(spacing: 0) {
-            ActionButtonBar(manager: manager)
-            Divider()
-
-            if manager.isSearching {
-                SearchBar(manager: manager)
+        ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
+                ActionButtonBar(manager: manager)
                 Divider()
-                SearchResultsView(manager: manager)
-            } else {
-                FileTreeView(manager: manager)
+
+                if manager.isSearching {
+                    SearchBar(manager: manager)
+                    Divider()
+                    SearchResultsView(manager: manager)
+                } else {
+                    FileTreeView(manager: manager)
+                }
             }
+
+            KeyboardShortcutBar()
         }
+    }
+}
+
+struct KeyboardShortcutBar: View {
+    @ObservedObject private var selection = SelectionManager.shared
+
+    var body: some View {
+        HStack(spacing: 6) {
+            shortcutPair("\u{2191}\u{2193}", "navigate")
+            shortcutPair("\u{2190}\u{2192}", "open/close")
+            shortcutPair("\u{21A9}", "rename")
+            shortcutPair("\u{2318}\u{21E7}N", "folder")
+            dot
+            shortcutPair("Space", "select")
+            if !selection.isEmpty {
+                shortcutPair("\u{2318}C", "copy")
+                shortcutPair("\u{2318}M", "move")
+            }
+            shortcutPair("\u{2318}\u{232B}", "trash")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+    }
+
+    private func shortcutPair(_ key: String, _ label: String) -> some View {
+        HStack(spacing: 2) {
+            Text(key)
+                .textStyle(.small, weight: .medium, mono: true)
+                .foregroundColor(.secondary)
+            Text(label)
+                .textStyle(.small)
+                .foregroundColor(.secondary.opacity(0.6))
+        }
+    }
+
+    private var dot: some View {
+        Text("\u{00B7}")
+            .textStyle(.small, weight: .bold)
+            .foregroundColor(.secondary.opacity(0.3))
     }
 }
 
@@ -161,25 +206,13 @@ struct SelectionBar: View {
     @ObservedObject var selection = SelectionManager.shared
     @State private var isExpanded = true
 
-    private var selectedItems: [FileItem] {
-        let _ = selection.version
-        return Array(selection.items).sorted {
-            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-        }
-    }
-
-    private var localItems: [FileItem] {
-        selectedItems.filter { if case .local = $0.source { return true } else { return false } }
-    }
-
-    private var iPhoneItems: [FileItem] {
-        selectedItems.filter { if case .iPhone = $0.source { return true } else { return false } }
-    }
+    private var selectedItems: [FileItem] { selection.sortedItems }
+    private var localItems: [FileItem] { selection.localItems }
+    private var iPhoneItems: [FileItem] { selection.iPhoneItems }
 
     var body: some View {
         if !selectedItems.isEmpty {
             VStack(spacing: 0) {
-                // Header row
                 HStack(spacing: 8) {
                     Button(action: { withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() } }) {
                         Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
@@ -195,7 +228,6 @@ struct SelectionBar: View {
 
                     Spacer()
 
-                    // Action buttons always visible
                     if !localItems.isEmpty {
                         SelectionBarButton(title: "Paste here", icon: "doc.on.doc", color: .blue) {
                             let count = selection.copyLocalItems(to: manager.currentPath)
@@ -205,25 +237,16 @@ struct SelectionBar: View {
                         }
                         SelectionBarButton(title: "Move here", icon: "folder", color: .orange) {
                             let count = selection.moveLocalItems(to: manager.currentPath)
+                            selection.clear()
                             ToastManager.shared.show("Moved \(count) file(s)")
                             manager.refresh()
                         }
                         SelectionBarButton(title: "Trash", icon: "trash", color: .red) {
-                            var failed = 0
-                            for item in localItems {
-                                if let url = item.localURL {
-                                    do {
-                                        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
-                                    } catch {
-                                        failed += 1
-                                    }
-                                }
-                                selection.remove(item)
-                            }
-                            if failed > 0 {
-                                ToastManager.shared.showError("Failed to trash \(failed) file(s)")
+                            let result = selection.trashLocalItems()
+                            if result.failed > 0 {
+                                ToastManager.shared.showError("Failed to trash \(result.failed) file(s)")
                             } else {
-                                ToastManager.shared.show("Moved \(localItems.count) file(s) to Trash")
+                                ToastManager.shared.show("Moved \(result.trashed) file(s) to Trash")
                             }
                             manager.refresh()
                         }
@@ -358,24 +381,12 @@ struct SelectedFilesView: View {
     @State private var showDeleteConfirmation = false
     @State private var isPermanentDelete = false
 
-    private var selectedItems: [FileItem] {
-        let _ = selection.version
-        return Array(selection.items).sorted {
-            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-        }
-    }
-
-    private var localItems: [FileItem] {
-        selectedItems.filter { if case .local = $0.source { return true } else { return false } }
-    }
-
-    private var iPhoneItems: [FileItem] {
-        selectedItems.filter { if case .iPhone = $0.source { return true } else { return false } }
-    }
+    private var selectedItems: [FileItem] { selection.sortedItems }
+    private var localItems: [FileItem] { selection.localItems }
+    private var iPhoneItems: [FileItem] { selection.iPhoneItems }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header with clear all button
             HStack {
                 Text("\(selectedItems.count) item\(selectedItems.count == 1 ? "" : "s") selected")
                     .textStyle(.small)
@@ -495,19 +506,9 @@ struct SelectedFilesView: View {
     }
 
     private func trashLocalFiles() {
-        var failed = 0
-        for item in localItems {
-            if let url = item.localURL {
-                do {
-                    try FileManager.default.trashItem(at: url, resultingItemURL: nil)
-                } catch {
-                    failed += 1
-                }
-                selection.remove(item)
-            }
-        }
-        if failed > 0 {
-            ToastManager.shared.showError("Failed to trash \(failed) file(s)")
+        let result = selection.trashLocalItems()
+        if result.failed > 0 {
+            ToastManager.shared.showError("Failed to trash \(result.failed) file(s)")
         }
         manager.refresh()
     }

@@ -64,6 +64,9 @@ The **central @MainActor ObservableObject**. Owns all navigation, file listing, 
 ### FileExplorerManagerFileOps (extension, `Models/FileExplorerManagerFileOps.swift`)
 File operation methods: `createNewFolder()`, `createNewFile()`, `duplicateFile()`, `addToZip()`, `extractArchive()`, `enableUnsafeApp()`, `moveToTrash()`, `refresh()`, `startRename()`, `cancelRename()`, `confirmRename()`, `toggleHidden()`.
 
+### FileExplorerManagerSearch (extension, `Models/FileExplorerManagerSearch.swift`)
+Search methods: `startSearch()`, `cancelSearch()`, `performSearch()`, `executeSearch()`, `findFd()`. List cursor navigation: `listSelectNext()`, `listSelectPrevious()`, `listActivateItem()`.
+
 ### FileItem & SelectionManager (`Models/FileItem.swift`)
 - `FileItem` -- unified file representation with `id`, `name`, `path`, `isDirectory`, `size`, `modifiedDate`, `source` (`.local` or `.iPhone`).
 - `SelectionManager` -- **singleton** managing a `Set<FileItem>`. Tracks `version: Int` for change detection. Supports add/remove/toggle/clear, move/copy/delete, iPhone download/upload.
@@ -84,7 +87,7 @@ All `@MainActor`:
 - **NpmPackageManager** -- detects `package.json`, provides npm link
 - **MovieManager** -- OMDB movie metadata + poster
 - **VolumesManager** -- monitors mounted volumes via NSWorkspace notifications
-- **iPhoneManager** -- iOS device file browsing/transfer via `ifuse`/`idevice` tools
+- **iPhoneManager** -- iOS device detection, app listing, file browsing (`iPhoneManager.swift`), file operations (`iPhoneManagerFileOps.swift`)
 - **AppSearcher** -- finds apps that can open a file type
 - **AppUninstaller** -- finds leftover app data for cleanup
 - **FolderSizeCache** -- cached folder size calculations (own serial queue)
@@ -165,7 +168,7 @@ Preview views in `Views/Preview/`: TextPreviewView, SyntaxHighlightView, JSONPre
 - `FileExplorerManager` created as `@StateObject` in ContentView, passed down via `@ObservedObject`
 - Change tracking via `.version` counters (ColorTagManager, SelectionManager)
 
-### Keyboard shortcuts (KeyCaptureView in MainContentView.swift)
+### Keyboard shortcuts (KeyCaptureView in KeyboardHandler.swift)
 `NSViewRepresentable` capturing all key events. Priority: context menu -> rename -> tab cycling -> sidebar -> right pane -> search -> normal mode. Normal mode: arrows (navigate/select), Space (toggle selection), Enter (rename), Backspace (go back), Cmd+Backspace (trash), letter (jump), Cmd+T (toggle tree/flat), Cmd+F (search), Ctrl+R (refresh).
 
 ### Context menu
@@ -183,6 +186,7 @@ app/
   Models/
     FileExplorerManager.swift        -- Central state manager
     FileExplorerManagerFileOps.swift  -- File operations extension
+    FileExplorerManagerSearch.swift   -- Search & list cursor extension
     FileItem.swift                   -- FileItem, SelectionManager
     AppSettings.swift                -- Persisted settings singleton
     ShortcutsManager.swift           -- Sidebar pinned folders
@@ -193,20 +197,23 @@ app/
     NpmPackageManager.swift          -- npm package detection
     MovieManager.swift               -- OMDB movie info
     VolumesManager.swift             -- Mounted volumes
-    iPhoneManager.swift              -- iOS device file transfer
+    iPhoneManager.swift              -- iOS device detection, browsing
+    iPhoneManagerFileOps.swift       -- iPhone file download/upload/delete
     AppSearcher.swift                -- App discovery for "Open with"
     AppUninstaller.swift             -- App cleanup/uninstall
     FolderSizeCache.swift            -- Cached folder size calc
     AppUpdater.swift                 -- GitHub release update checker
   Views/
-    MainContentView.swift            -- Main layout, toolbar, keyboard handler
+    MainContentView.swift            -- Main layout, toolbar, dialogs
+    KeyboardHandler.swift            -- KeyEventHandlingView, KeyCaptureView
     ShortcutsView.swift              -- Left sidebar
     ActionsPane.swift                -- Right pane actions
     iPhoneActionsPane.swift          -- iPhone-specific actions
     FileTreeView.swift               -- Tree/flat file listing (primary)
     FileTableView.swift              -- Table file listing (secondary)
     CustomContextMenu.swift          -- Right-click context menu system
-    HelperViews.swift                -- FileListRow, FileDetailsView, EmptyFolderView
+    HelperViews.swift                -- FileListRow, FileDetailsView, EmptyFolderView, RenameTextField
+    FileItemDialog.swift             -- File item dialog (rename, actions, details)
     SharedComponents.swift           -- Drop helpers, SheetHeader, EmptyStateView
     TextStyles.swift                 -- .textStyle() modifier system
     ToastView.swift                  -- Toast notification

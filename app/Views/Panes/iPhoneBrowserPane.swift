@@ -43,16 +43,7 @@ struct iPhoneBrowserPane: View {
 
         // Check if file type is previewable
         let ext = (file.name as NSString).pathExtension.lowercased()
-        let previewableExtensions = Set([
-            "jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "tiff", "avif",
-            "txt", "md", "json", "xml", "yaml", "yml",
-            "py", "js", "ts", "swift", "rb", "go", "rs", "c", "cpp", "h",
-            "html", "css", "sh", "log",
-            "mp3", "m4a", "wav", "aac", "flac", "ogg", "aiff",
-            "mp4", "mov", "m4v"
-        ])
-
-        guard previewableExtensions.contains(ext) else { return }
+        guard FileExtensions.previewable.contains(ext) else { return }
 
         isLoadingPreview = true
         defer { isLoadingPreview = false }
@@ -119,12 +110,10 @@ struct iPhoneFilesContent: View {
 struct iPhoneGalleryContent: View {
     @ObservedObject var deviceManager: iPhoneManager
 
-    private static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif", "tiff", "tif", "avif"]
-
     private var imageFiles: [iPhoneFile] {
         deviceManager.files.filter { file in
             let ext = (file.name as NSString).pathExtension.lowercased()
-            return Self.imageExtensions.contains(ext)
+            return FileExtensions.images.contains(ext)
         }
     }
 
@@ -249,9 +238,7 @@ struct iPhonePreviewPane: View {
         } else if let url = previewURL {
             // Check if it's audio - use iPhone-aware audio preview
             let ext = url.pathExtension.lowercased()
-            let audioExtensions = Set(["mp3", "m4a", "wav", "aac", "flac", "ogg", "aiff"])
-
-            if audioExtensions.contains(ext) {
+            if FileExtensions.audio.contains(ext) {
                 iPhoneAudioPreviewView(url: url, deviceManager: deviceManager)
             } else {
                 PreviewPane(url: url)
@@ -443,13 +430,6 @@ struct iPhoneAudioPreviewView: View {
         .onChange(of: url) { newURL in
             player.load(url: newURL)
         }
-    }
-
-    private func formatTime(_ time: Double) -> String {
-        guard time.isFinite && time >= 0 else { return "0:00" }
-        let minutes = Int(time) / 60
-        let seconds = Int(time) % 60
-        return String(format: "%d:%02d", minutes, seconds)
     }
 
     private func cropAndUpload(keepFrom: Double, keepTo: Double?) async {
@@ -911,56 +891,10 @@ struct iPhoneFileRow: View {
     }
 
     private func formatFileSize(_ size: Int64) -> String {
-        if size < 1024 {
-            return "\(size) b"
-        } else if size < 1024 * 1024 {
-            return String(format: "%.1f kb", Double(size) / 1024)
-        } else if size < 1024 * 1024 * 1024 {
-            return String(format: "%.1f mb", Double(size) / (1024 * 1024))
-        } else {
-            return String(format: "%.1f gb", Double(size) / (1024 * 1024 * 1024))
-        }
+        formatCompactSize(size)
     }
 
     private func formatDate(_ date: Date?) -> String {
-        guard let date else { return "--" }
-
-        let now = Date()
-        let interval = now.timeIntervalSince(date)
-
-        if interval < 60 {
-            return "just now"
-        } else if interval < 3600 {
-            let mins = Int(interval / 60)
-            return "\(mins) minute\(mins == 1 ? "" : "s")"
-        } else if interval < 86400 {
-            let hours = Int(interval / 3600)
-            let mins = Int((interval.truncatingRemainder(dividingBy: 3600)) / 60)
-            if mins > 0 {
-                return "\(hours) hour\(hours == 1 ? "" : "s") & \(mins) min"
-            }
-            return "\(hours) hour\(hours == 1 ? "" : "s")"
-        } else if interval < 86400 * 30 {
-            let days = Int(interval / 86400)
-            let hours = Int((interval.truncatingRemainder(dividingBy: 86400)) / 3600)
-            if hours > 0 && days < 7 {
-                return "\(days) day\(days == 1 ? "" : "s") & \(hours) hour\(hours == 1 ? "" : "s")"
-            }
-            return "\(days) day\(days == 1 ? "" : "s")"
-        } else if interval < 86400 * 365 {
-            let months = Int(interval / (86400 * 30))
-            let days = Int((interval.truncatingRemainder(dividingBy: 86400 * 30)) / 86400)
-            if days > 0 && months < 6 {
-                return "\(months) month\(months == 1 ? "" : "s") & \(days) day\(days == 1 ? "" : "s")"
-            }
-            return "\(months) month\(months == 1 ? "" : "s")"
-        } else {
-            let years = Int(interval / (86400 * 365))
-            let months = Int((interval.truncatingRemainder(dividingBy: 86400 * 365)) / (86400 * 30))
-            if months > 0 {
-                return "\(years) year\(years == 1 ? "" : "s") & \(months) month\(months == 1 ? "" : "s")"
-            }
-            return "\(years) year\(years == 1 ? "" : "s")"
-        }
+        formatRelativeDate(date)
     }
 }

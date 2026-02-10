@@ -108,7 +108,7 @@ struct ComicPageView: View {
 }
 
 enum ComicExtractor {
-    private static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif"]
+    private static let imageExtensions = FileExtensions.comicImages
 
     static func extract(from url: URL) -> Result<([URL], Int), Error> {
         let ext = url.pathExtension.lowercased()

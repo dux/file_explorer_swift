@@ -6,7 +6,7 @@ struct FolderGalleryPreview: View {
     @State private var imageURLs: [URL] = []
     @State private var totalCount: Int = 0
 
-    nonisolated private static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif", "tiff", "tif", "svg", "avif"]
+    nonisolated private static let imageExtensions = FileExtensions.images
 
     var body: some View {
         VStack(spacing: 0) {

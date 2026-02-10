@@ -187,17 +187,6 @@ struct VideoPreviewView: View {
         }
     }
 
-    private func formatTime(_ time: Double) -> String {
-        guard time.isFinite && time >= 0 else { return "0:00" }
-        let hours = Int(time) / 3600
-        let minutes = (Int(time) % 3600) / 60
-        let seconds = Int(time) % 60
-
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
-        }
-        return String(format: "%d:%02d", minutes, seconds)
-    }
 }
 
 struct VideoPlayerRepresentable: NSViewRepresentable {

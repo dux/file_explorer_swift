@@ -95,6 +95,10 @@ class SelectionManager: ObservableObject {
     var count: Int { items.count }
     var isEmpty: Bool { items.isEmpty }
 
+    var sortedItems: [FileItem] {
+        Array(items).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
     var localItems: [FileItem] {
         items.filter { if case .local = $0.source { return true } else { return false } }
     }
@@ -262,6 +266,23 @@ class SelectionManager: ObservableObject {
 
         clear()
         return count
+    }
+
+    func trashLocalItems() -> (trashed: Int, failed: Int) {
+        var trashed = 0
+        var failed = 0
+        for item in localItems {
+            if let url = item.localURL {
+                do {
+                    try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                    trashed += 1
+                } catch {
+                    failed += 1
+                }
+            }
+            remove(item)
+        }
+        return (trashed, failed)
     }
 
     /// Find a unique destination URL, appending " 2", " 3", etc. if needed

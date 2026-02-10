@@ -40,6 +40,79 @@ private final class URLCollector: @unchecked Sendable {
     }
 }
 
+// MARK: - Shared File Extension Sets
+
+enum FileExtensions {
+    static let images: Set<String> = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif", "tiff", "tif", "svg", "avif"]
+    static let audio: Set<String> = ["mp3", "m4a", "wav", "aac", "flac", "ogg", "wma", "aiff", "aif", "alac", "opus"]
+    static let video: Set<String> = ["mp4", "mov", "m4v", "avi", "mkv", "webm", "wmv", "flv", "ogv", "3gp"]
+    static let archives: Set<String> = ["zip", "tar", "tgz", "gz", "bz2", "xz", "rar", "7z"]
+    static let office: Set<String> = ["docx", "xlsx", "pptx", "doc", "xls", "ppt"]
+    static let comicImages: Set<String> = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif"]
+
+    static let previewable: Set<String> = {
+        var s = images
+        s.formUnion(["txt", "md", "json", "xml", "yaml", "yml"])
+        s.formUnion(["py", "js", "ts", "swift", "rb", "go", "rs", "c", "cpp", "h"])
+        s.formUnion(["html", "css", "sh", "log"])
+        s.formUnion(["mp3", "m4a", "wav", "aac", "flac", "ogg", "aiff"])
+        s.formUnion(["mp4", "mov", "m4v"])
+        return s
+    }()
+}
+
+// MARK: - Shared Formatters
+
+func formatTime(_ time: Double) -> String {
+    guard time.isFinite && time >= 0 else { return "0:00" }
+    let hours = Int(time) / 3600
+    let minutes = (Int(time) % 3600) / 60
+    let seconds = Int(time) % 60
+    if hours > 0 {
+        return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+    }
+    return String(format: "%d:%02d", minutes, seconds)
+}
+
+func formatCompactSize(_ bytes: Int64) -> String {
+    if bytes < 1024 { return "\(bytes) b" }
+    if bytes < 1024 * 1024 { return String(format: "%.1f kb", Double(bytes) / 1024) }
+    if bytes < 1024 * 1024 * 1024 { return String(format: "%.1f mb", Double(bytes) / (1024 * 1024)) }
+    return String(format: "%.1f gb", Double(bytes) / (1024 * 1024 * 1024))
+}
+
+func formatRelativeDate(_ date: Date?) -> String {
+    guard let date else { return "--" }
+    let interval = Date().timeIntervalSince(date)
+    if interval < 60 { return "just now" }
+    if interval < 3600 {
+        let mins = Int(interval / 60)
+        return "\(mins) minute\(mins == 1 ? "" : "s")"
+    }
+    if interval < 86400 {
+        let hours = Int(interval / 3600)
+        let mins = Int((interval.truncatingRemainder(dividingBy: 3600)) / 60)
+        if mins > 0 { return "\(hours) hour\(hours == 1 ? "" : "s") & \(mins) min" }
+        return "\(hours) hour\(hours == 1 ? "" : "s")"
+    }
+    if interval < 86400 * 30 {
+        let days = Int(interval / 86400)
+        let hours = Int((interval.truncatingRemainder(dividingBy: 86400)) / 3600)
+        if hours > 0 && days < 7 { return "\(days) day\(days == 1 ? "" : "s") & \(hours) hour\(hours == 1 ? "" : "s")" }
+        return "\(days) day\(days == 1 ? "" : "s")"
+    }
+    if interval < 86400 * 365 {
+        let months = Int(interval / (86400 * 30))
+        let days = Int((interval.truncatingRemainder(dividingBy: 86400 * 30)) / 86400)
+        if days > 0 && months < 6 { return "\(months) month\(months == 1 ? "" : "s") & \(days) day\(days == 1 ? "" : "s")" }
+        return "\(months) month\(months == 1 ? "" : "s")"
+    }
+    let years = Int(interval / (86400 * 365))
+    let months = Int((interval.truncatingRemainder(dividingBy: 86400 * 365)) / (86400 * 30))
+    if months > 0 { return "\(years) year\(years == 1 ? "" : "s") & \(months) month\(months == 1 ? "" : "s")" }
+    return "\(years) year\(years == 1 ? "" : "s")"
+}
+
 // MARK: - Shared Utility Functions
 
 private let sharedDateFormatter: DateFormatter = {

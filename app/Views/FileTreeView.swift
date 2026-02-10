@@ -526,8 +526,5 @@ struct FileTreeRow: View {
 }
 
 private func compactTreeFileSize(_ bytes: Int64) -> String {
-    if bytes < 1024 { return "\(bytes) b" }
-    if bytes < 1024 * 1024 { return String(format: "%.1f kb", Double(bytes) / 1024) }
-    if bytes < 1024 * 1024 * 1024 { return String(format: "%.1f mb", Double(bytes) / (1024 * 1024)) }
-    return String(format: "%.1f gb", Double(bytes) / (1024 * 1024 * 1024))
+    formatCompactSize(bytes)
 }
