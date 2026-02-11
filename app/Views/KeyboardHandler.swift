@@ -16,7 +16,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
     func updateNSView(_ nsView: KeyCaptureView, context: Context) {
         nsView.manager = manager
         // Reclaim focus when no sheet/dialog is active and we don't have focus
-        if manager.renamingItem == nil && !manager.isSearching && !manager.showItemDialog && !manager.showNewFolderDialog {
+        if manager.renamingItem == nil && !manager.isSearching && !manager.showItemDialog && !manager.showNewFolderDialog && !manager.showNewFileDialog {
             if let window = nsView.window {
                 let responder = window.firstResponder
                 // Reclaim if focus is on the window itself (sheet just closed) or already on us
@@ -54,6 +54,15 @@ class KeyCaptureView: NSView {
             if manager.currentPane == .browser {
                 manager.newFolderName = "New Folder"
                 manager.showNewFolderDialog = true
+            }
+            return
+        }
+
+        // Cmd+Shift+F: create new file
+        if event.keyCode == 3 && event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) {
+            if manager.currentPane == .browser {
+                manager.newFileName = "untitled.txt"
+                manager.showNewFileDialog = true
             }
             return
         }

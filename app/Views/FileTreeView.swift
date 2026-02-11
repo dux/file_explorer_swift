@@ -82,16 +82,6 @@ struct FileTreeView: View {
                         if settings.flatFolders {
                             // Compact breadcrumb + flat list
                             FlatBreadcrumbRow(ancestors: ancestors, manager: manager)
-                                .overlay(alignment: .trailing) {
-                                    Button(action: { settings.flatFolders.toggle() }) {
-                                        Text("in line")
-                                            .textStyle(.small)
-                                            .foregroundColor(.secondary.opacity(0.5))
-                                            .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.borderless)
-                                    .padding(.trailing, 100)
-                                }
 
                             ForEach(Array(manager.allItems.enumerated()), id: \.element.id) { index, fileInfo in
                                 FileTreeRow(
@@ -116,18 +106,6 @@ struct FileTreeView: View {
                                     indentStep: indentStep,
                                     manager: manager
                                 )
-                                .overlay(alignment: .trailing) {
-                                    if depth == 0 {
-                                        Button(action: { settings.flatFolders.toggle() }) {
-                                            Text("in tree")
-                                                .textStyle(.small)
-                                                .foregroundColor(.secondary.opacity(0.5))
-                                                .contentShape(Rectangle())
-                                        }
-                                        .buttonStyle(.borderless)
-                                        .padding(.trailing, isCurrent ? 100 : 12)
-                                    }
-                                }
                             }
 
                             // Children rows
@@ -143,6 +121,7 @@ struct FileTreeView: View {
                                 .id(fileInfo.id)
                             }
                         }
+
                     }
 
                     // Empty space area for folder right-click
@@ -175,7 +154,6 @@ struct FileTreeView: View {
                     handleDrop(providers: providers)
                     return true
                 }
-
             }
         }
     }
@@ -269,27 +247,32 @@ struct FlatBreadcrumbRow: View {
                     }
             }
 
-            Spacer()
-
-            if isSelected {
-                Button(action: {
-                    if isPinned {
-                        shortcutsManager.removeFolder(manager.currentPath)
-                    } else {
-                        shortcutsManager.addFolder(manager.currentPath)
-                    }
-                }) {
-                    HStack(spacing: 3) {
-                        Image(systemName: isPinned ? "pin.fill" : "pin")
-                            .textStyle(.small)
-                        Text(isPinned ? "unpin" : "pin folder")
-                            .textStyle(.small)
-                    }
-                    .foregroundColor(isPinned ? .orange : .secondary.opacity(0.5))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.borderless)
+            if manager.hiddenCount > 0 {
+                Text("· \(manager.hiddenCount) hidden")
+                    .textStyle(.buttons)
+                    .foregroundColor(.secondary.opacity(0.6))
             }
+
+            Button(action: {
+                if isPinned {
+                    shortcutsManager.removeFolder(manager.currentPath)
+                } else {
+                    shortcutsManager.addFolder(manager.currentPath)
+                }
+            }) {
+                HStack(spacing: 2) {
+                    Text("·")
+                        .foregroundColor(.secondary.opacity(0.5))
+                    Image(systemName: isPinned ? "pin.fill" : "pin")
+                        .foregroundColor(isPinned ? .orange : .secondary.opacity(0.5))
+                        .offset(y: 2)
+                }
+                .textStyle(.small)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+
+            Spacer()
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 5)
@@ -326,12 +309,10 @@ struct AncestorRow: View {
                 .lineLimit(1)
 
             if isCurrent && manager.hiddenCount > 0 {
-                Text("+\(manager.hiddenCount) hidden")
+                Text("· \(manager.hiddenCount) hidden")
                     .textStyle(.buttons)
                     .foregroundColor(.secondary.opacity(0.6))
             }
-
-            Spacer()
 
             if isCurrent {
                 Button(action: {
@@ -341,17 +322,20 @@ struct AncestorRow: View {
                         shortcutsManager.addFolder(manager.currentPath)
                     }
                 }) {
-                    HStack(spacing: 3) {
+                    HStack(spacing: 2) {
+                        Text("·")
+                            .foregroundColor(.secondary.opacity(0.5))
                         Image(systemName: isPinned ? "pin.fill" : "pin")
-                            .textStyle(.small)
-                        Text(isPinned ? "unpin" : "pin folder")
-                            .textStyle(.small)
+                            .foregroundColor(isPinned ? .orange : .secondary.opacity(0.5))
+                            .offset(y: 2)
                     }
-                    .foregroundColor(isPinned ? .orange : .secondary.opacity(0.5))
+                    .textStyle(.small)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
             }
+
+            Spacer()
         }
         .padding(.leading, CGFloat(depth) * indentStep + 12)
         .padding(.trailing, 12)
@@ -391,6 +375,10 @@ struct FileTreeRow: View {
 
     private var isSelected: Bool {
         manager.selectedIndex == index && manager.selectedItem == url
+    }
+
+    private var isCentralPaneFocused: Bool {
+        !manager.sidebarFocused && !manager.rightPaneFocused
     }
 
     private var isInSelection: Bool {
@@ -495,9 +483,11 @@ struct FileTreeRow: View {
         .padding(.leading, CGFloat(depth) * indentStep + 12)
         .padding(.trailing, 12)
         .padding(.vertical, 5)
-        .background(
-            isSelected ? Color.accentColor.opacity(0.18) :
-            (isInSelection ? Color.green.opacity(0.15) : Color.clear)
+        .rowHighlight(
+            isSelected: isSelected,
+            isFocused: isSelected && isCentralPaneFocused,
+            isHovered: isHovered,
+            isInSelection: isInSelection
         )
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }

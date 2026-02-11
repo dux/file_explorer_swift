@@ -259,6 +259,7 @@ struct HelpSettingsView: View {
                     shortcutRow("Cmd+Backspace", "Move to trash")
                     shortcutRow("Cmd+Shift+D", "Duplicate file")
                     shortcutRow("Cmd+Shift+N", "Create new folder")
+                    shortcutRow("Cmd+Shift+F", "Create new file")
                     shortcutRow("Space", "Add / remove from selection")
                     shortcutRow("Cmd+Shift+C", "Copy selection here")
                     shortcutRow("Cmd+Shift+V", "Move selection here")

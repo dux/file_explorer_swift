@@ -67,9 +67,54 @@ extension View {
     func selectedBackground(_ isSelected: Bool) -> some View {
         background(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
     }
+
+    /// Unified row highlight for all panes.
+    ///
+    /// States (priority high to low):
+    /// - `isFocused`: accent border, clear fill (keyboard selection in active pane)
+    /// - `isSelected`: light blue fill, no border (selected but pane not focused)
+    /// - `isInSelection`: green fill (global selection set)
+    /// - `isHovered`: subtle gray fill
+    /// - default: clear
+    func rowHighlight(
+        isSelected: Bool = false,
+        isFocused: Bool = false,
+        isHovered: Bool = false,
+        isInSelection: Bool = false
+    ) -> some View {
+        self
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(RowHighlightStyle.fill(
+                        isSelected: isSelected,
+                        isFocused: isFocused,
+                        isHovered: isHovered,
+                        isInSelection: isInSelection
+                    ))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isFocused ? Color.accentColor : Color.clear, lineWidth: 2)
+            )
+    }
 }
 
 // MARK: - Selection Colors
+
+enum RowHighlightStyle {
+    static func fill(
+        isSelected: Bool,
+        isFocused: Bool,
+        isHovered: Bool,
+        isInSelection: Bool
+    ) -> Color {
+        if isFocused { return isInSelection ? Color.green.opacity(0.15) : .clear }
+        if isSelected { return Color.accentColor.opacity(0.18) }
+        if isInSelection { return Color.green.opacity(0.15) }
+        if isHovered { return Color.gray.opacity(0.1) }
+        return .clear
+    }
+}
 
 extension Color {
     /// Sidebar row fill: selected (accent), hovered (gray), or clear

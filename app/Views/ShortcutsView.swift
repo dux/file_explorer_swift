@@ -285,13 +285,10 @@ struct ShortcutRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 3)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isFocused ? Color.clear : Color.sidebarRow(isSelected: isSelected || (isApplicationsRow && isShowingLocalApps), isHovered: isHovered))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(isFocused ? Color.accentColor : Color.clear, lineWidth: 2)
+        .rowHighlight(
+            isSelected: isSelected || (isApplicationsRow && isShowingLocalApps),
+            isFocused: isFocused,
+            isHovered: isHovered
         )
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -403,15 +400,10 @@ struct DraggableShortcutRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 3)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isDragTarget ? Color.accentColor.opacity(0.3) :
-                      (isSelected ? Color.accentColor.opacity(0.2) :
-                      (isHovered ? Color.gray.opacity(0.1) : Color.clear)))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke((isFocused || isDragTarget) ? Color.accentColor : Color.clear, lineWidth: 2)
+        .rowHighlight(
+            isSelected: isSelected || isDragTarget,
+            isFocused: isFocused || isDragTarget,
+            isHovered: isHovered
         )
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -482,9 +474,9 @@ struct iPhoneRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 3)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.sidebarRow(isSelected: isSelected, isHovered: isHovered))
+        .rowHighlight(
+            isSelected: isSelected,
+            isHovered: isHovered
         )
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -548,13 +540,10 @@ struct VolumeRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 3)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isFocused ? Color.clear : Color.sidebarRow(isSelected: isSelected, isHovered: isHovered))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(isFocused ? Color.accentColor : Color.clear, lineWidth: 2)
+        .rowHighlight(
+            isSelected: isSelected,
+            isFocused: isFocused,
+            isHovered: isHovered
         )
         .contentShape(Rectangle())
         .onHover { hovering in

@@ -475,7 +475,8 @@ struct ActionButtonBar: View {
             .help("Create new folder")
 
             Button(action: {
-                manager.createNewFile()
+                manager.newFileName = "untitled.txt"
+                manager.showNewFileDialog = true
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "doc.badge.plus")
@@ -488,6 +489,12 @@ struct ActionButtonBar: View {
             .help("Create new text file")
 
             Spacer()
+
+            Button(action: { settings.flatFolders.toggle() }) {
+                Text(settings.flatFolders ? "in line" : "in tree")
+                    .textStyle(.buttons)
+            }
+            .buttonStyle(.bordered)
         }
         .padding(.leading, 13)
         .padding(.trailing, 16)
@@ -495,6 +502,11 @@ struct ActionButtonBar: View {
         .sheet(isPresented: $manager.showNewFolderDialog) {
             NewFolderDialog(folderName: $manager.newFolderName, isPresented: $manager.showNewFolderDialog) {
                 manager.createNewFolder(named: manager.newFolderName)
+            }
+        }
+        .sheet(isPresented: $manager.showNewFileDialog) {
+            NewFileDialog(fileName: $manager.newFileName, isPresented: $manager.showNewFileDialog) {
+                manager.createNewFile(named: manager.newFileName)
             }
         }
         .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
@@ -543,6 +555,55 @@ struct NewFolderDialog: View {
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
                 .disabled(folderName.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 300)
+    }
+}
+
+struct NewFileDialog: View {
+    @Binding var fileName: String
+    @Binding var isPresented: Bool
+    var onCreate: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Image(systemName: "doc.badge.plus")
+                    .font(.system(size: 24))
+                    .foregroundColor(.blue)
+                Text("New File")
+                    .textStyle(.default, weight: .semibold)
+                Spacer()
+            }
+
+            TextField("File name", text: $fileName)
+                .styledInput()
+                .onSubmit {
+                    if !fileName.isEmpty {
+                        onCreate()
+                        isPresented = false
+                    }
+                }
+
+            HStack {
+                Button("Cancel") {
+                    isPresented = false
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Create") {
+                    if !fileName.isEmpty {
+                        onCreate()
+                        isPresented = false
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(fileName.isEmpty)
             }
         }
         .padding(20)

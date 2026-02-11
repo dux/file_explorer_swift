@@ -499,7 +499,8 @@ private struct FolderContextMenuContent: View {
             manager.createNewFolder()
         }))
         items.append(MenuItem(icon: "doc.badge.plus", label: "Create File", action: act {
-            manager.createNewFile()
+            manager.newFileName = "untitled.txt"
+            manager.showNewFileDialog = true
         }))
         return items
     }

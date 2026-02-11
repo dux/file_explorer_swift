@@ -52,6 +52,8 @@ class FileExplorerManager: ObservableObject {
     @Published var showItemDialog: Bool = false
     @Published var showNewFolderDialog: Bool = false
     @Published var newFolderName: String = "New Folder"
+    @Published var showNewFileDialog: Bool = false
+    @Published var newFileName: String = "untitled.txt"
     @Published var showAppSelectorForURL: URL? = nil
 
     // Sidebar focus
@@ -372,11 +374,24 @@ class FileExplorerManager: ObservableObject {
     func sidebarSelectNext() {
         let items = sidebarItems
         guard !items.isEmpty else { return }
-        sidebarIndex = min(sidebarIndex + 1, items.count - 1)
+        var next = sidebarIndex + 1
+        while next < items.count && ShortcutsManager.isDivider(items[next]) {
+            next += 1
+        }
+        if next < items.count {
+            sidebarIndex = next
+        }
     }
 
     func sidebarSelectPrevious() {
-        sidebarIndex = max(sidebarIndex - 1, 0)
+        let items = sidebarItems
+        var prev = sidebarIndex - 1
+        while prev >= 0 && ShortcutsManager.isDivider(items[prev]) {
+            prev -= 1
+        }
+        if prev >= 0 {
+            sidebarIndex = prev
+        }
     }
 
     func sidebarActivate() {

@@ -26,14 +26,16 @@ extension FileExplorerManager {
         }
     }
 
-    func createNewFile() {
-        var fileName = "untitled.txt"
+    func createNewFile(named name: String? = nil) {
+        var fileName = name ?? "untitled.txt"
         var counter = 1
         var newFileURL = currentPath.appendingPathComponent(fileName)
 
-        // Find unique name
+        // Find unique name if exists
+        let baseName = (fileName as NSString).deletingPathExtension
+        let ext = (fileName as NSString).pathExtension
         while fileManager.fileExists(atPath: newFileURL.path) {
-            fileName = "untitled \(counter).txt"
+            fileName = ext.isEmpty ? "\(baseName) \(counter)" : "\(baseName) \(counter).\(ext)"
             newFileURL = currentPath.appendingPathComponent(fileName)
             counter += 1
         }
@@ -41,14 +43,9 @@ extension FileExplorerManager {
         do {
             try "".write(to: newFileURL, atomically: true, encoding: .utf8)
             loadContents()
-            // Select and start rename after UI updates
             selectedItem = newFileURL
             if let index = allItems.firstIndex(where: { $0.url == newFileURL }) {
                 selectedIndex = index
-            }
-            // Delay rename to ensure UI has updated
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [self] in
-                startRename()
             }
         } catch {
             ToastManager.shared.showError("Error creating file: \(error.localizedDescription)")

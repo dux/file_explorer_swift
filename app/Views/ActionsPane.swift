@@ -433,13 +433,9 @@ struct ActionButton: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isFocused ? Color.clear : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(isFocused ? Color.accentColor : Color.clear, lineWidth: 2)
+            .rowHighlight(
+                isFocused: isFocused,
+                isHovered: isHovered
             )
         }
         .buttonStyle(.plain)
@@ -557,13 +553,9 @@ struct PreferredAppButton: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill((isFocused || isDragTarget) ? Color.clear : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke((isFocused || isDragTarget) ? Color.accentColor : Color.clear, lineWidth: 2)
+        .rowHighlight(
+            isFocused: isFocused || isDragTarget,
+            isHovered: isHovered
         )
         .onHover { hovering in
             isHovered = hovering
