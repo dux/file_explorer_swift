@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import WebKit
 
 struct MoviePreviewView: View {
     let folderURL: URL
@@ -190,7 +189,7 @@ struct MoviePreviewView: View {
                 if info.posterURL != "N/A" {
                     Divider()
                     if let posterURL = URL(string: info.posterURL) {
-                        PosterHTMLImageView(imageURL: posterURL)
+                        PosterImageView(imageURL: posterURL)
                             .frame(maxWidth: .infinity)
                             .frame(minHeight: 620, maxHeight: .infinity, alignment: .top)
                     } else {
@@ -257,134 +256,78 @@ struct MoviePreviewView: View {
     }
 }
 
-private struct PosterHTMLImageView: NSViewRepresentable {
+private struct PosterImageView: View {
     let imageURL: URL
+    @State private var nsImage: NSImage?
+    @State private var failed = false
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    func makeNSView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.setValue(false, forKey: "drawsBackground")
-        context.coordinator.load(url: imageURL, in: webView)
-        return webView
-    }
-
-    func updateNSView(_ nsView: WKWebView, context: Context) {
-        context.coordinator.load(url: imageURL, in: nsView)
-    }
-
-    final class Coordinator {
-        private var lastURL: URL?
-
-        @MainActor
-        func load(url: URL, in webView: WKWebView) {
-            guard lastURL != url else { return }
-            lastURL = url
-            webView.loadHTMLString(Self.html(for: url), baseURL: nil)
-        }
-
-        private static func html(for url: URL) -> String {
-            let jsURL = escapeForSingleQuotedJS(upgradePosterURL(url).absoluteString)
-            return """
-            <!doctype html>
-            <html>
-            <head>
-              <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
-              <style>
-                html, body {
-                  margin: 0;
-                  padding: 0;
-                  width: 100%;
-                  height: 100%;
-                  overflow: hidden;
-                  background: transparent;
-                  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-                }
-                #wrap {
-                  width: 100%;
-                  height: 100%;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  position: relative;
-                }
-                #spinner {
-                  width: 20px;
-                  height: 20px;
-                  border: 2px solid rgba(128,128,128,0.25);
-                  border-top-color: rgba(128,128,128,0.95);
-                  border-radius: 50%;
-                  animation: spin 0.8s linear infinite;
-                }
-                #img {
-                  width: 100%;
-                  height: 100%;
-                  object-fit: contain;
-                  object-position: top center;
-                  display: none;
-                }
-                #error {
-                  display: none;
-                  color: #8a8a8a;
-                  font-size: 12px;
-                }
-                @keyframes spin {
-                  to { transform: rotate(360deg); }
-                }
-              </style>
-            </head>
-            <body>
-              <div id=\"wrap\">
-                <div id=\"spinner\"></div>
-                <img id=\"img\" alt=\"Poster\" />
-                <div id=\"error\">Poster unavailable</div>
-              </div>
-              <script>
-                const img = document.getElementById('img');
-                const spinner = document.getElementById('spinner');
-                const error = document.getElementById('error');
-
-                img.onload = function () {
-                  spinner.style.display = 'none';
-                  error.style.display = 'none';
-                  img.style.display = 'block';
-                };
-
-                img.onerror = function () {
-                  spinner.style.display = 'none';
-                  img.style.display = 'none';
-                  error.style.display = 'block';
-                };
-
-                img.src = '\(jsURL)';
-              </script>
-            </body>
-            </html>
-            """
-        }
-
-        private static func escapeForSingleQuotedJS(_ input: String) -> String {
-            var out = input.replacingOccurrences(of: "\\", with: "\\\\")
-            out = out.replacingOccurrences(of: "'", with: "\\'")
-            out = out.replacingOccurrences(of: "\n", with: "")
-            out = out.replacingOccurrences(of: "\r", with: "")
-            return out
-        }
-
-        // IMDb posters often include a size token like ._V1_...jpg; request a larger height to preserve poster framing.
-        private static func upgradePosterURL(_ url: URL) -> URL {
-            let absolute = url.absoluteString
-            guard absolute.contains("media-amazon.com"),
-                  let range = absolute.range(of: "._V1_") else {
-                return url
+    var body: some View {
+        Group {
+            if let nsImage {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else if failed {
+                Text("Poster unavailable")
+                    .textStyle(.small)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+            } else {
+                ProgressView()
+                    .scaleEffect(0.8)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
             }
-
-            let prefix = absolute[..<range.lowerBound]
-            let upgraded = "\(prefix)._V1_SY2000_.jpg"
-            return URL(string: upgraded) ?? url
         }
+        .task(id: imageURL) {
+            nsImage = nil
+            failed = false
+            await loadImage()
+        }
+    }
+
+    private func loadImage() async {
+        let url = Self.upgradePosterURL(imageURL)
+        if let cached = Self.imageCache.object(forKey: url.absoluteString as NSString) {
+            nsImage = cached
+            return
+        }
+        let data: Data? = await Task.detached(priority: .utility) {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                return data
+            } catch {
+                return nil
+            }
+        }.value
+        if let data, let image = NSImage(data: data) {
+            Self.imageCache.setObject(image, forKey: url.absoluteString as NSString)
+            nsImage = image
+        } else {
+            failed = true
+        }
+    }
+
+    // MARK: - Memory Cache
+
+    private static let imageCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 30
+        return cache
+    }()
+
+    // MARK: - URL Upgrade
+
+    // IMDb posters often include a size token like ._V1_...jpg; request a larger height to preserve poster framing.
+    private static func upgradePosterURL(_ url: URL) -> URL {
+        let absolute = url.absoluteString
+        guard absolute.contains("media-amazon.com"),
+              let range = absolute.range(of: "._V1_") else {
+            return url
+        }
+        let prefix = absolute[..<range.lowerBound]
+        let upgraded = "\(prefix)._V1_SY2000_.jpg"
+        return URL(string: upgraded) ?? url
     }
 }

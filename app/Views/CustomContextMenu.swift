@@ -174,8 +174,25 @@ private struct CustomContextMenuContent: View {
         { contextMenu.dismissAndRun(action) }
     }
 
+    @ObservedObject private var selection = SelectionManager.shared
+
     private var menuItems: [MenuItem] {
         var items: [MenuItem] = []
+        if isDirectory && !selection.localItems.isEmpty {
+            let count = selection.localItems.count
+            items.append(MenuItem(icon: "doc.on.doc", label: "Copy \(count) here", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
+                let copied = SelectionManager.shared.copyLocalItems(to: url)
+                SelectionManager.shared.clear()
+                ToastManager.shared.show("Copied \(copied) file(s)")
+                manager.refresh()
+            }))
+            items.append(MenuItem(icon: "folder", label: "Move \(count) here", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
+                let moved = SelectionManager.shared.moveLocalItems(to: url)
+                SelectionManager.shared.clear()
+                ToastManager.shared.show("Moved \(moved) file(s)")
+                manager.refresh()
+            }))
+        }
         items.append(MenuItem(icon: "info.circle", label: "View Details", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url, isDirectory] in
             contextMenu.detailsURL = url
             contextMenu.detailsIsDirectory = isDirectory
@@ -198,6 +215,7 @@ private struct CustomContextMenuContent: View {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setString(url.path, forType: .string)
+            ToastManager.shared.show("Path copied to clipboard")
         }))
         items.append(MenuItem(icon: "pencil", label: "Rename", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
             manager.selectedItem = url
@@ -254,9 +272,9 @@ private struct CustomContextMenuContent: View {
             HStack(alignment: .center, spacing: 10) {
                 Group {
                     if isDirectory {
-                        FolderIconView(url: url, size: 18, selected: false)
+                        FolderIconView(url: url, size: 18)
                     } else {
-                        Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: false, selected: false))
+                        Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: false))
                             .resizable()
                             .interpolation(.high)
                             .frame(width: 18, height: 18)
@@ -303,7 +321,7 @@ private struct CustomContextMenuContent: View {
 
     @ViewBuilder
     private func menuRowView(item: MenuItem, index: Int, items: [MenuItem]) -> some View {
-        let needsDivider = index == 5 || index == sectionBreak2(items) || index == sectionBreak3(items)
+        let needsDivider = index == sectionBreakAfterSelection(items) || index == sectionBreakAfterCopyPath(items) || index == sectionBreak2(items) || index == sectionBreak3(items)
         let focused = contextMenu.focusedIndex == index
         if needsDivider {
             ContextMenuDivider()
@@ -313,6 +331,16 @@ private struct CustomContextMenuContent: View {
         } else {
             ContextMenuRow(icon: item.icon, label: item.label, isDestructive: item.isDestructive, isFocused: focused, action: item.action)
         }
+    }
+
+    private func sectionBreakAfterSelection(_ items: [MenuItem]) -> Int {
+        guard let idx = items.firstIndex(where: { $0.label == "View Details" }) else { return -1 }
+        return idx > 0 ? idx : -1
+    }
+
+    private func sectionBreakAfterCopyPath(_ items: [MenuItem]) -> Int {
+        guard let idx = items.firstIndex(where: { $0.label == "Copy Path" }) else { return -1 }
+        return idx + 1
     }
 
     private func sectionBreak2(_ items: [MenuItem]) -> Int {
@@ -433,24 +461,47 @@ private struct FolderContextMenuContent: View {
         let action: () -> Void
     }
 
+    @ObservedObject private var selection = SelectionManager.shared
+
     private var menuItems: [MenuItem] {
-        [
-            MenuItem(icon: "info.circle", label: "View Details", action: act { [url] in
-                contextMenu.detailsURL = url
-                contextMenu.detailsIsDirectory = true
-                contextMenu.showDetails = true
-            }),
-            MenuItem(icon: "face.smiling", label: "Assign Icon", action: act { [url] in
-                contextMenu.emojiPickerURL = url
-                contextMenu.showEmojiPicker = true
-            }),
-            MenuItem(icon: "folder.badge.plus", label: "Create Folder", action: act {
-                manager.createNewFolder()
-            }),
-            MenuItem(icon: "doc.badge.plus", label: "Create File", action: act {
-                manager.createNewFile()
-            })
-        ]
+        var items: [MenuItem] = []
+        if !selection.localItems.isEmpty {
+            let count = selection.localItems.count
+            items.append(MenuItem(icon: "doc.on.doc", label: "Copy \(count) here", action: act { [url] in
+                let copied = SelectionManager.shared.copyLocalItems(to: url)
+                SelectionManager.shared.clear()
+                ToastManager.shared.show("Copied \(copied) file(s)")
+                manager.refresh()
+            }))
+            items.append(MenuItem(icon: "folder", label: "Move \(count) here", action: act { [url] in
+                let moved = SelectionManager.shared.moveLocalItems(to: url)
+                SelectionManager.shared.clear()
+                ToastManager.shared.show("Moved \(moved) file(s)")
+                manager.refresh()
+            }))
+        }
+        items.append(MenuItem(icon: "info.circle", label: "View Details", action: act { [url] in
+            contextMenu.detailsURL = url
+            contextMenu.detailsIsDirectory = true
+            contextMenu.showDetails = true
+        }))
+        items.append(MenuItem(icon: "face.smiling", label: "Assign Icon", action: act { [url] in
+            contextMenu.emojiPickerURL = url
+            contextMenu.showEmojiPicker = true
+        }))
+        items.append(MenuItem(icon: "doc.on.clipboard", label: "Copy Path", action: act { [url] in
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(url.path, forType: .string)
+            ToastManager.shared.show("Path copied to clipboard")
+        }))
+        items.append(MenuItem(icon: "folder.badge.plus", label: "Create Folder", action: act {
+            manager.createNewFolder()
+        }))
+        items.append(MenuItem(icon: "doc.badge.plus", label: "Create File", action: act {
+            manager.createNewFile()
+        }))
+        return items
     }
 
     var body: some View {
@@ -458,7 +509,7 @@ private struct FolderContextMenuContent: View {
         VStack(alignment: .leading, spacing: 0) {
             // Title: folder icon + name
             HStack(alignment: .center, spacing: 10) {
-                FolderIconView(url: url, size: 18, selected: false)
+                FolderIconView(url: url, size: 18)
                     .frame(width: 18, height: 18)
                 Text(url.lastPathComponent)
                     .textStyle(.default, weight: .semibold)
@@ -476,6 +527,9 @@ private struct FolderContextMenuContent: View {
                 .padding(.bottom, 4)
 
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                if item.label == "View Details" && index > 0 {
+                    ContextMenuDivider()
+                }
                 let focused = contextMenu.focusedIndex == index
                 ContextMenuRow(icon: item.icon, label: item.label, isFocused: focused, action: item.action)
             }

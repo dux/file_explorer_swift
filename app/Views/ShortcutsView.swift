@@ -224,7 +224,7 @@ struct ShortcutRow: View {
         .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill((isSelected || (isApplicationsRow && isShowingLocalApps)) ? Color.accentColor.opacity(0.2) : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
+                .fill(isFocused ? Color.clear : Color.sidebarRow(isSelected: isSelected || (isApplicationsRow && isShowingLocalApps), isHovered: isHovered))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
@@ -284,8 +284,9 @@ struct DraggableShortcutRow: View {
                     .foregroundColor(.accentColor)
                     .frame(width: 22, height: 22)
             } else {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path))
+                Image(nsImage: IconProvider.shared.icon(for: item.url, isDirectory: true))
                     .resizable()
+                    .interpolation(.high)
                     .frame(width: 22, height: 22)
             }
 
@@ -420,7 +421,7 @@ struct iPhoneRow: View {
         .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
+                .fill(Color.sidebarRow(isSelected: isSelected, isHovered: isHovered))
         )
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -486,7 +487,7 @@ struct VolumeRow: View {
         .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
+                .fill(isFocused ? Color.clear : Color.sidebarRow(isSelected: isSelected, isHovered: isHovered))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)

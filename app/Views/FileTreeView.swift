@@ -242,7 +242,7 @@ struct FlatBreadcrumbRow: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            FolderIconView(url: manager.currentPath, size: 20, selected: isSelected)
+            FolderIconView(url: manager.currentPath, size: 20)
 
             ForEach(Array(ancestors.enumerated()), id: \.element.url) { index, ancestor in
                 if index > 0 {
@@ -254,7 +254,7 @@ struct FlatBreadcrumbRow: View {
                 let isCurrent = ancestor.url.path == manager.currentPath.path
                 Text(ancestor.name)
                     .textStyle(.default, weight: isCurrent ? .semibold : .regular)
-                    .foregroundColor(isSelected ? .white : (isCurrent ? .primary : .secondary))
+                    .foregroundColor(isCurrent ? .primary : .secondary)
                     .lineLimit(1)
                     .onTapGesture {
                         if !isCurrent {
@@ -269,35 +269,31 @@ struct FlatBreadcrumbRow: View {
                     }
             }
 
-            if manager.hiddenCount > 0 {
-                Text("+\(manager.hiddenCount) hidden")
-                    .textStyle(.small)
-                    .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary.opacity(0.6))
-            }
-
             Spacer()
 
-            Button(action: {
-                if isPinned {
-                    shortcutsManager.removeFolder(manager.currentPath)
-                } else {
-                    shortcutsManager.addFolder(manager.currentPath)
+            if isSelected {
+                Button(action: {
+                    if isPinned {
+                        shortcutsManager.removeFolder(manager.currentPath)
+                    } else {
+                        shortcutsManager.addFolder(manager.currentPath)
+                    }
+                }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: isPinned ? "pin.fill" : "pin")
+                            .textStyle(.small)
+                        Text(isPinned ? "unpin" : "pin folder")
+                            .textStyle(.small)
+                    }
+                    .foregroundColor(isPinned ? .orange : .secondary.opacity(0.5))
+                    .contentShape(Rectangle())
                 }
-            }) {
-                HStack(spacing: 3) {
-                    Image(systemName: isPinned ? "pin.fill" : "pin")
-                        .textStyle(.small)
-                    Text(isPinned ? "unpin" : "pin folder")
-                        .textStyle(.small)
-                }
-                .foregroundColor(isPinned ? .orange : .secondary.opacity(0.5))
-                .contentShape(Rectangle())
+                .buttonStyle(.borderless)
             }
-            .buttonStyle(.borderless)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 5)
-        .background(isSelected ? Color.accentColor : Color.clear)
+        .selectedBackground(isSelected)
         .contentShape(Rectangle())
     }
 }
@@ -322,17 +318,17 @@ struct AncestorRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            FolderIconView(url: url, size: 20, selected: isSelected)
+            FolderIconView(url: url, size: 20)
 
             Text(name)
                 .textStyle(.default, weight: isCurrent ? .semibold : .regular)
-                .foregroundColor(isSelected ? .white : (isCurrent ? .primary : .secondary))
+                .foregroundColor(isCurrent ? .primary : .secondary)
                 .lineLimit(1)
 
             if isCurrent && manager.hiddenCount > 0 {
                 Text("+\(manager.hiddenCount) hidden")
                     .textStyle(.buttons)
-                    .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary.opacity(0.6))
+                    .foregroundColor(.secondary.opacity(0.6))
             }
 
             Spacer()
@@ -360,7 +356,7 @@ struct AncestorRow: View {
         .padding(.leading, CGFloat(depth) * indentStep + 12)
         .padding(.trailing, 12)
         .padding(.vertical, 4)
-        .background(isSelected ? Color.accentColor : Color.clear)
+        .selectedBackground(isSelected)
         .contentShape(Rectangle())
         .onTapGesture {
             if isCurrent {
@@ -442,9 +438,9 @@ struct FileTreeRow: View {
     var body: some View {
         HStack(spacing: 6) {
             if isDirectory {
-                FolderIconView(url: url, size: 22, selected: isSelected)
+                FolderIconView(url: url, size: 22)
             } else {
-                Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: false, selected: isSelected))
+                Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: false))
                     .resizable()
                     .interpolation(.high)
                     .frame(width: 22, height: 22)
@@ -453,7 +449,7 @@ struct FileTreeRow: View {
             Text(url.lastPathComponent)
                 .textStyle(.default)
                 .lineLimit(1)
-                .foregroundColor(isSelected ? .white : .primary)
+                .foregroundColor(.primary)
 
             if !fileColors.isEmpty {
                 HStack(spacing: 2) {
@@ -470,13 +466,13 @@ struct FileTreeRow: View {
             if manager.sortMode == .modified && !humanReadableDate.isEmpty {
                 Text(humanReadableDate)
                     .textStyle(.buttons)
-                    .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
+                    .foregroundColor(.secondary)
             }
 
             if !fileSizeDisplay.isEmpty {
                 Text(fileSizeDisplay)
                     .textStyle(.buttons)
-                    .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
+                    .foregroundColor(.secondary)
                     .frame(width: 60, alignment: .trailing)
             }
         }
@@ -484,7 +480,7 @@ struct FileTreeRow: View {
         .padding(.trailing, 12)
         .padding(.vertical, 5)
         .background(
-            isSelected ? Color.accentColor :
+            isSelected ? Color.accentColor.opacity(0.18) :
             (isInSelection ? Color.green.opacity(0.15) : Color.clear)
         )
         .contentShape(Rectangle())

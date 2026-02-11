@@ -307,19 +307,19 @@ struct ArchiveEntryRow: View {
             Text(entry.name)
                 .textStyle(.default)
                 .lineLimit(1)
-                .foregroundColor(isSelected ? .white : .primary)
+                .foregroundColor(.primary)
 
             Spacer()
 
             Text(entry.isDirectory ? "" : entry.displaySize)
                 .textStyle(.small)
-                .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
+                .foregroundColor(.secondary)
                 .frame(width: 60, alignment: .trailing)
         }
         .padding(.horizontal, 12)
         .padding(.trailing, 12)
         .padding(.vertical, 5)
-        .background(isSelected ? Color.accentColor : Color.clear)
+        .selectedBackground(isSelected)
         .cornerRadius(4)
         .contentShape(Rectangle())
         .contextMenu {

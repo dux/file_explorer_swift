@@ -62,4 +62,18 @@ extension View {
     func textStyle(_ style: TextStyle, weight: Font.Weight? = nil, mono: Bool = false) -> some View {
         modifier(TextStyleModifier(style: style, weight: weight, mono: mono))
     }
+
+    /// Selected row background — use on flat rows (FileTreeRow, ArchiveRow, etc.)
+    func selectedBackground(_ isSelected: Bool) -> some View {
+        background(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+    }
+}
+
+// MARK: - Selection Colors
+
+extension Color {
+    /// Sidebar row fill: selected (accent), hovered (gray), or clear
+    static func sidebarRow(isSelected: Bool, isHovered: Bool = false) -> Color {
+        isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? Color.gray.opacity(0.1) : Color.clear)
+    }
 }

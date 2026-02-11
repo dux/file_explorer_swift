@@ -347,6 +347,7 @@ struct FileContextMenuItems: View {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setString(url.path, forType: .string)
+            ToastManager.shared.show("Path copied to clipboard")
         }) {
             Label("Copy Path", systemImage: "doc.on.clipboard")
         }

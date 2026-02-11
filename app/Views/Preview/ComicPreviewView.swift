@@ -33,16 +33,24 @@ struct ComicPreviewView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 GeometryReader { geometry in
+                    let halfWidth = floor(geometry.size.width / 2)
                     ScrollView {
-                        LazyVStack(spacing: 0) {
-                            if totalPages > pages.count {
+                        LazyVStack(spacing: 2) {
+                            if totalPages > 0 {
                                 Text("\(totalPages) pages")
                                     .textStyle(.small)
                                     .foregroundColor(.secondary)
                                     .padding(.vertical, 4)
                             }
-                            ForEach(Array(pages.enumerated()), id: \.offset) { _, pageURL in
-                                ComicPageView(url: pageURL, width: geometry.size.width)
+                            ForEach(spreads, id: \.id) { spread in
+                                HStack(spacing: 2) {
+                                    ComicPageView(url: spread.left, width: halfWidth)
+                                    if let right = spread.right {
+                                        ComicPageView(url: right, width: halfWidth)
+                                    } else {
+                                        Color.clear.frame(width: halfWidth)
+                                    }
+                                }
                             }
                         }
                     }
@@ -51,6 +59,16 @@ struct ComicPreviewView: View {
         }
         .task(id: url) {
             await extractPages()
+        }
+    }
+
+    private var spreads: [PageSpread] {
+        stride(from: 0, to: pages.count, by: 2).map { i in
+            PageSpread(
+                left: pages[i],
+                right: i + 1 < pages.count ? pages[i + 1] : nil,
+                id: i
+            )
         }
     }
 
@@ -73,6 +91,12 @@ struct ComicPreviewView: View {
         }
         isLoading = false
     }
+}
+
+private struct PageSpread: Identifiable {
+    let left: URL
+    let right: URL?
+    let id: Int
 }
 
 struct ComicPageView: View {

@@ -35,8 +35,8 @@ struct KeyboardShortcutBar: View {
             dot
             shortcutPair("Space", "select")
             if !selection.isEmpty {
-                shortcutPair("\u{2318}C", "copy")
-                shortcutPair("\u{2318}M", "move")
+                shortcutPair("\u{2318}\u{21E7}C", "copy")
+                shortcutPair("\u{2318}\u{21E7}V", "move")
             }
             shortcutPair("\u{2318}\u{232B}", "trash")
         }

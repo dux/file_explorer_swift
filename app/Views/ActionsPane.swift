@@ -17,6 +17,7 @@ struct ActionsPane: View {
     @State private var showUninstallConfirm = false
     @State private var appDataPaths: [URL] = []
     @State private var showEmojiPicker = false
+    @State private var showExecuteSheet = false
     @ObservedObject private var folderIconManager = FolderIconManager.shared
 
     private var targetURL: URL {
@@ -53,8 +54,12 @@ struct ActionsPane: View {
         targetURL.pathExtension.lowercased() == "app" && isDirectory
     }
 
+    private var isExecutableFile: Bool {
+        !isDirectory && FileManager.default.isExecutableFile(atPath: targetURL.path)
+    }
+
     private var hasActionButtons: Bool {
-        isAppBundle || isImageFile || isOfficeFile || gitRepo.gitRepoInfo != nil || npmPackage.npmPackageInfo != nil
+        isAppBundle || isImageFile || isOfficeFile || isExecutableFile || gitRepo.gitRepoInfo != nil || npmPackage.npmPackageInfo != nil
     }
 
     @ViewBuilder
@@ -86,6 +91,11 @@ struct ActionsPane: View {
                 if isOfficeFile {
                     ActionButton(icon: "doc.text.magnifyingglass", title: "Document Info", color: .indigo, flatIndex: 1, manager: manager) {
                         showOfficeMetadataSheet = true
+                    }
+                }
+                if isExecutableFile {
+                    ActionButton(icon: "terminal", title: "Execute", color: .green, flatIndex: 1, manager: manager) {
+                        showExecuteSheet = true
                     }
                 }
                 if let gitInfo = gitRepo.gitRepoInfo {
@@ -152,6 +162,11 @@ struct ActionsPane: View {
         if isOfficeFile {
             items.append(RightPaneItem(id: "office", title: "Document Info") {
                 self.showOfficeMetadataSheet = true
+            })
+        }
+        if isExecutableFile {
+            items.append(RightPaneItem(id: "execute", title: "Execute") {
+                self.showExecuteSheet = true
             })
         }
         items.append(RightPaneItem(id: "selectapp", title: "Select app...") {
@@ -357,6 +372,13 @@ struct ActionsPane: View {
                 manager.refresh()
             }
         }
+        .sheet(isPresented: $showExecuteSheet) {
+            ExecuteScriptSheet(
+                scriptURL: targetURL,
+                initialWorkingDirectory: manager.currentPath,
+                isPresented: $showExecuteSheet
+            )
+        }
     }
 
     private func copyPath() {
@@ -400,12 +422,12 @@ struct ActionButton: View {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .textStyle(.default)
-                    .foregroundColor(isFocused ? .white : color)
+                    .foregroundColor(color)
                     .frame(width: 22, height: 22)
 
                 Text(title)
                     .textStyle(.default)
-                    .foregroundColor(isFocused ? .white : .primary)
+                    .foregroundColor(.primary)
 
                 Spacer()
             }
@@ -413,7 +435,11 @@ struct ActionButton: View {
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isFocused ? Color.accentColor : (isHovered ? Color.gray.opacity(0.15) : Color.clear))
+                    .fill(isFocused ? Color.clear : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isFocused ? Color.accentColor : Color.clear, lineWidth: 2)
             )
         }
         .buttonStyle(.plain)
@@ -439,7 +465,7 @@ struct ActionButtonWithIcon: View {
             HStack(spacing: 10) {
                 Image(nsImage: icon)
                     .resizable()
-                    .frame(width: 22, height: 22)
+                    .frame(width: 24, height: 24)
 
                 Text(title)
                     .textStyle(.default)
@@ -498,21 +524,21 @@ struct PreferredAppButton: View {
                 HStack(spacing: 10) {
                     Image(nsImage: icon)
                         .resizable()
-                        .frame(width: 22, height: 22)
+                        .frame(width: 24, height: 24)
 
                     Text(title)
                         .textStyle(.default)
-                        .foregroundColor(isFocused ? .white : .primary)
+                        .foregroundColor(.primary)
 
                     if isDefault {
                         Text("default")
                             .textStyle(.small, weight: .medium)
-                            .foregroundColor(isFocused ? .white.opacity(0.7) : .secondary)
+                            .foregroundColor(.secondary)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(
                                 RoundedRectangle(cornerRadius: 3)
-                                    .fill(isFocused ? Color.white.opacity(0.2) : Color.gray.opacity(0.15))
+                                    .fill(Color.gray.opacity(0.15))
                             )
                     }
 
@@ -524,7 +550,7 @@ struct PreferredAppButton: View {
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
                     .textStyle(.default)
-                    .foregroundColor(isFocused ? .white.opacity(0.7) : .secondary)
+                    .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
             .opacity(isHovered || isFocused ? 1 : 0)
@@ -533,13 +559,11 @@ struct PreferredAppButton: View {
         .padding(.vertical, 4)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isFocused ? Color.accentColor :
-                      (isDragTarget ? Color.accentColor.opacity(0.2) :
-                      (isHovered ? Color.gray.opacity(0.15) : Color.clear)))
+                .fill((isFocused || isDragTarget) ? Color.clear : (isHovered ? Color.gray.opacity(0.1) : Color.clear))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isDragTarget ? Color.accentColor : Color.clear, lineWidth: 2)
+                .stroke((isFocused || isDragTarget) ? Color.accentColor : Color.clear, lineWidth: 2)
         )
         .onHover { hovering in
             isHovered = hovering

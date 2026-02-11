@@ -62,7 +62,6 @@ class FolderIconManager: ObservableObject {
 struct FolderIconView: View {
     let url: URL
     let size: CGFloat
-    var selected: Bool = false
     @ObservedObject private var iconManager = FolderIconManager.shared
 
     var body: some View {
@@ -71,7 +70,7 @@ struct FolderIconView: View {
                 .font(.system(size: size * 0.85))
                 .frame(width: size, height: size)
         } else {
-            Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: true, selected: selected))
+            Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: true))
                 .resizable()
                 .interpolation(.high)
                 .frame(width: size, height: size)

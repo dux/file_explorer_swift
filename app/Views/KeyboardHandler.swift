@@ -261,8 +261,8 @@ class KeyCaptureView: NSView {
                 manager.selectAllFiles()
                 return true
             }
-        case 8:
-            if event.modifierFlags.contains(.command) {
+        case 8: // C key
+            if event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) {
                 let selection = SelectionManager.shared
                 guard !selection.items.isEmpty else { return false }
                 let count = selection.copyLocalItems(to: manager.currentPath)
@@ -310,7 +310,7 @@ class KeyCaptureView: NSView {
                 manager.startRename()
             }
             return true
-        case 51:
+        case 51: // Backspace
             if event.modifierFlags.contains(.command) {
                 if let item = manager.selectedItem {
                     manager.moveToTrash(item)
@@ -333,8 +333,8 @@ class KeyCaptureView: NSView {
         case 47: // Period key - show context menu
             showContextMenuForSelected(manager)
             return true
-        case 46: // M key
-            if event.modifierFlags.contains(.command) {
+        case 9: // V key - Cmd+Shift+V: move selection here
+            if event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) {
                 let selection = SelectionManager.shared
                 guard !selection.items.isEmpty else { return false }
                 let count = selection.moveLocalItems(to: manager.currentPath)
@@ -343,12 +343,13 @@ class KeyCaptureView: NSView {
                 manager.refresh()
                 return true
             }
-            if event.modifierFlags.contains(.control) {
+        case 46: // M key - Cmd+Shift+M: context menu
+            if event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) {
                 showContextMenuForSelected(manager)
                 return true
             }
-        case 2: // D key
-            if event.modifierFlags.contains(.command) {
+        case 2: // D key - Cmd+Shift+D: duplicate
+            if event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) {
                 let selection = SelectionManager.shared
                 let locals = selection.items.filter { if case .local = $0.source { return true } else { return false } }
                 guard locals.count == 1, let url = locals.first?.localURL else { return false }

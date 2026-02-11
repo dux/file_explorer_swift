@@ -102,10 +102,26 @@ class FileExplorerManager: ObservableObject {
         directories + files
     }
 
+    private static let lastFolderFile = AppSettings.configBase.appendingPathComponent("last-folder.txt")
+
+    private func saveLastFolder(_ url: URL) {
+        try? url.path.write(to: Self.lastFolderFile, atomically: true, encoding: .utf8)
+    }
+
+    private static func loadLastFolder() -> URL? {
+        guard let path = try? String(contentsOf: lastFolderFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+              !path.isEmpty else { return nil }
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else { return nil }
+        return URL(fileURLWithPath: path)
+    }
+
     init() {
         // Use initial path from command line argument if provided
         if let initialPath = FileExplorerApp.initialPath {
             self.currentPath = initialPath
+        } else if let lastFolder = Self.loadLastFolder() {
+            self.currentPath = lastFolder
         } else {
             self.currentPath = fileManager.homeDirectoryForCurrentUser
         }
@@ -325,6 +341,7 @@ class FileExplorerManager: ObservableObject {
             suppressSortDidSet = false
             loadContents()
             restoreSelection()
+            saveLastFolder(targetURL)
         } else {
             selectedItem = targetURL
             if let index = allItems.firstIndex(where: { $0.url == targetURL }) {

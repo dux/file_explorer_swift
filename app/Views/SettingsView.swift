@@ -257,7 +257,11 @@ struct HelpSettingsView: View {
                     shortcutRow("Cmd+F", "Toggle search (uses fd)")
                     shortcutRow("Cmd+O", "Open with preferred app")
                     shortcutRow("Cmd+Backspace", "Move to trash")
+                    shortcutRow("Cmd+Shift+D", "Duplicate file")
+                    shortcutRow("Cmd+Shift+N", "Create new folder")
                     shortcutRow("Space", "Add / remove from selection")
+                    shortcutRow("Cmd+Shift+C", "Copy selection here")
+                    shortcutRow("Cmd+Shift+V", "Move selection here")
                     shortcutRow("Cmd+A", "Select all files")
                     shortcutRow("Ctrl+R", "Refresh directory")
                     shortcutRow("Cmd+T", "Toggle tree / flat view")
@@ -275,7 +279,7 @@ struct HelpSettingsView: View {
                 }
 
                 helpSection("Right-Click Menu") {
-                    shortcutRow(". / Ctrl+M", "Open context menu for selected file")
+                    shortcutRow(". / Cmd+Shift+M", "Open context menu for selected file")
                     helpText("View details, copy path, show in Finder, duplicate, add to zip, extract archive, color labels, enable unsigned app, move to trash.")
                 }
 
@@ -302,10 +306,10 @@ struct HelpSettingsView: View {
     }
 
     private func helpSection(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .textStyle(.title)
-                .padding(.bottom, 2)
+                .padding(.bottom, 4)
             content()
         }
     }
@@ -314,11 +318,12 @@ struct HelpSettingsView: View {
         HStack(spacing: 0) {
             Text(keys)
                 .font(.system(size: 13, design: .monospaced))
-                .frame(width: 160, alignment: .leading)
+                .frame(width: 200, alignment: .leading)
             Text(desc)
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
         }
+        .padding(.vertical, 1)
     }
 
     private func helpText(_ text: String) -> some View {

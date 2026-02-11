@@ -263,19 +263,109 @@ final class IconProvider {
     // MARK: - Public API
 
     /// Returns an NSImage for the given file URL.
-    /// Uses catppuccin icon if available, else macOS system icon.
-    /// When `selected` is true, returns a white-tinted version for blue highlight backgrounds.
-    func icon(for url: URL, isDirectory: Bool, selected: Bool = false) -> NSImage {
+    func icon(for url: URL, isDirectory: Bool) -> NSImage {
         if isDirectory {
             return folderIcon(for: url)
-        }
-        if selected {
-            return fileIconSelected(for: url)
         }
         return fileIcon(for: url)
     }
 
+    // MARK: - Folder name -> specialized SVG mapping
+
+    private static let folderMap: [String: String] = [
+        "api": "folder_api",
+        "app": "folder_app",
+        "apps": "folder_app",
+        "assets": "folder_assets",
+        "audio": "folder_audio",
+        "music": "folder_audio",
+        "sounds": "folder_audio",
+        "client": "folder_client",
+        "frontend": "folder_client",
+        "components": "folder_components",
+        "config": "folder_config",
+        ".config": "folder_config",
+        "configuration": "folder_config",
+        "core": "folder_core",
+        "database": "folder_database",
+        "db": "folder_database",
+        "dist": "folder_dist",
+        "build": "folder_dist",
+        "out": "folder_dist",
+        "output": "folder_dist",
+        ".docker": "folder_docker",
+        "docker": "folder_docker",
+        "docs": "folder_docs",
+        "doc": "folder_docs",
+        "documentation": "folder_docs",
+        "downloads": "folder_download",
+        "fonts": "folder_fonts",
+        "font": "folder_fonts",
+        ".git": "folder_git",
+        ".github": "folder_github",
+        "hooks": "folder_hooks",
+        "images": "folder_images",
+        "img": "folder_images",
+        "icons": "folder_images",
+        "pictures": "folder_images",
+        "photos": "folder_images",
+        "lib": "folder_lib",
+        "libs": "folder_lib",
+        "library": "folder_lib",
+        "vendor": "folder_lib",
+        "middleware": "folder_middleware",
+        "node_modules": "folder_node",
+        "packages": "folder_packages",
+        "plugins": "folder_plugins",
+        "extensions": "folder_plugins",
+        "addons": "folder_plugins",
+        "public": "folder_public",
+        "www": "folder_public",
+        "static": "folder_public",
+        "routes": "folder_routes",
+        "scripts": "folder_scripts",
+        "bin": "folder_scripts",
+        "server": "folder_server",
+        "backend": "folder_server",
+        "shared": "folder_shared",
+        "common": "folder_shared",
+        "src": "folder_src",
+        "source": "folder_src",
+        "styles": "folder_styles",
+        "css": "folder_styles",
+        "scss": "folder_styles",
+        "temp": "folder_temp",
+        "tmp": "folder_temp",
+        ".tmp": "folder_temp",
+        "cache": "folder_temp",
+        ".cache": "folder_temp",
+        "templates": "folder_templates",
+        "layouts": "folder_templates",
+        "tests": "folder_tests",
+        "test": "folder_tests",
+        "spec": "folder_tests",
+        "__tests__": "folder_tests",
+        "types": "folder_types",
+        "typings": "folder_types",
+        "utils": "folder_utils",
+        "helpers": "folder_utils",
+        "tools": "folder_utils",
+        "upload": "folder_upload",
+        "uploads": "folder_upload",
+        "video": "folder_video",
+        "videos": "folder_video",
+        "movies": "folder_video",
+        "views": "folder_views",
+        "pages": "folder_views",
+        ".vscode": "folder_vscode"
+    ]
+
     private func folderIcon(for url: URL) -> NSImage {
+        let name = url.lastPathComponent.lowercased()
+        if let iconName = Self.folderMap[name], let img = loadSVG(iconName) {
+            return img
+        }
+        if let img = loadSVG("_folder") { return img }
         return NSWorkspace.shared.icon(forFile: url.path)
     }
 
@@ -295,22 +385,6 @@ final class IconProvider {
 
         // Default file icon
         if let img = loadSVG("_file") {
-            return img
-        }
-        return NSWorkspace.shared.icon(forFile: url.path)
-    }
-
-    private func fileIconSelected(for url: URL) -> NSImage {
-        let filename = url.lastPathComponent.lowercased()
-        let ext = url.pathExtension.lowercased()
-
-        if let iconName = Self.nameMap[filename], let img = loadSVGWhite(iconName) {
-            return img
-        }
-        if let iconName = Self.extMap[ext], let img = loadSVGWhite(iconName) {
-            return img
-        }
-        if let img = loadSVGWhite("_file") {
             return img
         }
         return NSWorkspace.shared.icon(forFile: url.path)
@@ -346,39 +420,4 @@ final class IconProvider {
         return nsImage
     }
 
-    private func loadSVGWhite(_ name: String) -> NSImage? {
-        let key = name + "_white"
-        if let cached = cache[key] {
-            return cached
-        }
-
-        guard let url = Bundle.module.url(forResource: name, withExtension: "svg", subdirectory: "Icons") else {
-            return nil
-        }
-
-        guard let data = try? Data(contentsOf: url),
-              var svgString = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-
-        // Replace all stroke/fill colors with white
-        guard let colorPattern = try? NSRegularExpression(pattern: "#[0-9a-fA-F]{6}") else { return nil }
-        svgString = colorPattern.stringByReplacingMatches(
-            in: svgString,
-            range: NSRange(svgString.startIndex..., in: svgString),
-            withTemplate: "#ffffff"
-        )
-
-        let scaledSVG = svgString.replacingOccurrences(of: "width=\"16\"", with: "width=\"32\"")
-            .replacingOccurrences(of: "height=\"16\"", with: "height=\"32\"")
-
-        guard let scaledData = scaledSVG.data(using: .utf8),
-              let nsImage = NSImage(data: scaledData) else {
-            return nil
-        }
-
-        nsImage.size = NSSize(width: 16, height: 16)
-        cache[key] = nsImage
-        return nsImage
-    }
 }

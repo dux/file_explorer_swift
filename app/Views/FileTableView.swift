@@ -117,9 +117,9 @@ struct FileTableRow: View {
         HStack(spacing: 0) {
             HStack(spacing: 10) {
                 if isDirectory {
-                    FolderIconView(url: url, size: 24, selected: isSelected)
+                    FolderIconView(url: url, size: 24)
                 } else {
-                    Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: false, selected: isSelected))
+                    Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: false))
                         .resizable()
                         .interpolation(.high)
                         .frame(width: 24, height: 24)
@@ -128,7 +128,7 @@ struct FileTableRow: View {
                 Text(url.lastPathComponent)
                     .textStyle(.default)
                     .lineLimit(1)
-                    .foregroundColor(isSelected ? .white : .primary)
+                    .foregroundColor(.primary)
 
                 if !fileColors.isEmpty {
                     HStack(spacing: 2) {
@@ -147,19 +147,19 @@ struct FileTableRow: View {
             if manager.sortMode == .modified {
                 Text(humanReadableDate)
                     .textStyle(.default)
-                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                    .foregroundColor(.secondary)
                     .frame(width: 180, alignment: .leading)
             }
 
             Text(fileSizeDisplay)
                 .textStyle(.default)
-                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                .foregroundColor(.secondary)
                 .frame(width: 80, alignment: .trailing)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(
-            isSelected ? Color.accentColor :
+            isSelected ? Color.accentColor.opacity(0.18) :
             (isInSelection ? Color.green.opacity(0.15) : Color.clear)
         )
         .contentShape(Rectangle())
