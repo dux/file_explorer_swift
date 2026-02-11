@@ -408,14 +408,11 @@ class FileExplorerManager: ObservableObject {
 
     func focusSidebar() {
         sidebarFocused = true
-        // Clamp sidebar index to valid range.
         let items = sidebarItems
-        if sidebarIndex < 0 || sidebarIndex >= items.count {
-            if let idx = items.firstIndex(where: { $0.path == currentPath.path }) {
-                sidebarIndex = idx
-            } else {
-                sidebarIndex = min(sidebarIndex, max(items.count - 1, 0))
-            }
+        if let idx = items.firstIndex(where: { $0.path == currentPath.path }) {
+            sidebarIndex = idx
+        } else if sidebarIndex < 0 || sidebarIndex >= items.count {
+            sidebarIndex = min(sidebarIndex, max(items.count - 1, 0))
         }
     }
 
@@ -487,20 +484,25 @@ class FileExplorerManager: ObservableObject {
         guard !allItems.isEmpty else { return }
         if selectedIndex < allItems.count - 1 {
             selectedIndex += 1
+            selectedItem = allItems[selectedIndex].url
         } else {
-            selectedIndex = 0
+            selectedIndex = -1
+            selectedItem = currentPath
         }
-        selectedItem = allItems[selectedIndex].url
     }
 
     func selectPrevious() {
         guard !allItems.isEmpty else { return }
         if selectedIndex > 0 {
             selectedIndex -= 1
+            selectedItem = allItems[selectedIndex].url
+        } else if selectedIndex == 0 {
+            selectedIndex = -1
+            selectedItem = currentPath
         } else {
             selectedIndex = allItems.count - 1
+            selectedItem = allItems[selectedIndex].url
         }
-        selectedItem = allItems[selectedIndex].url
     }
 
     func openSelected() {

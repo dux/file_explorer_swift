@@ -214,8 +214,14 @@ struct FlatBreadcrumbRow: View {
         shortcutsManager.customFolders.contains(where: { $0.path == manager.currentPath.path })
     }
 
+    @State private var isHovered = false
+
     private var isSelected: Bool {
         manager.selectedItem == manager.currentPath
+    }
+
+    private var isFocusedRow: Bool {
+        manager.selectedIndex == -1 && manager.selectedItem == manager.currentPath && !manager.sidebarFocused && !manager.rightPaneFocused
     }
 
     var body: some View {
@@ -276,8 +282,13 @@ struct FlatBreadcrumbRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 5)
-        .selectedBackground(isSelected)
+        .rowHighlight(
+            isSelected: isSelected,
+            isFocused: isFocusedRow,
+            isHovered: isHovered
+        )
         .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -291,8 +302,14 @@ struct AncestorRow: View {
     @ObservedObject var shortcutsManager = ShortcutsManager.shared
     @ObservedObject var folderIconManager = FolderIconManager.shared
 
+    @State private var isHovered = false
+
     private var isSelected: Bool {
         manager.selectedItem == url
+    }
+
+    private var isFocusedRow: Bool {
+        isCurrent && manager.selectedIndex == -1 && manager.selectedItem == url && !manager.sidebarFocused && !manager.rightPaneFocused
     }
 
     private var isPinned: Bool {
@@ -340,8 +357,13 @@ struct AncestorRow: View {
         .padding(.leading, CGFloat(depth) * indentStep + 12)
         .padding(.trailing, 12)
         .padding(.vertical, 4)
-        .selectedBackground(isSelected)
+        .rowHighlight(
+            isSelected: isSelected,
+            isFocused: isFocusedRow,
+            isHovered: isHovered
+        )
         .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
         .onTapGesture {
             if isCurrent {
                 if isSelected {
