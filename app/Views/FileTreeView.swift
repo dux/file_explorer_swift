@@ -384,6 +384,7 @@ struct FileTreeRow: View {
     let depth: Int
     let indentStep: CGFloat
     @State private var lastClickTime: Date = .distantPast
+    @State private var isHovered = false
 
     private var url: URL { fileInfo.url }
     private var isDirectory: Bool { fileInfo.isDirectory }
@@ -439,6 +440,21 @@ struct FileTreeRow: View {
         HStack(spacing: 6) {
             if isDirectory {
                 FolderIconView(url: url, size: 22)
+                    .overlay(alignment: .leading) {
+                        Button(action: { manager.navigateTo(url) }) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.secondary.opacity(0.5))
+                                .frame(width: 16, height: 22)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .offset(x: -18)
+                        .opacity(isHovered ? 1 : 0)
+                        .onHover { inside in
+                            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                        }
+                    }
             } else {
                 Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: false))
                     .resizable()
@@ -484,6 +500,7 @@ struct FileTreeRow: View {
             (isInSelection ? Color.green.opacity(0.15) : Color.clear)
         )
         .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
         .onDrag {
             return NSItemProvider(object: url as NSURL)
         }
@@ -498,20 +515,12 @@ struct FileTreeRow: View {
                 }
                 lastClickTime = .distantPast
             } else {
-                // Single click
-                if isDirectory {
-                    manager.selectItem(at: index, url: url)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        manager.navigateTo(url)
-                        manager.selectCurrentFolder()
-                    }
+                // Single click — select only, no navigate
+                if manager.selectedItem == url {
+                    manager.selectedItem = nil
+                    manager.selectedIndex = -1
                 } else {
-                    if manager.selectedItem == url {
-                        manager.selectedItem = nil
-                        manager.selectedIndex = -1
-                    } else {
-                        manager.selectItem(at: index, url: url)
-                    }
+                    manager.selectItem(at: index, url: url)
                 }
                 lastClickTime = now
             }
