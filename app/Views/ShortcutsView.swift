@@ -41,18 +41,22 @@ struct ShortcutsView: View {
                     }
 
                     if !shortcutsManager.customFolders.isEmpty {
-                        SidebarSectionTitle(title: "Pinned Folders")
+                        PinnedFoldersTitle(shortcutsManager: shortcutsManager)
 
-                        ForEach(Array(shortcutsManager.customFolders.enumerated()), id: \.element) { index, folder in
-                            let item = ShortcutItem(url: folder, name: folder.lastPathComponent, isBuiltIn: false)
-                        DraggableShortcutRow(
-                            item: item,
-                            index: index,
-                            manager: manager,
-                            shortcutsManager: shortcutsManager,
-                            folderIconManager: folderIconManager,
-                            flatIndex: builtInCount + index
-                        )
+                        ForEach(Array(shortcutsManager.customFolders.enumerated()), id: \.offset) { index, folder in
+                            if ShortcutsManager.isDivider(folder) {
+                                PinnedDividerRow(index: index, shortcutsManager: shortcutsManager)
+                            } else {
+                                let item = ShortcutItem(url: folder, name: folder.lastPathComponent, isBuiltIn: false)
+                                DraggableShortcutRow(
+                                    item: item,
+                                    index: index,
+                                    manager: manager,
+                                    shortcutsManager: shortcutsManager,
+                                    folderIconManager: folderIconManager,
+                                    flatIndex: builtInCount + index
+                                )
+                            }
                         }
                     }
 
@@ -90,6 +94,65 @@ struct ShortcutsView: View {
                 }
             }
         }
+    }
+}
+
+struct PinnedFoldersTitle: View {
+    @ObservedObject var shortcutsManager: ShortcutsManager
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack {
+            Text("Pinned Folders")
+                .textStyle(.title)
+
+            Spacer()
+
+            Button(action: { shortcutsManager.addDivider() }) {
+                Text("hr")
+                    .textStyle(.small, weight: .medium)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(RoundedRectangle(cornerRadius: 3).fill(Color.gray.opacity(0.12)))
+            }
+            .buttonStyle(.plain)
+            .opacity(isHovered && shortcutsManager.customFolders.count >= 2 ? 1 : 0)
+        }
+        .padding(.leading, 38)
+        .padding(.trailing, 16)
+        .padding(.top, 22)
+        .padding(.bottom, 6)
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+    }
+}
+
+struct PinnedDividerRow: View {
+    let index: Int
+    let shortcutsManager: ShortcutsManager
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Rectangle()
+                .fill(Color.gray.opacity(0.25))
+                .frame(height: 1)
+
+            Button(action: {
+                shortcutsManager.removeDivider(at: index)
+            }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .opacity(isHovered ? 1 : 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -173,11 +236,11 @@ struct ShortcutRow: View {
         HStack(spacing: 8) {
             if let icon = item.icon {
                 Image(systemName: icon)
-                    .font(.system(size: 16))
+                    .font(.system(size: 14))
                     .foregroundColor(.accentColor)
-                    .frame(width: 26, height: 26)
+                    .frame(width: 22, height: 22)
             } else {
-                FolderIconView(url: item.url, size: 26)
+                FolderIconView(url: item.url, size: 22)
             }
 
             Text(formatPath(item.url.path, full: !item.isBuiltIn))
@@ -402,7 +465,7 @@ struct iPhoneRow: View {
             Image(systemName: "iphone")
                 .font(.system(size: 14))
                 .foregroundColor(.pink)
-                .frame(width: 20)
+                .frame(width: 22, height: 22)
 
             Text(device.name)
                 .textStyle(.default, weight: .semibold)
@@ -458,7 +521,7 @@ struct VolumeRow: View {
             Image(systemName: volume.icon)
                 .font(.system(size: 14))
                 .foregroundColor(Color(volume.iconColor))
-                .frame(width: 20)
+                .frame(width: 22, height: 22)
 
             Text(volume.name)
                 .textStyle(.default, weight: .semibold)

@@ -53,7 +53,7 @@ class ShortcutsManager: ObservableObject {
         items.append(ShortcutItem(url: home.appendingPathComponent("Downloads"), name: "Downloads", isBuiltIn: true, icon: "arrow.down.circle.fill"))
         items.append(ShortcutItem(url: URL(fileURLWithPath: "/Applications"), name: "Applications", isBuiltIn: true, icon: "square.grid.2x2.fill"))
 
-        for folder in customFolders {
+        for folder in customFolders where !Self.isDivider(folder) {
             let isProject = fileManager.fileExists(atPath: folder.appendingPathComponent("README.md").path)
                 || fileManager.fileExists(atPath: folder.appendingPathComponent("README.MD").path)
                 || fileManager.fileExists(atPath: folder.appendingPathComponent("readme.md").path)
@@ -69,6 +69,14 @@ class ShortcutsManager: ObservableObject {
         }
     }
 
+    static func isDivider(_ url: URL) -> Bool {
+        url.path.hasPrefix("/---")
+    }
+
+    private static func makeDividerURL() -> URL {
+        URL(fileURLWithPath: "---/\(UUID().uuidString)")
+    }
+
     private func loadCustomFolders() {
         guard fileManager.fileExists(atPath: foldersFile.path) else { return }
 
@@ -77,13 +85,26 @@ class ShortcutsManager: ObservableObject {
         customFolders = content.components(separatedBy: .newlines)
             .compactMap { line in
                 let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed == "---" { return Self.makeDividerURL() }
                 return trimmed.isEmpty ? nil : URL(fileURLWithPath: trimmed)
             }
     }
 
     func saveCustomFolders() {
-        let content = customFolders.map { $0.path }.joined(separator: "\n")
+        let content = customFolders.map { Self.isDivider($0) ? "---" : $0.path }.joined(separator: "\n")
         try? content.write(to: foldersFile, atomically: true, encoding: .utf8)
+    }
+
+    func addDivider() {
+        let insertIndex = max(0, customFolders.count - 1)
+        customFolders.insert(Self.makeDividerURL(), at: insertIndex)
+        saveCustomFolders()
+    }
+
+    func removeDivider(at index: Int) {
+        guard index >= 0 && index < customFolders.count && Self.isDivider(customFolders[index]) else { return }
+        customFolders.remove(at: index)
+        saveCustomFolders()
     }
 
     func addFolder(_ url: URL) {
