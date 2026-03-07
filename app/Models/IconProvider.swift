@@ -361,6 +361,13 @@ final class IconProvider {
     ]
 
     private func folderIcon(for url: URL) -> NSImage {
+        // .app bundles should show their actual application icon
+        if url.pathExtension.lowercased() == "app" {
+            let icon = NSWorkspace.shared.icon(forFile: url.path)
+            icon.size = NSSize(width: 32, height: 32)
+            return icon
+        }
+
         let name = url.lastPathComponent.lowercased()
         if let iconName = Self.folderMap[name], let img = loadSVG(iconName) {
             return img

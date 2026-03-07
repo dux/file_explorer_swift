@@ -50,6 +50,7 @@ class ShortcutsManager: ObservableObject {
 
         items.append(ShortcutItem(url: home, name: "Home", isBuiltIn: true, icon: "house.fill"))
         items.append(ShortcutItem(url: home.appendingPathComponent("Desktop"), name: "Desktop", isBuiltIn: true, icon: "menubar.dock.rectangle"))
+        items.append(ShortcutItem(url: home.appendingPathComponent("Documents"), name: "Documents", isBuiltIn: true, icon: "doc.fill"))
         items.append(ShortcutItem(url: home.appendingPathComponent("Downloads"), name: "Downloads", isBuiltIn: true, icon: "arrow.down.circle.fill"))
         items.append(ShortcutItem(url: URL(fileURLWithPath: "/Applications"), name: "Applications", isBuiltIn: true, icon: "square.grid.2x2.fill"))
 

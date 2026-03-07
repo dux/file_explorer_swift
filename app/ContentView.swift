@@ -50,11 +50,16 @@ struct ContentView: View {
             }
             }
 
-            ToastView()
-                .padding(.bottom, 20)
+            VStack(spacing: 8) {
+                CopyProgressView()
+                iPhoneTransferProgressView()
+                ToastView()
+            }
+            .padding(.bottom, 20)
         }
         .frame(minWidth: 900, minHeight: 600)
         .background(WindowAccessor(settings: settings))
+        .onAppear { _ = ClipboardMonitor.shared }
     }
 }
 

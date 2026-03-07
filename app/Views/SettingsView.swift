@@ -55,6 +55,7 @@ extension Notification.Name {
 
 struct GeneralSettingsView: View {
     @ObservedObject var settings: AppSettings
+    @State private var skipFoldersText: String = ""
 
     var body: some View {
         Form {
@@ -85,6 +86,27 @@ struct GeneralSettingsView: View {
             }
 
             Section {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Skip folders on copy")
+                    TextEditor(text: $skipFoldersText)
+                        .font(.system(size: 12, design: .monospaced))
+                        .frame(height: 120)
+                        .border(Color.gray.opacity(0.3), width: 1)
+                        .onChange(of: skipFoldersText) { newValue in
+                            let folders = newValue
+                                .components(separatedBy: .newlines)
+                                .map { $0.trimmingCharacters(in: .whitespaces) }
+                                .filter { !$0.isEmpty }
+                            let sorted = folders.sorted { $0.lowercased() < $1.lowercased() }
+                            settings.copySkipFolders = sorted
+                        }
+                    Text("Folder names skipped when copying directories via drag & drop, one per line")
+                        .textStyle(.small)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Section {
                 HStack {
                     Text("Config location")
                     Spacer()
@@ -100,6 +122,9 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .padding(10)
+        .onAppear {
+            skipFoldersText = settings.copySkipFolders.sorted { $0.lowercased() < $1.lowercased() }.joined(separator: "\n")
+        }
     }
 
     private var hasDuti: Bool {
@@ -289,7 +314,7 @@ struct HelpSettingsView: View {
                 }
 
                 helpSection("Selection") {
-                    helpText("Space to add files to global selection. Selection bar appears with actions: paste here, move here, trash, download (iPhone). Works across folders and iPhone.")
+                    helpText("Space to add files to global selection. Selection bar appears with actions: copy to, move to, trash, download (iPhone). Works across folders and iPhone.")
                 }
 
                 helpSection("iPhone") {

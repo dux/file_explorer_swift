@@ -229,13 +229,19 @@ struct SelectionBar: View {
                     Spacer()
 
                     if !localItems.isEmpty {
-                        SelectionBarButton(title: "Paste here", icon: "doc.on.doc", color: .blue) {
-                            let count = selection.copyLocalItems(to: manager.currentPath)
+                        SelectionBarButton(title: "Copy to", icon: "doc.on.doc", color: .blue) {
+                            let items = selection.localItems.compactMap { item in
+                                item.localURL.map { (name: item.name, url: $0) }
+                            }
+                            let dest = manager.currentPath
                             selection.clear()
-                            ToastManager.shared.show("Pasted \(count) file(s)")
-                            manager.refresh()
+                            Task {
+                                let count = await CopyProgressManager.shared.copyItems(items, to: dest)
+                                ToastManager.shared.show("Copied \(count) item(s)")
+                                manager.refresh()
+                            }
                         }
-                        SelectionBarButton(title: "Move here", icon: "folder", color: .orange) {
+                        SelectionBarButton(title: "Move to", icon: "folder", color: .orange) {
                             let count = selection.moveLocalItems(to: manager.currentPath)
                             selection.clear()
                             ToastManager.shared.show("Moved \(count) file(s)")
@@ -428,10 +434,10 @@ struct SelectedFilesView: View {
                             Text("Local (\(localItems.count)):")
                                 .textStyle(.small)
                                 .foregroundColor(.secondary)
-                            SelectionActionButton(title: "Paste here", icon: "doc.on.doc", color: .blue) {
+                            SelectionActionButton(title: "Copy to", icon: "doc.on.doc", color: .blue) {
                                 copyLocalFilesHere()
                             }
-                            SelectionActionButton(title: "Move here", icon: "folder", color: .orange) {
+                            SelectionActionButton(title: "Move to", icon: "folder", color: .orange) {
                                 moveLocalFilesHere()
                             }
                             SelectionActionButton(title: "Trash", icon: "trash", color: .red) {
@@ -493,10 +499,16 @@ struct SelectedFilesView: View {
     }
 
     private func copyLocalFilesHere() {
-        let count = selection.copyLocalItems(to: manager.currentPath)
+        let items = selection.localItems.compactMap { item in
+            item.localURL.map { (name: item.name, url: $0) }
+        }
+        let dest = manager.currentPath
         selection.clear()
-        ToastManager.shared.show("Pasted \(count) file(s)")
-        manager.refresh()
+        Task {
+            let count = await CopyProgressManager.shared.copyItems(items, to: dest)
+            ToastManager.shared.show("Copied \(count) item(s)")
+            manager.refresh()
+        }
     }
 
     private func moveLocalFilesHere() {

@@ -58,6 +58,8 @@ class iPhoneManager: ObservableObject {
     @Published var files: [iPhoneFile] = []
     @Published var isLoadingFiles: Bool = false
     @Published var selectedFile: iPhoneFile?
+    @Published var renamingFile: iPhoneFile?
+    @Published var renameText: String = ""
 
     private var scanTimer: Timer?
     internal let fileManager = FileManager.default

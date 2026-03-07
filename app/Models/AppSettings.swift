@@ -92,6 +92,11 @@ class AppSettings: ObservableObject {
         didSet { saveAsync() }
     }
 
+    // Folder names to skip when copying directories via drag & drop
+    @Published var copySkipFolders: [String] {
+        didSet { saveAsync() }
+    }
+
     private init() {
         configFile = configDir.appendingPathComponent("settings.json")
 
@@ -114,6 +119,12 @@ class AppSettings: ObservableObject {
         fontButtons = 12
         fontSmall = 12
         fontTitle = 13
+        copySkipFolders = [
+            ".build", ".bundle", ".cache", ".gem", ".gradle",
+            ".next", ".nuxt", ".parcel-cache", ".sass-cache", ".turbo", ".venv",
+            "DerivedData", "Pods", "__pycache__", "_build",
+            "deps", "dist", "node_modules", "target", "tmp"
+        ]
 
         // Migrate from old config path
         migrateOldConfig()
@@ -205,6 +216,7 @@ class AppSettings: ObservableObject {
         if let v = json["fontButtons"] as? CGFloat { fontButtons = v }
         if let v = json["fontSmall"] as? CGFloat { fontSmall = v }
         if let v = json["fontTitle"] as? CGFloat { fontTitle = v }
+        if let v = json["copySkipFolders"] as? [String] { copySkipFolders = v }
     }
 
     private func saveAsync() {
@@ -234,7 +246,8 @@ class AppSettings: ObservableObject {
             fontDefault: fontDefault,
             fontButtons: fontButtons,
             fontSmall: fontSmall,
-            fontTitle: fontTitle
+            fontTitle: fontTitle,
+            copySkipFolders: copySkipFolders
         )
 
         saveTask = Task.detached(priority: .utility) {
@@ -266,6 +279,7 @@ class AppSettings: ObservableObject {
         let fontButtons: CGFloat
         let fontSmall: CGFloat
         let fontTitle: CGFloat
+        let copySkipFolders: [String]
     }
 
     nonisolated private static func writeToDisk(_ s: SettingsSnapshot) {
@@ -294,6 +308,7 @@ class AppSettings: ObservableObject {
         json["fontButtons"] = s.fontButtons
         json["fontSmall"] = s.fontSmall
         json["fontTitle"] = s.fontTitle
+        json["copySkipFolders"] = s.copySkipFolders
 
         if let data = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted) {
             try? data.write(to: s.configFile)

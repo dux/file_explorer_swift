@@ -78,6 +78,57 @@ extension iPhoneManager {
         return success ? localPath : nil
     }
 
+    // MARK: - Rename file on iPhone
+
+    func renameFile(_ file: iPhoneFile, to newName: String) async -> Bool {
+        guard let device = currentDevice,
+              case .appDocuments(let appId, _) = browseMode else { return false }
+
+        let udid = device.id
+        let oldPath = file.path
+        let parentPath = (oldPath as NSString).deletingLastPathComponent
+        let newPath = parentPath == "/" ? "/\(newName)" : "\(parentPath)/\(newName)"
+
+        return await Task.detached { () -> Bool in
+            Self.withAfcClient(deviceId: udid, appId: appId) { afcClient in
+                afc_rename_path(afcClient, oldPath, newPath) == AFC_E_SUCCESS
+            } ?? false
+        }.value
+    }
+
+    func startRename() {
+        guard let file = selectedFile else { return }
+        renamingFile = file
+        renameText = file.name
+    }
+
+    func cancelRename() {
+        renamingFile = nil
+        renameText = ""
+    }
+
+    func confirmRename() async {
+        guard let file = renamingFile else {
+            cancelRename()
+            return
+        }
+
+        let newName = renameText.trimmingCharacters(in: .whitespaces)
+        guard !newName.isEmpty, newName != file.name else {
+            cancelRename()
+            return
+        }
+
+        let success = await renameFile(file, to: newName)
+        cancelRename()
+        if success {
+            await loadFiles()
+            ToastManager.shared.show("Renamed to \(newName)")
+        } else {
+            ToastManager.shared.showError("Failed to rename")
+        }
+    }
+
     // MARK: - Delete file on iPhone
 
     func deleteFile(_ file: iPhoneFile) async -> Bool {
@@ -110,9 +161,14 @@ extension iPhoneManager {
         let targetPath = currentPath
         let fm = FileManager.default
 
+        let progress = iPhoneTransferProgressManager.shared
+        progress.start(direction: .upload, total: localURLs.count)
+
         for localURL in localURLs {
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: localURL.path, isDirectory: &isDir) else { continue }
+
+            progress.update(file: localURL.lastPathComponent, completed: uploadedCount)
 
             let remotePath = targetPath == "/" ? "/\(localURL.lastPathComponent)" : "\(targetPath)/\(localURL.lastPathComponent)"
 
@@ -130,6 +186,8 @@ extension iPhoneManager {
                 uploadedCount += 1
             }
         }
+
+        progress.finish()
 
         // Refresh file list after upload
         if uploadedCount > 0 {

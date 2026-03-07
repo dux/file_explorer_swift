@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 extension FileExplorerManager {
     func createNewFolder(named name: String? = nil) {
@@ -128,6 +129,17 @@ extension FileExplorerManager {
         }
     }
 
+    func runApp(_ url: URL) {
+        guard url.pathExtension.lowercased() == "app" else { return }
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, error in
+            Task { @MainActor in
+                if let error = error {
+                    ToastManager.shared.showError("Failed to launch app: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
     func enableUnsafeApp(_ url: URL) {
         guard url.pathExtension.lowercased() == "app" else { return }
         let appPath = url.path
@@ -169,11 +181,23 @@ extension FileExplorerManager {
     }
 
     func moveToTrash(_ url: URL) {
+        // Check if we're deleting the current directory or an ancestor of it
+        let isCurrentOrAncestor = currentPath.path == url.path ||
+            currentPath.path.hasPrefix(url.path + "/")
+
         do {
             try fileManager.trashItem(at: url, resultingItemURL: nil)
             // Remove from selection if it was selected
             SelectionManager.shared.removeByPath(url.path)
-            loadContents()
+
+            if isCurrentOrAncestor {
+                // Navigate to the parent of the deleted folder and focus it
+                let parent = url.deletingLastPathComponent()
+                navigateTo(parent)
+                selectCurrentFolder()
+            } else {
+                loadContents()
+            }
             ToastManager.shared.show("Moved to Trash")
         } catch {
             ToastManager.shared.showError("Error moving to trash: \(error.localizedDescription)")

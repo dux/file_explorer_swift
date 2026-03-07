@@ -63,48 +63,70 @@ struct ActionsPane: View {
     }
 
     @ViewBuilder
-    private var actionButtonsSection: some View {
+    private func actionButtonsSection(paneItems: [RightPaneItem]) -> some View {
         if hasActionButtons {
             Divider()
             VStack(spacing: 1) {
                 if isAppBundle {
-                    ActionButton(icon: "checkmark.shield", title: "Enable unsafe app", color: .green, flatIndex: 1, manager: manager) {
+                    let runIdx = paneItems.firstIndex(where: { $0.id == "runapp" }) ?? -1
+                    let enableIdx = paneItems.firstIndex(where: { $0.id == "enableapp" }) ?? -1
+                    let uninstallIdx = paneItems.firstIndex(where: { $0.id == "uninstall" }) ?? -1
+                    ActionButton(icon: "play.circle", title: "Run", color: .blue,
+                                 flatIndex: runIdx, manager: manager) {
+                        manager.runApp(targetURL)
+                    }
+                    ActionButton(icon: "checkmark.shield", title: "Enable unsafe app", color: .green,
+                                 flatIndex: enableIdx, manager: manager) {
                         manager.enableUnsafeApp(targetURL)
                     }
-                    ActionButton(icon: "trash", title: "Uninstall \(targetURL.deletingPathExtension().lastPathComponent)", color: .red, flatIndex: 2, manager: manager) {
+                    ActionButton(icon: "trash", title: "Uninstall \(targetURL.deletingPathExtension().lastPathComponent)", color: .red,
+                                 flatIndex: uninstallIdx, manager: manager) {
                         appDataPaths = AppUninstaller.findAppData(for: targetURL)
                         showUninstallConfirm = true
                     }
                 }
                 if isImageFile {
-                    let base = 1
-                    ActionButton(icon: "camera.aperture", title: "EXIF / Metadata", color: .teal, flatIndex: base, manager: manager) {
+                    let exifIdx = paneItems.firstIndex(where: { $0.id == "exif" }) ?? -1
+                    let resizeIdx = paneItems.firstIndex(where: { $0.id == "resize" }) ?? -1
+                    let convertIdx = paneItems.firstIndex(where: { $0.id == "convert" }) ?? -1
+                    ActionButton(icon: "camera.aperture", title: "EXIF / Metadata", color: .teal,
+                                 flatIndex: exifIdx, manager: manager) {
                         showExifSheet = true
                     }
-                    ActionButton(icon: "arrow.up.left.and.arrow.down.right", title: "Resize / Crop", color: .pink, flatIndex: base + 1, manager: manager) {
+                    ActionButton(icon: "arrow.up.left.and.arrow.down.right", title: "Resize / Crop", color: .pink,
+                                 flatIndex: resizeIdx, manager: manager) {
                         showImageResizeSheet = true
                     }
-                    ActionButton(icon: "arrow.triangle.2.circlepath", title: "Convert to...", color: .cyan, flatIndex: base + 2, manager: manager) {
+                    ActionButton(icon: "arrow.triangle.2.circlepath", title: "Convert to...", color: .cyan,
+                                 flatIndex: convertIdx, manager: manager) {
                         showImageConvertSheet = true
                     }
                 }
                 if isOfficeFile {
-                    ActionButton(icon: "doc.text.magnifyingglass", title: "Document Info", color: .indigo, flatIndex: 1, manager: manager) {
+                    let officeIdx = paneItems.firstIndex(where: { $0.id == "office" }) ?? -1
+                    ActionButton(icon: "doc.text.magnifyingglass", title: "Document Info", color: .indigo,
+                                 flatIndex: officeIdx, manager: manager) {
                         showOfficeMetadataSheet = true
                     }
                 }
                 if isExecutableFile {
-                    ActionButton(icon: "terminal", title: "Execute", color: .green, flatIndex: 1, manager: manager) {
+                    let execIdx = paneItems.firstIndex(where: { $0.id == "execute" }) ?? -1
+                    ActionButton(icon: "terminal", title: "Execute", color: .green,
+                                 flatIndex: execIdx, manager: manager) {
                         showExecuteSheet = true
                     }
                 }
                 if let gitInfo = gitRepo.gitRepoInfo {
-                    ActionButton(icon: "arrow.up.right.square", title: gitInfo.displayLabel, color: .secondary, manager: manager) {
+                    let gitIdx = paneItems.firstIndex(where: { $0.id == "git" }) ?? -1
+                    ActionButton(icon: "arrow.up.right.square", title: gitInfo.displayLabel, color: .secondary,
+                                 flatIndex: gitIdx, manager: manager) {
                         NSWorkspace.shared.open(gitInfo.webURL)
                     }
                 }
                 if let npmInfo = npmPackage.npmPackageInfo {
-                    ActionButton(icon: "shippingbox", title: "\(npmInfo.displayLabel) (\(npmInfo.packageName))", color: .red, manager: manager) {
+                    let npmIdx = paneItems.firstIndex(where: { $0.id == "npm" }) ?? -1
+                    ActionButton(icon: "shippingbox", title: "\(npmInfo.displayLabel) (\(npmInfo.packageName))", color: .red,
+                                 flatIndex: npmIdx, manager: manager) {
                         NSWorkspace.shared.open(npmInfo.webURL)
                     }
                 }
@@ -148,6 +170,18 @@ struct ActionsPane: View {
         var items: [RightPaneItem] = []
         let url = targetURL
 
+        if isAppBundle {
+            items.append(RightPaneItem(id: "runapp", title: "Run") {
+                self.manager.runApp(self.targetURL)
+            })
+            items.append(RightPaneItem(id: "enableapp", title: "Enable unsafe app") {
+                self.manager.enableUnsafeApp(self.targetURL)
+            })
+            items.append(RightPaneItem(id: "uninstall", title: "Uninstall") {
+                self.appDataPaths = AppUninstaller.findAppData(for: self.targetURL)
+                self.showUninstallConfirm = true
+            })
+        }
         if isImageFile {
             items.append(RightPaneItem(id: "exif", title: "EXIF / Metadata") {
                 self.showExifSheet = true
@@ -167,6 +201,18 @@ struct ActionsPane: View {
         if isExecutableFile {
             items.append(RightPaneItem(id: "execute", title: "Execute") {
                 self.showExecuteSheet = true
+            })
+        }
+        if let gitInfo = gitRepo.gitRepoInfo {
+            let webURL = gitInfo.webURL
+            items.append(RightPaneItem(id: "git", title: gitInfo.displayLabel) {
+                NSWorkspace.shared.open(webURL)
+            })
+        }
+        if let npmInfo = npmPackage.npmPackageInfo {
+            let webURL = npmInfo.webURL
+            items.append(RightPaneItem(id: "npm", title: npmInfo.displayLabel) {
+                NSWorkspace.shared.open(webURL)
             })
         }
         items.append(RightPaneItem(id: "selectapp", title: "Select app...") {
@@ -212,7 +258,7 @@ struct ActionsPane: View {
                 SelectionSection(manager: manager, selection: selection)
             }
 
-            actionButtonsSection
+            actionButtonsSection(paneItems: paneItems)
 
             Divider()
 
@@ -599,13 +645,19 @@ struct SelectionSection: View {
             // Action buttons row
             HStack(spacing: 5) {
                 if !localItems.isEmpty {
-                    SelectionBarButton(title: "Copy", icon: "doc.on.doc", color: .blue, shortcut: "Copy here (Cmd+C)") {
-                        let count = selection.copyLocalItems(to: manager.currentPath)
+                    SelectionBarButton(title: "Copy to", icon: "doc.on.doc", color: .blue, shortcut: "Copy here (Cmd+C)") {
+                        let items = selection.localItems.compactMap { item in
+                            item.localURL.map { (name: item.name, url: $0) }
+                        }
+                        let dest = manager.currentPath
                         selection.clear()
-                        ToastManager.shared.show("Pasted \(count) file(s)")
-                        manager.refresh()
+                        Task {
+                            let count = await CopyProgressManager.shared.copyItems(items, to: dest)
+                            ToastManager.shared.show("Copied \(count) item(s)")
+                            manager.refresh()
+                        }
                     }
-                    SelectionBarButton(title: "Move", icon: "folder", color: .orange, shortcut: "Move here (Cmd+M)") {
+                    SelectionBarButton(title: "Move to", icon: "folder", color: .orange, shortcut: "Move here (Cmd+M)") {
                         let count = selection.moveLocalItems(to: manager.currentPath)
                         selection.clear()
                         ToastManager.shared.show("Moved \(count) file(s)")
@@ -661,81 +713,9 @@ struct SelectionSection: View {
             .padding(.vertical, 6)
 
             // Selection file list
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 0) {
-                    ForEach(selectedItems, id: \.id) { item in
-                        SelectionSectionRow(item: item, selection: selection)
-                    }
-                }
-            }
-            .frame(maxHeight: CGFloat(min(selectedItems.count, 6)) * 26)
+            SelectionFileList(selection: selection)
         }
         .background(Color.green.opacity(0.05))
     }
 }
 
-private struct SelectionSectionRow: View {
-    let item: FileItem
-    @ObservedObject var selection: SelectionManager
-    @State private var isHovered = false
-
-    private var sourceFolder: String {
-        switch item.source {
-        case .local:
-            let parent = (item.path as NSString).deletingLastPathComponent
-            let home = FileManager.default.homeDirectoryForCurrentUser.path
-            if parent.hasPrefix(home) {
-                return "~" + parent.dropFirst(home.count)
-            }
-            return parent
-        case .iPhone(_, _, let appName):
-            return "iPhone: \(appName)"
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            if let url = item.localURL {
-                if item.isDirectory {
-                    FolderIconView(url: url, size: 16)
-                } else {
-                    Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: false))
-                        .resizable()
-                        .interpolation(.high)
-                        .frame(width: 16, height: 16)
-                }
-            } else {
-                Image(systemName: "iphone")
-                    .font(.system(size: 12))
-                    .foregroundColor(.pink)
-                    .frame(width: 16, height: 16)
-            }
-
-            Text(item.name)
-                .textStyle(.small)
-                .lineLimit(1)
-                .truncationMode(.middle)
-
-            Text(sourceFolder)
-                .textStyle(.small)
-                .foregroundColor(.secondary)
-                .lineLimit(1)
-                .truncationMode(.head)
-
-            Spacer()
-
-            if isHovered {
-                Button(action: { selection.remove(item) }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
-        .background(isHovered ? Color.green.opacity(0.06) : Color.clear)
-        .onHover { isHovered = $0 }
-    }
-}

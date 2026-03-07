@@ -47,36 +47,14 @@ struct FileTableView: View {
         let currentPath = manager.currentPath
 
         collectDropURLs(from: providers) { uniqueURLs in
-            Task.detached {
-                for srcURL in uniqueURLs {
-                    if srcURL.deletingLastPathComponent().path == currentPath.path { continue }
-
-                    let destURL = currentPath.appendingPathComponent(srcURL.lastPathComponent)
-                    do {
-                        var finalURL = destURL
-                        var counter = 1
-                        while FileManager.default.fileExists(atPath: finalURL.path) {
-                            let baseName = destURL.deletingPathExtension().lastPathComponent
-                            let ext = destURL.pathExtension
-                            let newName = ext.isEmpty ? "\(baseName) \(counter)" : "\(baseName) \(counter).\(ext)"
-                            finalURL = currentPath.appendingPathComponent(newName)
-                            counter += 1
-                        }
-
-                        try FileManager.default.copyItem(at: srcURL, to: finalURL)
-                        await MainActor.run {
-                            ToastManager.shared.show("Copied \(srcURL.lastPathComponent)")
-                        }
-                    } catch {
-                        await MainActor.run {
-                            ToastManager.shared.show("Drop error: \(error.localizedDescription)")
-                        }
-                    }
-                }
-
-                await MainActor.run {
-                    self.manager.refresh()
-                }
+            let items = uniqueURLs
+                .filter { $0.deletingLastPathComponent().path != currentPath.path }
+                .map { (name: $0.lastPathComponent, url: $0) }
+            guard !items.isEmpty else { return }
+            Task {
+                let count = await CopyProgressManager.shared.copyItems(items, to: currentPath)
+                ToastManager.shared.show("Copied \(count) item(s)")
+                self.manager.refresh()
             }
         }
     }

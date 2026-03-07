@@ -300,6 +300,95 @@ struct MetadataTableView: View {
     }
 }
 
+// MARK: - Reusable Selection File List
+
+/// A reusable scrollable list of selected files. Can be embedded in any pane.
+struct SelectionFileList: View {
+    @ObservedObject var selection: SelectionManager
+    var maxVisible: Int = 6
+
+    private var selectedItems: [FileItem] { selection.sortedItems }
+
+    var body: some View {
+        if !selection.isEmpty {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    ForEach(selectedItems, id: \.id) { item in
+                        SelectionFileRow(item: item, selection: selection)
+                    }
+                }
+            }
+            .frame(maxHeight: CGFloat(min(selectedItems.count, maxVisible)) * 26)
+        }
+    }
+}
+
+struct SelectionFileRow: View {
+    let item: FileItem
+    @ObservedObject var selection: SelectionManager
+    @State private var isHovered = false
+
+    private var sourceFolder: String {
+        switch item.source {
+        case .local:
+            let parent = (item.path as NSString).deletingLastPathComponent
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
+            if parent.hasPrefix(home) {
+                return "~" + parent.dropFirst(home.count)
+            }
+            return parent
+        case .iPhone(_, _, let appName):
+            return "iPhone: \(appName)"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let url = item.localURL {
+                if item.isDirectory {
+                    FolderIconView(url: url, size: 16)
+                } else {
+                    Image(nsImage: IconProvider.shared.icon(for: url, isDirectory: false))
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 16, height: 16)
+                }
+            } else {
+                Image(systemName: "iphone")
+                    .font(.system(size: 12))
+                    .foregroundColor(.pink)
+                    .frame(width: 16, height: 16)
+            }
+
+            Text(item.name)
+                .textStyle(.small)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Text(sourceFolder)
+                .textStyle(.small)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.head)
+
+            Spacer()
+
+            if isHovered {
+                Button(action: { selection.remove(item) }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(isHovered ? Color.green.opacity(0.06) : Color.clear)
+        .onHover { isHovered = $0 }
+    }
+}
+
 // MARK: - Font Size Controls
 
 struct FontSizeControls: View {

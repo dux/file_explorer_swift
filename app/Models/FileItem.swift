@@ -121,6 +121,22 @@ class SelectionManager: ObservableObject {
         }
     }
 
+    /// Batch add local URLs without per-item toasts. Returns count of newly added items.
+    func addLocals(_ urls: [URL]) -> Int {
+        var added = 0
+        for url in urls {
+            if let item = FileItem.fromLocal(url) {
+                if items.insert(item).inserted {
+                    added += 1
+                }
+            }
+        }
+        if added > 0 {
+            version += 1
+        }
+        return added
+    }
+
     func addIPhone(_ file: iPhoneFile, deviceId: String, appId: String, appName: String) {
         let item = FileItem.fromIPhone(file, deviceId: deviceId, appId: appId, appName: appName)
         add(item)
@@ -186,9 +202,15 @@ class SelectionManager: ObservableObject {
     func downloadIPhoneItems(to destination: URL, move: Bool = false) async -> Int {
         var count = 0
         let iPhoneManager = iPhoneManager.shared
+        let itemsToDownload = iPhoneItems
 
-        for item in iPhoneItems {
+        let progress = iPhoneTransferProgressManager.shared
+        progress.start(direction: .download, total: itemsToDownload.count)
+
+        for item in itemsToDownload {
             guard case .iPhone(let deviceId, let appId, _) = item.source else { continue }
+
+            progress.update(file: item.name, completed: count)
 
             let destPath = destination.appendingPathComponent(item.name)
 
@@ -212,6 +234,7 @@ class SelectionManager: ObservableObject {
             }
         }
 
+        progress.finish()
         return count
     }
 
@@ -219,9 +242,15 @@ class SelectionManager: ObservableObject {
     func uploadLocalItems(deviceId: String, appId: String, toPath: String) async -> Int {
         var count = 0
         let iPhoneManager = iPhoneManager.shared
+        let itemsToUpload = localItems
 
-        for item in localItems {
+        let progress = iPhoneTransferProgressManager.shared
+        progress.start(direction: .upload, total: itemsToUpload.count)
+
+        for item in itemsToUpload {
             guard let url = item.localURL else { continue }
+
+            progress.update(file: item.name, completed: count)
 
             let success = await iPhoneManager.uploadFileFromContext(
                 deviceId: deviceId,
@@ -235,6 +264,7 @@ class SelectionManager: ObservableObject {
             }
         }
 
+        progress.finish()
         return count
     }
 

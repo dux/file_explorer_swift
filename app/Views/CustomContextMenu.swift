@@ -181,10 +181,15 @@ private struct CustomContextMenuContent: View {
         if isDirectory && !selection.localItems.isEmpty {
             let count = selection.localItems.count
             items.append(MenuItem(icon: "doc.on.doc", label: "Copy \(count) here", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
-                let copied = SelectionManager.shared.copyLocalItems(to: url)
+                let items = SelectionManager.shared.localItems.compactMap { item in
+                    item.localURL.map { (name: item.name, url: $0) }
+                }
                 SelectionManager.shared.clear()
-                ToastManager.shared.show("Copied \(copied) file(s)")
-                manager.refresh()
+                Task {
+                    let copied = await CopyProgressManager.shared.copyItems(items, to: url)
+                    ToastManager.shared.show("Copied \(copied) item(s)")
+                    manager.refresh()
+                }
             }))
             items.append(MenuItem(icon: "folder", label: "Move \(count) here", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
                 let moved = SelectionManager.shared.moveLocalItems(to: url)
@@ -236,6 +241,9 @@ private struct CustomContextMenuContent: View {
             }))
         }
         if isApp {
+            items.append(MenuItem(icon: "play.circle", label: "Run", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
+                manager.runApp(url)
+            }))
             items.append(MenuItem(icon: "checkmark.shield", label: "Enable unsafe app", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
                 manager.enableUnsafeApp(url)
             }))
@@ -468,10 +476,15 @@ private struct FolderContextMenuContent: View {
         if !selection.localItems.isEmpty {
             let count = selection.localItems.count
             items.append(MenuItem(icon: "doc.on.doc", label: "Copy \(count) here", action: act { [url] in
-                let copied = SelectionManager.shared.copyLocalItems(to: url)
+                let items = SelectionManager.shared.localItems.compactMap { item in
+                    item.localURL.map { (name: item.name, url: $0) }
+                }
                 SelectionManager.shared.clear()
-                ToastManager.shared.show("Copied \(copied) file(s)")
-                manager.refresh()
+                Task {
+                    let copied = await CopyProgressManager.shared.copyItems(items, to: url)
+                    ToastManager.shared.show("Copied \(copied) item(s)")
+                    manager.refresh()
+                }
             }))
             items.append(MenuItem(icon: "folder", label: "Move \(count) here", action: act { [url] in
                 let moved = SelectionManager.shared.moveLocalItems(to: url)

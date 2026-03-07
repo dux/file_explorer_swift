@@ -274,10 +274,16 @@ class KeyCaptureView: NSView {
             if event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) {
                 let selection = SelectionManager.shared
                 guard !selection.items.isEmpty else { return false }
-                let count = selection.copyLocalItems(to: manager.currentPath)
+                let items = selection.localItems.compactMap { item in
+                    item.localURL.map { (name: item.name, url: $0) }
+                }
+                let dest = manager.currentPath
                 selection.clear()
-                ToastManager.shared.show("Pasted \(count) file(s)")
-                manager.refresh()
+                Task {
+                    let count = await CopyProgressManager.shared.copyItems(items, to: dest)
+                    ToastManager.shared.show("Copied \(count) item(s)")
+                    manager.refresh()
+                }
                 return true
             }
             if event.modifierFlags.contains(.control) {
@@ -315,7 +321,9 @@ class KeyCaptureView: NSView {
             manager.toggleGlobalSelection()
             return true
         case 36:
-            if manager.selectedItem != nil {
+            if manager.currentPane == .iphone {
+                iPhoneManager.shared.startRename()
+            } else if manager.selectedItem != nil {
                 manager.startRename()
             }
             return true

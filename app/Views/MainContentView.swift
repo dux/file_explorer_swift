@@ -144,7 +144,7 @@ struct MainContentView: View {
                         ActionsPane(manager: manager)
                     }
 
-                    if settings.showPreviewPane {
+                    if settings.showPreviewPane && manager.currentPane != .iphone {
                         if let selected = manager.selectedItem {
                             switch previewKind {
                             case .movie:

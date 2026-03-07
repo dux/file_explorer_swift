@@ -57,6 +57,15 @@ struct iPhoneActionsPane: View {
                 .disabled(selectedFile == nil || selectedFile?.isDirectory == true)
 
                 ActionButton(
+                    icon: "pencil",
+                    title: "Rename",
+                    color: .orange
+                ) {
+                    deviceManager.startRename()
+                }
+                .disabled(selectedFile == nil)
+
+                ActionButton(
                     icon: "trash",
                     title: "Delete from iPhone",
                     color: .red
@@ -73,74 +82,28 @@ struct iPhoneActionsPane: View {
             Divider()
 
             // Selection info & actions
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Selection (\(selection.count))")
-                    .textStyle(.title)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 6)
-
+            VStack(alignment: .leading, spacing: 0) {
                 let _ = selection.version
                 let iPhoneCount = selection.iPhoneItems.count
                 let localCount = selection.localItems.count
 
-                if iPhoneCount > 0 {
-                    HStack(spacing: 10) {
-                        Image(systemName: "iphone")
-                            .textStyle(.default)
-                            .foregroundColor(.pink)
-                            .frame(width: 20)
-                        Text("\(iPhoneCount) iPhone file(s)")
-                            .textStyle(.buttons)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
+                HStack {
+                    Text("Selection (\(selection.count))")
+                        .textStyle(.title)
 
-                    ActionButton(
-                        icon: "arrow.down.doc",
-                        title: "Download here",
-                        color: .blue
-                    ) {
-                        Task {
-                            await downloadIPhoneSelection()
+                    Spacer()
+
+                    if !selection.isEmpty {
+                        Button(action: { selection.clear() }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .textStyle(.small)
+                                .foregroundColor(.secondary)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
-
-                if localCount > 0 {
-                    HStack(spacing: 10) {
-                        Image(systemName: "desktopcomputer")
-                            .textStyle(.default)
-                            .foregroundColor(.blue)
-                            .frame(width: 20)
-                        Text("\(localCount) Mac file(s)")
-                            .textStyle(.buttons)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .padding(.top, iPhoneCount > 0 ? 4 : 0)
-
-                    ActionButton(
-                        icon: "arrow.up.doc",
-                        title: "Upload to iPhone",
-                        color: .green
-                    ) {
-                        Task {
-                            await uploadMacSelection()
-                        }
-                    }
-                }
-
-                if !selection.isEmpty {
-                    ActionButton(
-                        icon: "xmark.circle",
-                        title: "Clear selection",
-                        color: .orange
-                    ) {
-                        selection.clear()
-                    }
-                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
 
                 if selection.isEmpty {
                     Text("No files selected")
@@ -148,10 +111,41 @@ struct iPhoneActionsPane: View {
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
+                } else {
+                    // Action buttons
+                    VStack(spacing: 2) {
+                        if iPhoneCount > 0 {
+                            ActionButton(
+                                icon: "arrow.down.doc",
+                                title: "Download \(iPhoneCount) iPhone file\(iPhoneCount == 1 ? "" : "s")",
+                                color: .blue
+                            ) {
+                                Task {
+                                    await downloadIPhoneSelection()
+                                }
+                            }
+                        }
+
+                        if localCount > 0 {
+                            ActionButton(
+                                icon: "arrow.up.doc",
+                                title: "Upload \(localCount) Mac file\(localCount == 1 ? "" : "s")",
+                                color: .green
+                            ) {
+                                Task {
+                                    await uploadMacSelection()
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 8)
+
+                    // File list
+                    SelectionFileList(selection: selection)
                 }
             }
             .padding(.vertical, 8)
-            .padding(.horizontal, 8)
+            .background(selection.isEmpty ? Color.clear : Color.green.opacity(0.05))
 
             Spacer()
         }

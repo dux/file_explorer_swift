@@ -5,9 +5,6 @@ struct iPhoneBrowserPane: View {
     @ObservedObject var deviceManager = iPhoneManager.shared
     @ObservedObject var settings = AppSettings.shared
     @State private var searchText: String = ""
-    @State private var previewURL: URL?
-    @State private var isLoadingPreview: Bool = false
-
     var body: some View {
         VStack(spacing: 0) {
             // Show different content based on view mode
@@ -17,9 +14,7 @@ struct iPhoneBrowserPane: View {
                     manager: manager,
                     deviceManager: deviceManager,
                     settings: settings,
-                    searchText: $searchText,
-                    previewURL: $previewURL,
-                    isLoadingPreview: $isLoadingPreview
+                    searchText: $searchText
                 )
             case .selected:
                 SelectedFilesView(manager: manager)
@@ -27,31 +22,60 @@ struct iPhoneBrowserPane: View {
         }
         .onChange(of: deviceManager.browseMode) { _ in
             searchText = ""
-            previewURL = nil
         }
-        .onChange(of: deviceManager.selectedFile) { newFile in
-            Task {
-                await loadPreview(for: newFile)
-            }
+        .sheet(isPresented: Binding(
+            get: { deviceManager.renamingFile != nil },
+            set: { if !$0 { deviceManager.cancelRename() } }
+        )) {
+            iPhoneRenameDialog(deviceManager: deviceManager)
         }
     }
+}
 
-    private func loadPreview(for file: iPhoneFile?) async {
-        previewURL = nil
+struct iPhoneRenameDialog: View {
+    @ObservedObject var deviceManager: iPhoneManager
 
-        guard let file, !file.isDirectory else { return }
+    private var isDirectory: Bool {
+        deviceManager.renamingFile?.isDirectory ?? false
+    }
 
-        // Check if file type is previewable
-        let ext = (file.name as NSString).pathExtension.lowercased()
-        guard FileExtensions.previewable.contains(ext) else { return }
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Image(systemName: isDirectory ? "folder.fill" : "doc.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.blue)
+                Text("Rename")
+                    .textStyle(.default, weight: .semibold)
+                Spacer()
+            }
 
-        isLoadingPreview = true
-        defer { isLoadingPreview = false }
+            TextField("Name", text: $deviceManager.renameText)
+                .styledInput()
+                .onSubmit {
+                    if !deviceManager.renameText.isEmpty {
+                        Task { await deviceManager.confirmRename() }
+                    }
+                }
 
-        // Download file for preview
-        if let localURL = await deviceManager.downloadFile(file) {
-            previewURL = localURL
+            HStack {
+                Button("Cancel") {
+                    deviceManager.cancelRename()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Rename") {
+                    Task { await deviceManager.confirmRename() }
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(deviceManager.renameText.isEmpty)
+            }
         }
+        .padding(20)
+        .frame(width: 600)
     }
 }
 
@@ -62,8 +86,6 @@ struct iPhoneFilesContent: View {
     @ObservedObject var deviceManager: iPhoneManager
     @ObservedObject var settings: AppSettings
     @Binding var searchText: String
-    @Binding var previewURL: URL?
-    @Binding var isLoadingPreview: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -87,18 +109,7 @@ struct iPhoneFilesContent: View {
                 case .apps:
                     iPhoneAppListView(manager: manager, deviceManager: deviceManager, searchText: searchText)
                 case .appDocuments:
-                    if settings.showPreviewPane {
-                        ResizableSplitView(
-                            top: {
-                                iPhoneFileListView(manager: manager, deviceManager: deviceManager, searchText: searchText)
-                            },
-                            bottom: {
-                                iPhonePreviewPane(previewURL: previewURL, isLoading: isLoadingPreview, deviceManager: deviceManager)
-                            }
-                        )
-                    } else {
-                        iPhoneFileListView(manager: manager, deviceManager: deviceManager, searchText: searchText)
-                    }
+                    iPhoneFileListView(manager: manager, deviceManager: deviceManager, searchText: searchText)
                 }
             }
         }

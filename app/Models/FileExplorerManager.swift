@@ -98,6 +98,10 @@ class FileExplorerManager: ObservableObject {
     private var history: [URL] = []
     private var historyIndex: Int = -1
 
+    // Directory monitor: detects external changes to current folder
+    private var directoryMonitorSource: DispatchSourceFileSystemObject?
+    private var monitorDebounceTask: Task<Void, Never>?
+
     let fileManager = FileManager.default
 
     var allItems: [CachedFileInfo] {
@@ -135,6 +139,7 @@ class FileExplorerManager: ObservableObject {
         loadContents()
         history.append(currentPath)
         historyIndex = 0
+        startMonitoringDirectory()
 
         // If a file was passed, select it
         if let initialFile = FileExplorerApp.initialFile {
@@ -344,6 +349,7 @@ class FileExplorerManager: ObservableObject {
             loadContents()
             restoreSelection()
             saveLastFolder(targetURL)
+            startMonitoringDirectory()
         } else {
             selectedItem = targetURL
             if let index = allItems.firstIndex(where: { $0.url == targetURL }) {
@@ -424,7 +430,11 @@ class FileExplorerManager: ObservableObject {
 
     func focusRightPane() {
         rightPaneFocused = true
-        rightPaneIndex = 0
+        if let idx = rightPaneItems.firstIndex(where: { $0.id == "selectapp" }) {
+            rightPaneIndex = idx
+        } else {
+            rightPaneIndex = 0
+        }
     }
 
     func unfocusRightPane() {
@@ -461,6 +471,7 @@ class FileExplorerManager: ObservableObject {
         currentPath = history[index]
         loadContents()
         restoreSelection()
+        startMonitoringDirectory()
     }
 
     var canGoBack: Bool {
@@ -469,6 +480,68 @@ class FileExplorerManager: ObservableObject {
 
     var canGoForward: Bool {
         historyIndex < history.count - 1
+    }
+
+    // MARK: - Directory monitoring
+
+    func startMonitoringDirectory() {
+        stopMonitoringDirectory()
+
+        let path = currentPath.path
+        let fd = open(path, O_EVTONLY)
+        guard fd >= 0 else { return }
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.delete, .rename, .write],
+            queue: .main
+        )
+
+        source.setEventHandler { [weak self] in
+            guard let self else { return }
+            let flags = source.data
+            Task { @MainActor in
+                if flags.contains(.delete) || flags.contains(.rename) {
+                    self.handleCurrentDirectoryDeleted()
+                } else if flags.contains(.write) {
+                    self.debounceReloadContents()
+                }
+            }
+        }
+
+        source.setCancelHandler {
+            close(fd)
+        }
+
+        directoryMonitorSource = source
+        source.resume()
+    }
+
+    private func stopMonitoringDirectory() {
+        directoryMonitorSource?.cancel()
+        directoryMonitorSource = nil
+        monitorDebounceTask?.cancel()
+        monitorDebounceTask = nil
+    }
+
+    private func handleCurrentDirectoryDeleted() {
+        stopMonitoringDirectory()
+        // Walk up to the nearest existing ancestor
+        var parent = currentPath.deletingLastPathComponent()
+        while !fileManager.fileExists(atPath: parent.path) && parent.path != "/" {
+            parent = parent.deletingLastPathComponent()
+        }
+        navigateTo(parent)
+        selectCurrentFolder()
+    }
+
+    private func debounceReloadContents() {
+        monitorDebounceTask?.cancel()
+        monitorDebounceTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms
+            guard !Task.isCancelled else { return }
+            self.loadContents()
+        }
     }
 
     // MARK: - Selection (Single item only)
