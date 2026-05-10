@@ -189,7 +189,7 @@ struct MoviePreviewView: View {
                 if info.posterURL != "N/A" {
                     Divider()
                     if let posterURL = URL(string: info.posterURL) {
-                        PosterImageView(imageURL: posterURL)
+                        PosterImageView(imageURL: posterURL, movieURL: folderURL)
                             .frame(maxWidth: .infinity)
                             .frame(minHeight: 620, maxHeight: .infinity, alignment: .top)
                     } else {
@@ -258,6 +258,7 @@ struct MoviePreviewView: View {
 
 private struct PosterImageView: View {
     let imageURL: URL
+    let movieURL: URL
     @State private var nsImage: NSImage?
     @State private var failed = false
 
@@ -289,21 +290,39 @@ private struct PosterImageView: View {
 
     private func loadImage() async {
         let url = Self.upgradePosterURL(imageURL)
+        let diskCache = Self.diskCachePath(for: movieURL)
+
         if let cached = Self.imageCache.object(forKey: url.absoluteString as NSString) {
             nsImage = cached
             return
         }
-        let data: Data? = await Task.detached(priority: .utility) {
+
+        // Try disk cache
+        if let diskCache, FileManager.default.fileExists(atPath: diskCache.path) {
+            if let image = NSImage(contentsOf: diskCache) {
+                Self.imageCache.setObject(image, forKey: url.absoluteString as NSString)
+                nsImage = image
+                return
+            }
+        }
+
+        let result: (Data, URL?)? = await Task.detached(priority: .utility) {
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)
-                return data
+                return (data, diskCache)
             } catch {
                 return nil
             }
         }.value
-        if let data, let image = NSImage(data: data) {
+        if let result, let image = NSImage(data: result.0) {
             Self.imageCache.setObject(image, forKey: url.absoluteString as NSString)
             nsImage = image
+            // Save to disk cache
+            if let cachePath = result.1 {
+                Task.detached(priority: .utility) {
+                    try? result.0.write(to: cachePath, options: .atomic)
+                }
+            }
         } else {
             failed = true
         }
@@ -316,6 +335,19 @@ private struct PosterImageView: View {
         cache.countLimit = 30
         return cache
     }()
+
+    // MARK: - Disk Cache
+
+    private static func diskCachePath(for movieURL: URL) -> URL? {
+        var isDir: ObjCBool = false
+        FileManager.default.fileExists(atPath: movieURL.path, isDirectory: &isDir)
+        if isDir.boolValue {
+            return movieURL.appendingPathComponent("cover.jpg")
+        }
+        let dir = movieURL.deletingLastPathComponent()
+        let name = movieURL.deletingPathExtension().lastPathComponent
+        return dir.appendingPathComponent("\(name).jpg")
+    }
 
     // MARK: - URL Upgrade
 

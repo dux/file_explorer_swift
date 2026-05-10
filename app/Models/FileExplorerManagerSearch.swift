@@ -18,7 +18,18 @@ extension FileExplorerManager {
         listCursorIndex = -1
     }
 
+    func startSearch(withQuery query: String) {
+        isSearching = true
+        searchQuery = query
+        searchResults = []
+        listCursorIndex = -1
+        performSearch(query)
+    }
+
     func cancelSearch() {
+        searchToken += 1
+        searchDebounceTask?.cancel()
+        searchDebounceTask = nil
         searchTask?.terminate()
         searchTask = nil
         isSearching = false
@@ -64,6 +75,8 @@ extension FileExplorerManager {
         searchDebounceTask?.cancel()
         searchTask?.terminate()
         searchTask = nil
+        searchToken += 1
+        let token = searchToken
 
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else {
@@ -74,6 +87,8 @@ extension FileExplorerManager {
 
         guard let fdPath = Self.findFd() else {
             ToastManager.shared.show("fd not found — install with: brew install fd")
+            searchResults = []
+            isSearchRunning = false
             return
         }
 
@@ -82,11 +97,11 @@ extension FileExplorerManager {
         searchDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 200_000_000)
             guard !Task.isCancelled else { return }
-            self.executeSearch(query: query, trimmed: trimmed, fdPath: fdPath)
+            self.executeSearch(query: query, trimmed: trimmed, fdPath: fdPath, token: token)
         }
     }
 
-    private func executeSearch(query: String, trimmed: String, fdPath: String) {
+    private func executeSearch(query: String, trimmed: String, fdPath: String, token: Int) {
         let searchDir = currentPath.path
         let showAll = showHidden
 
@@ -114,8 +129,12 @@ extension FileExplorerManager {
                 guard process.terminationStatus == 0 || process.terminationStatus == 1,
                       let output = String(data: data, encoding: .utf8) else {
                     await MainActor.run { [weak self] in
+                        guard self?.searchToken == token,
+                              self?.searchQuery == query,
+                              self?.currentPath.path == searchDir else { return }
                         self?.searchResults = []
                         self?.isSearchRunning = false
+                        self?.searchTask = nil
                     }
                     return
                 }
@@ -139,15 +158,21 @@ extension FileExplorerManager {
                 }
 
                 await MainActor.run { [weak self] in
-                    if self?.searchQuery == query {
-                        self?.searchResults = sorted
-                        self?.isSearchRunning = false
-                    }
+                    guard self?.searchToken == token,
+                          self?.searchQuery == query,
+                          self?.currentPath.path == searchDir else { return }
+                    self?.searchResults = sorted
+                    self?.isSearchRunning = false
+                    self?.searchTask = nil
                 }
             } catch {
                 await MainActor.run { [weak self] in
+                    guard self?.searchToken == token,
+                          self?.searchQuery == query,
+                          self?.currentPath.path == searchDir else { return }
                     self?.searchResults = []
                     self?.isSearchRunning = false
+                    self?.searchTask = nil
                 }
             }
         }

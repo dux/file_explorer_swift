@@ -379,7 +379,7 @@ class KeyCaptureView: NSView {
                let c = chars.first, c.isLetter,
                !event.modifierFlags.contains(.command),
                !event.modifierFlags.contains(.control) {
-                manager.jumpToLetter(c)
+                manager.startSearch(withQuery: String(c))
                 return true
             }
         }

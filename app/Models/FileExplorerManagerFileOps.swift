@@ -133,7 +133,7 @@ extension FileExplorerManager {
         guard url.pathExtension.lowercased() == "app" else { return }
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, error in
             Task { @MainActor in
-                if let error = error {
+                if let error {
                     ToastManager.shared.showError("Failed to launch app: \(error.localizedDescription)")
                 }
             }

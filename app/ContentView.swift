@@ -102,6 +102,7 @@ struct WindowAccessor: NSViewRepresentable {
         Coordinator(settings: settings)
     }
 
+    @MainActor
     class Coordinator: NSObject {
         let settings: AppSettings
 

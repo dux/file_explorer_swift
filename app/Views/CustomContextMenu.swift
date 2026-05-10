@@ -591,7 +591,7 @@ struct RightClickableArea: NSViewRepresentable {
         var isDirectory: Bool = false
 
         override func rightMouseDown(with event: NSEvent) {
-            guard let url = url,
+            guard let url,
                   let window = self.window,
                   let contentView = window.contentView else { return }
             let windowPoint = event.locationInWindow

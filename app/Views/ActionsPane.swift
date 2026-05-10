@@ -718,4 +718,3 @@ struct SelectionSection: View {
         .background(Color.green.opacity(0.05))
     }
 }
-

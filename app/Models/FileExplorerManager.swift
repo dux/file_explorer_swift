@@ -73,6 +73,7 @@ class FileExplorerManager: ObservableObject {
     @Published var listCursorIndex: Int = -1
     internal var searchTask: Process?
     internal var searchDebounceTask: Task<Void, Never>?
+    internal var searchToken: Int = 0
 
     // Remember selected item per folder
     private var selectionMemory: [String: URL] = [:]
@@ -301,7 +302,7 @@ class FileExplorerManager: ObservableObject {
         if path.path == downloads.path || path.path == desktop.path {
             return .modified
         }
-        return .type
+        return .name
     }
 
     private func saveSelection() {
@@ -331,6 +332,9 @@ class FileExplorerManager: ObservableObject {
         }
 
         if isDirectory.boolValue {
+            if isSearching {
+                cancelSearch()
+            }
             saveSelection()
 
             // Add to history only if different from current

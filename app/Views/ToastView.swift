@@ -104,7 +104,7 @@ class CopyProgressManager: ObservableObject {
                             let c = fileCount
                             let f = fileName
                             Task { @MainActor in
-                                CopyProgressManager.shared.update(file: f, count: c)
+                                Self.shared.update(file: f, count: c)
                             }
                         }
                     }
@@ -120,7 +120,7 @@ class CopyProgressManager: ObservableObject {
             // Final update
             let finalCount = fileCount
             Task { @MainActor in
-                CopyProgressManager.shared.update(file: "", count: finalCount)
+                Self.shared.update(file: "", count: finalCount)
             }
 
             return copied

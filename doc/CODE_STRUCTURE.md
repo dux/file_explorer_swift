@@ -130,7 +130,7 @@ ContentView
 ## Navigation System
 
 ### Folder navigation
-- **`navigateTo(_ url)`** -- validates path, saves selection memory, pushes history, sets `currentPath`, auto-selects sort mode (.modified for Downloads/Desktop, .type otherwise), calls `loadContents()`, restores selection.
+- **`navigateTo(_ url)`** -- validates path, saves selection memory, pushes history, sets `currentPath`, auto-selects sort mode (.modified for Downloads/Desktop, .name otherwise), calls `loadContents()`, restores selection.
 - **`navigateUp()`** -- stores current dir URL in parent's selection memory, calls `navigateTo(parent)`.
 - **`goBack()` / `goForward()`** -- moves `historyIndex` through history stack.
 
