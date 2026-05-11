@@ -460,8 +460,7 @@ struct ActionButtonBar: View {
                 .frame(height: 20)
 
             Button(action: {
-                manager.newFolderName = "New Folder"
-                manager.showNewFolderDialog = true
+                manager.promptForNewFolder()
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "folder.badge.plus")
@@ -474,8 +473,7 @@ struct ActionButtonBar: View {
             .help("Create new folder")
 
             Button(action: {
-                manager.newFileName = "untitled.txt"
-                manager.showNewFileDialog = true
+                manager.promptForNewFile()
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "doc.badge.plus")
@@ -516,6 +514,7 @@ struct NewFolderDialog: View {
     @Binding var folderName: String
     @Binding var isPresented: Bool
     var onCreate: () -> Void
+    @FocusState private var nameFieldFocused: Bool
 
     var body: some View {
         VStack(spacing: 16) {
@@ -530,6 +529,7 @@ struct NewFolderDialog: View {
 
             TextField("Folder name", text: $folderName)
                 .styledInput()
+                .focused($nameFieldFocused)
                 .onSubmit {
                     if !folderName.isEmpty {
                         onCreate()
@@ -558,6 +558,14 @@ struct NewFolderDialog: View {
         }
         .padding(20)
         .frame(width: 300)
+        .onAppear {
+            DispatchQueue.main.async {
+                nameFieldFocused = true
+            }
+        }
+        .onExitCommand {
+            isPresented = false
+        }
     }
 }
 
@@ -565,6 +573,7 @@ struct NewFileDialog: View {
     @Binding var fileName: String
     @Binding var isPresented: Bool
     var onCreate: () -> Void
+    @FocusState private var nameFieldFocused: Bool
 
     var body: some View {
         VStack(spacing: 16) {
@@ -579,6 +588,7 @@ struct NewFileDialog: View {
 
             TextField("File name", text: $fileName)
                 .styledInput()
+                .focused($nameFieldFocused)
                 .onSubmit {
                     if !fileName.isEmpty {
                         onCreate()
@@ -607,6 +617,14 @@ struct NewFileDialog: View {
         }
         .padding(20)
         .frame(width: 300)
+        .onAppear {
+            DispatchQueue.main.async {
+                nameFieldFocused = true
+            }
+        }
+        .onExitCommand {
+            isPresented = false
+        }
     }
 }
 

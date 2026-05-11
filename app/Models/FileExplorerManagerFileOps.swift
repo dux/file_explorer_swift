@@ -2,6 +2,16 @@ import Foundation
 import AppKit
 
 extension FileExplorerManager {
+    func promptForNewFolder() {
+        newFolderName = "New Folder"
+        showNewFolderDialog = true
+    }
+
+    func promptForNewFile() {
+        newFileName = "untitled.txt"
+        showNewFileDialog = true
+    }
+
     func createNewFolder(named name: String? = nil) {
         var folderName = name ?? "New Folder"
         var counter = 1

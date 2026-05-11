@@ -517,11 +517,10 @@ private struct FolderContextMenuContent: View {
             ToastManager.shared.show("Path copied to clipboard")
         }))
         items.append(MenuItem(icon: "folder.badge.plus", label: "Create Folder", action: act {
-            manager.createNewFolder()
+            manager.promptForNewFolder()
         }))
         items.append(MenuItem(icon: "doc.badge.plus", label: "Create File", action: act {
-            manager.newFileName = "untitled.txt"
-            manager.showNewFileDialog = true
+            manager.promptForNewFile()
         }))
         return items
     }

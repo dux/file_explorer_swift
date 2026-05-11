@@ -56,8 +56,7 @@ class KeyCaptureView: NSView {
         // Cmd+Shift+N: create new folder
         if event.keyCode == 45 && event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) {
             if manager.currentPane == .browser {
-                manager.newFolderName = "New Folder"
-                manager.showNewFolderDialog = true
+                manager.promptForNewFolder()
             }
             return
         }
@@ -65,8 +64,7 @@ class KeyCaptureView: NSView {
         // Cmd+Shift+F: create new file
         if event.keyCode == 3 && event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) {
             if manager.currentPane == .browser {
-                manager.newFileName = "untitled.txt"
-                manager.showNewFileDialog = true
+                manager.promptForNewFile()
             }
             return
         }
