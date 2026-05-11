@@ -308,12 +308,18 @@ private struct PosterImageView: View {
 
         let result: (Data, URL?)? = await Task.detached(priority: .utility) {
             do {
-                let (data, _) = try await URLSession.shared.data(from: url)
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 8
+                let (data, response) = try await Self.posterSession.data(for: request)
+                guard let http = response as? HTTPURLResponse,
+                      (200..<300).contains(http.statusCode),
+                      !data.isEmpty else { return nil }
                 return (data, diskCache)
             } catch {
                 return nil
             }
         }.value
+        guard !Task.isCancelled else { return }
         if let result, let image = NSImage(data: result.0) {
             Self.imageCache.setObject(image, forKey: url.absoluteString as NSString)
             nsImage = image
@@ -327,6 +333,15 @@ private struct PosterImageView: View {
             failed = true
         }
     }
+
+    private static let posterSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.waitsForConnectivity = false
+        config.timeoutIntervalForRequest = 8
+        config.timeoutIntervalForResource = 12
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: config)
+    }()
 
     // MARK: - Memory Cache
 

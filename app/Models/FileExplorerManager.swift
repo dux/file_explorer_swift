@@ -71,9 +71,12 @@ class FileExplorerManager: ObservableObject {
     @Published var searchResults: [CachedFileInfo] = []
     @Published var isSearchRunning: Bool = false
     @Published var listCursorIndex: Int = -1
-    internal var searchTask: Process?
-    internal var searchDebounceTask: Task<Void, Never>?
+    @Published var searchScannedCount: Int = 0
+    @Published var searchExtensionCounts: [String: Int] = [:]
+    @Published var selectedSearchExtension: String? = nil
+    internal var searchIndexTask: Task<Void, Never>?
     internal var searchToken: Int = 0
+    internal var searchAllItems: [CachedFileInfo] = []
 
     // Remember selected item per folder
     private var selectionMemory: [String: URL] = [:]

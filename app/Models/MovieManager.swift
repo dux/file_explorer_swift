@@ -34,6 +34,8 @@ class MovieManager {
 
     private var omdbKey: String { AppSettings.shared.omdbAPIKey }
     private var inFlightTasks: [String: Task<MovieInfo?, Never>] = [:]
+    nonisolated private static let movieLookupTimeoutSeconds: UInt64 = 20
+    nonisolated private static let imdbLookupTimeoutSeconds: UInt64 = 15
 
     nonisolated private static let networkSession: URLSession = {
         let config = URLSessionConfiguration.ephemeral
@@ -67,7 +69,9 @@ class MovieManager {
 
         let task = Task.detached(priority: .utility) { () -> MovieInfo? in
             let searchTerm = year.isEmpty ? title : "\(title) \(year)"
-            guard let info = await Self.lookupMovie(searchTerm, apiKey: apiKey) else { return nil }
+            guard let info = await Self.withTimeout(seconds: Self.movieLookupTimeoutSeconds, operation: {
+                await Self.lookupMovie(searchTerm, apiKey: apiKey)
+            }) else { return nil }
             Self.saveCache(info, to: cacheFile)
             return info
         }
@@ -83,7 +87,9 @@ class MovieManager {
             var isDir: ObjCBool = false
             FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
             let cacheFile = Self.cacheFileURL(for: url, isDir: isDir.boolValue)
-            guard let info = await Self.scrapeIMDB(id: imdbID) else { return nil }
+            guard let info = await Self.withTimeout(seconds: Self.imdbLookupTimeoutSeconds, operation: {
+                await Self.scrapeIMDB(id: imdbID)
+            }) else { return nil }
             Self.saveCache(info, to: cacheFile)
             return info
         }.value
@@ -404,5 +410,26 @@ class MovieManager {
         if let m = try? /(\d+)M/.firstMatch(in: dur) { result += "\(m.1) min" }
         let trimmed = result.trimmingCharacters(in: .whitespaces)
         return trimmed.isEmpty ? "N/A" : trimmed
+    }
+
+    nonisolated private static func withTimeout<T: Sendable>(
+        seconds: UInt64,
+        operation: @escaping @Sendable () async -> T?
+    ) async -> T? {
+        await withTaskGroup(of: T?.self) { group in
+            group.addTask {
+                await operation()
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
+                return nil
+            }
+            guard let result = await group.next() else {
+                group.cancelAll()
+                return nil
+            }
+            group.cancelAll()
+            return result
+        }
     }
 }

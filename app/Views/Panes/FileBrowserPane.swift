@@ -98,11 +98,9 @@ struct SearchBar: View {
                         .controlSize(.small)
                 }
 
-                if !manager.searchQuery.isEmpty {
-                    Text("\(manager.searchResults.count)")
-                        .textStyle(.buttons)
-                        .foregroundColor(.secondary)
-                }
+                Text("\(manager.searchResults.count) / \(manager.searchScannedCount)")
+                    .textStyle(.buttons)
+                    .foregroundColor(.secondary)
 
                 Button(action: { manager.cancelSearch() }) {
                     Image(systemName: "xmark.circle.fill")
@@ -111,10 +109,62 @@ struct SearchBar: View {
                 }
                 .buttonStyle(.plain)
             }
+
+            SearchExtensionFilterBar(manager: manager)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+    }
+}
+
+struct SearchExtensionFilterBar: View {
+    @ObservedObject var manager: FileExplorerManager
+
+    var body: some View {
+        let filters = manager.searchExtensionFilters
+        if !filters.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    extensionButton(
+                        title: "All",
+                        count: manager.searchScannedCount,
+                        isSelected: manager.selectedSearchExtension == nil
+                    ) {
+                        manager.toggleSearchExtension(nil)
+                    }
+
+                    ForEach(filters, id: \.extensionKey) { filter in
+                        extensionButton(
+                            title: manager.searchExtensionLabel(filter.extensionKey),
+                            count: filter.count,
+                            isSelected: manager.selectedSearchExtension == filter.extensionKey
+                        ) {
+                            manager.toggleSearchExtension(filter.extensionKey)
+                        }
+                    }
+                }
+                .padding(.vertical, 1)
+            }
+        }
+    }
+
+    private func extensionButton(title: String, count: Int, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .textStyle(.small, weight: isSelected ? .semibold : .regular)
+                Text("\(count)")
+                    .textStyle(.small)
+                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .foregroundColor(isSelected ? .white : .primary)
+            .background(isSelected ? Color.accentColor : Color.secondary.opacity(0.12))
+            .cornerRadius(4)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -136,13 +186,17 @@ struct SearchResultsView: View {
     }
 
     var body: some View {
-        if manager.searchResults.isEmpty && !manager.isSearchRunning {
+        if manager.searchResults.isEmpty {
             VStack(spacing: 12) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 32))
                     .foregroundColor(.secondary)
-                if manager.searchQuery.isEmpty {
-                    Text("Type to search files")
+                if manager.isSearchRunning {
+                    Text("Indexing files...")
+                        .textStyle(.buttons)
+                        .foregroundColor(.secondary)
+                } else if manager.searchQuery.isEmpty {
+                    Text("No files found")
                         .textStyle(.buttons)
                         .foregroundColor(.secondary)
                 } else {

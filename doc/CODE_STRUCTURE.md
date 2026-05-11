@@ -44,6 +44,7 @@ The **central @MainActor ObservableObject**. Owns all navigation, file listing, 
 - `browserViewMode: BrowserViewMode` -- `.files`, `.selected`
 - `showHidden`, `hiddenCount`, `hasImages`
 - `isSearching`, `searchQuery`, `searchResults`, `isSearchRunning`, `listCursorIndex`
+- `searchScannedCount`, `searchExtensionCounts`, `selectedSearchExtension` -- recursive search index/filter state
 - `sidebarFocused`, `sidebarIndex`, `rightPaneFocused`, `rightPaneIndex`, `rightPaneItems`
 - `renamingItem`, `renameText`, `showAppSelectorForURL`
 
@@ -53,7 +54,8 @@ The **central @MainActor ObservableObject**. Owns all navigation, file listing, 
 - `navigateUp()` -- remembers current folder in parent's selection memory, then navigates
 - `goBack()` / `goForward()` -- history-based navigation
 - `openItem(_ item)` -- directories: navigate; archives: extract; files: open with preferred app
-- `performSearch(_ query)` -- debounced (200ms), runs `fd` CLI tool in background, results sorted dirs-first
+- `startSearch()` -- begins a background recursive file scan, skipping heavy folders such as `.git`, `node_modules`, `tmp`, build/cache directories
+- `performSearch(_ query)` -- filters the in-memory search index by name/path and selected extension, showing up to 1,000 results
 - `selectNext()`, `selectPrevious()`, `jumpToLetter()`, `selectFirst()`, `selectLast()` -- keyboard nav
 - `addFileToSelection()`, `toggleFileSelection()`, `selectAllFiles()` -- delegates to `SelectionManager.shared`
 

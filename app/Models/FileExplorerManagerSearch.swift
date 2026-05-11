@@ -1,42 +1,86 @@
 import Foundation
 
 extension FileExplorerManager {
-    // MARK: - Search with fd
+    // MARK: - Recursive Search Index
 
-    private static func findFd() -> String? {
-        for dir in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"] {
-            let path = "\(dir)/fd"
-            if FileManager.default.fileExists(atPath: path) { return path }
-        }
-        return nil
+    private static let maxVisibleSearchResults = 1_000
+    private static let searchBatchSize = 1_000
+    private static let emptyExtensionKey = "__no_extension__"
+    private static let searchResourceKeys: Set<URLResourceKey> = [
+        .isDirectoryKey,
+        .contentModificationDateKey,
+        .fileSizeKey,
+        .isHiddenKey
+    ]
+    private static let defaultSearchSkipDirectories: Set<String> = [
+        ".build", ".bundle", ".cache", ".git", ".gradle", ".hg", ".idea",
+        ".next", ".nuxt", ".parcel-cache", ".sass-cache", ".svn", ".turbo",
+        ".venv", ".vscode", "DerivedData", "Pods", "__pycache__", "_build",
+        "build", "coverage", "deps", "dist", "node_modules", "target", "tmp",
+        "vendor"
+    ]
+
+    var searchExtensionFilters: [(extensionKey: String, count: Int)] {
+        searchExtensionCounts
+            .sorted { lhs, rhs in
+                if lhs.value != rhs.value { return lhs.value > rhs.value }
+                return searchExtensionLabel(lhs.key).localizedStandardCompare(searchExtensionLabel(rhs.key)) == .orderedAscending
+            }
+            .map { (extensionKey: $0.key, count: $0.value) }
+    }
+
+    func searchExtensionLabel(_ key: String) -> String {
+        key == Self.emptyExtensionKey ? "No ext" : key
     }
 
     func startSearch() {
         isSearching = true
         searchQuery = ""
-        searchResults = []
-        listCursorIndex = -1
+        selectedSearchExtension = nil
+        resetSearchState()
+        startSearchIndexScan()
     }
 
     func startSearch(withQuery query: String) {
         isSearching = true
         searchQuery = query
-        searchResults = []
-        listCursorIndex = -1
-        performSearch(query)
+        selectedSearchExtension = nil
+        resetSearchState()
+        startSearchIndexScan()
     }
 
     func cancelSearch() {
         searchToken += 1
-        searchDebounceTask?.cancel()
-        searchDebounceTask = nil
-        searchTask?.terminate()
-        searchTask = nil
+        searchIndexTask?.cancel()
+        searchIndexTask = nil
         isSearching = false
         searchQuery = ""
-        searchResults = []
+        selectedSearchExtension = nil
+        resetSearchState()
         isSearchRunning = false
+    }
+
+    func performSearch(_ query: String) {
+        searchQuery = query
         listCursorIndex = -1
+
+        guard isSearching else {
+            searchResults = []
+            isSearchRunning = false
+            return
+        }
+
+        applySearchFilters()
+    }
+
+    func toggleSearchExtension(_ extensionKey: String?) {
+        if selectedSearchExtension == extensionKey {
+            selectedSearchExtension = nil
+        } else {
+            selectedSearchExtension = extensionKey
+        }
+        listCursorIndex = -1
+        applySearchFilters()
     }
 
     // MARK: - List cursor navigation (search results / color tags)
@@ -69,112 +113,141 @@ extension FileExplorerManager {
         }
     }
 
-    func performSearch(_ query: String) {
-        searchQuery = query
+    private func resetSearchState() {
+        searchResults = []
+        searchAllItems = []
+        searchScannedCount = 0
+        searchExtensionCounts = [:]
+        listCursorIndex = -1
+        isSearchRunning = false
+    }
 
-        searchDebounceTask?.cancel()
-        searchTask?.terminate()
-        searchTask = nil
+    private func startSearchIndexScan() {
         searchToken += 1
+        searchIndexTask?.cancel()
+
         let token = searchToken
-
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else {
-            searchResults = []
-            isSearchRunning = false
-            return
-        }
-
-        guard let fdPath = Self.findFd() else {
-            ToastManager.shared.show("fd not found — install with: brew install fd")
-            searchResults = []
-            isSearchRunning = false
-            return
-        }
+        let root = currentPath
+        let showHiddenFiles = showHidden
+        let skipDirectories = Self.defaultSearchSkipDirectories.union(AppSettings.shared.copySkipFolders)
+        let resourceKeys = Self.searchResourceKeys
+        let batchSize = Self.searchBatchSize
 
         isSearchRunning = true
 
-        searchDebounceTask = Task {
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            guard !Task.isCancelled else { return }
-            self.executeSearch(query: query, trimmed: trimmed, fdPath: fdPath, token: token)
+        searchIndexTask = Task.detached(priority: .userInitiated) { [weak self] in
+            let options: FileManager.DirectoryEnumerationOptions = showHiddenFiles
+                ? [.skipsPackageDescendants]
+                : [.skipsHiddenFiles, .skipsPackageDescendants]
+            let fileManager = FileManager.default
+
+            guard let enumerator = fileManager.enumerator(
+                at: root,
+                includingPropertiesForKeys: Array(resourceKeys),
+                options: options,
+                errorHandler: { _, _ in true }
+            ) else {
+                await self?.finishSearchIndexScan(token: token, root: root)
+                return
+            }
+
+            var batch: [CachedFileInfo] = []
+
+            while let url = enumerator.nextObject() as? URL {
+                guard !Task.isCancelled else { return }
+
+                let values = try? url.resourceValues(forKeys: resourceKeys)
+                let isDirectory = values?.isDirectory ?? false
+
+                if isDirectory {
+                    if skipDirectories.contains(url.lastPathComponent) {
+                        enumerator.skipDescendants()
+                    }
+                    continue
+                }
+
+                let hidden = url.lastPathComponent.hasPrefix(".") || (values?.isHidden ?? false)
+                let info = CachedFileInfo(
+                    url: url,
+                    isDirectory: false,
+                    size: Int64(values?.fileSize ?? 0),
+                    modDate: values?.contentModificationDate,
+                    isHidden: hidden
+                )
+                batch.append(info)
+
+                if batch.count >= batchSize {
+                    await self?.appendSearchBatch(batch, token: token, root: root)
+                    batch.removeAll(keepingCapacity: true)
+                }
+            }
+
+            if !batch.isEmpty {
+                await self?.appendSearchBatch(batch, token: token, root: root)
+            }
+
+            await self?.finishSearchIndexScan(token: token, root: root)
         }
     }
 
-    private func executeSearch(query: String, trimmed: String, fdPath: String, token: Int) {
-        let searchDir = currentPath.path
-        let showAll = showHidden
+    private func appendSearchBatch(_ batch: [CachedFileInfo], token: Int, root: URL) {
+        guard searchToken == token, currentPath.path == root.path else { return }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: fdPath)
-        var args = ["--max-results", "200", "--color", "never"]
-        if showAll {
-            args += ["--hidden", "--no-ignore"]
+        searchAllItems.append(contentsOf: batch)
+        searchScannedCount = searchAllItems.count
+
+        for item in batch {
+            let key = searchExtensionKey(for: item)
+            searchExtensionCounts[key, default: 0] += 1
         }
-        args += [trimmed, searchDir]
-        process.arguments = args
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
+        applySearchFilters()
+    }
 
-        self.searchTask = process
+    private func finishSearchIndexScan(token: Int, root: URL) {
+        guard searchToken == token, currentPath.path == root.path else { return }
+        isSearchRunning = false
+        searchIndexTask = nil
+        applySearchFilters()
+    }
 
-        Task.detached {
-            do {
-                try process.run()
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                process.waitUntilExit()
+    private func applySearchFilters() {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let extensionKey = selectedSearchExtension
+        var filtered: [CachedFileInfo] = []
+        filtered.reserveCapacity(min(searchAllItems.count, Self.maxVisibleSearchResults))
 
-                guard process.terminationStatus == 0 || process.terminationStatus == 1,
-                      let output = String(data: data, encoding: .utf8) else {
-                    await MainActor.run { [weak self] in
-                        guard self?.searchToken == token,
-                              self?.searchQuery == query,
-                              self?.currentPath.path == searchDir else { return }
-                        self?.searchResults = []
-                        self?.isSearchRunning = false
-                        self?.searchTask = nil
-                    }
-                    return
-                }
-
-                let resourceKeys: Set<URLResourceKey> = [.isDirectoryKey, .contentModificationDateKey, .fileSizeKey, .isHiddenKey]
-                let results: [CachedFileInfo] = output.split(separator: "\n").compactMap { line in
-                    let path = String(line)
-                    guard !path.isEmpty else { return nil }
-                    let url = URL(fileURLWithPath: path)
-                    let values = try? url.resourceValues(forKeys: resourceKeys)
-                    let isDir = values?.isDirectory ?? false
-                    let size = Int64(values?.fileSize ?? 0)
-                    let modDate = values?.contentModificationDate
-                    let hidden = url.lastPathComponent.hasPrefix(".") || (values?.isHidden ?? false)
-                    return CachedFileInfo(url: url, isDirectory: isDir, size: size, modDate: modDate, isHidden: hidden)
-                }
-
-                let sorted = results.sorted { a, b in
-                    if a.isDirectory != b.isDirectory { return a.isDirectory }
-                    return a.name.localizedStandardCompare(b.name) == .orderedAscending
-                }
-
-                await MainActor.run { [weak self] in
-                    guard self?.searchToken == token,
-                          self?.searchQuery == query,
-                          self?.currentPath.path == searchDir else { return }
-                    self?.searchResults = sorted
-                    self?.isSearchRunning = false
-                    self?.searchTask = nil
-                }
-            } catch {
-                await MainActor.run { [weak self] in
-                    guard self?.searchToken == token,
-                          self?.searchQuery == query,
-                          self?.currentPath.path == searchDir else { return }
-                    self?.searchResults = []
-                    self?.isSearchRunning = false
-                    self?.searchTask = nil
-                }
+        for item in searchAllItems {
+            if let extensionKey, searchExtensionKey(for: item) != extensionKey {
+                continue
+            }
+            if !query.isEmpty && !matchesSearchQuery(item, query: query) {
+                continue
+            }
+            filtered.append(item)
+            if filtered.count >= Self.maxVisibleSearchResults {
+                break
             }
         }
+
+        searchResults = filtered
+    }
+
+    private func matchesSearchQuery(_ item: CachedFileInfo, query: String) -> Bool {
+        item.name.localizedCaseInsensitiveContains(query) ||
+            relativeSearchPath(for: item.url).localizedCaseInsensitiveContains(query)
+    }
+
+    private func relativeSearchPath(for url: URL) -> String {
+        let full = url.path
+        let base = currentPath.path
+        guard full.hasPrefix(base) else { return full }
+        let relative = String(full.dropFirst(base.count))
+        return relative.hasPrefix("/") ? String(relative.dropFirst()) : relative
+    }
+
+    private func searchExtensionKey(for item: CachedFileInfo) -> String {
+        let ext = item.url.pathExtension.lowercased()
+        return ext.isEmpty ? Self.emptyExtensionKey : ext
     }
 }

@@ -1063,6 +1063,71 @@ struct SearchDebounceTests {
         #expect(manager.searchResults.isEmpty)
         #expect(!manager.isSearchRunning)
     }
+
+    @Test("active empty search shows indexed files")
+    @MainActor func activeEmptySearchShowsIndexedFiles() {
+        let manager = FileExplorerManager()
+        let root = URL(fileURLWithPath: "/tmp/search-index")
+        let psd = CachedFileInfo(
+            url: root.appendingPathComponent("design.psd"),
+            isDirectory: false,
+            size: 1,
+            modDate: nil,
+            isHidden: false
+        )
+        let jpg = CachedFileInfo(
+            url: root.appendingPathComponent("preview.jpg"),
+            isDirectory: false,
+            size: 1,
+            modDate: nil,
+            isHidden: false
+        )
+
+        manager.currentPath = root
+        manager.isSearching = true
+        manager.searchAllItems = [psd, jpg]
+        manager.searchScannedCount = 2
+        manager.searchExtensionCounts = ["psd": 1, "jpg": 1]
+        manager.performSearch("")
+
+        #expect(manager.searchResults.map(\.name) == ["design.psd", "preview.jpg"])
+        #expect(!manager.isSearchRunning)
+    }
+
+    @Test("extension toggle filters indexed search results")
+    @MainActor func extensionToggleFiltersIndexedResults() {
+        let manager = FileExplorerManager()
+        let root = URL(fileURLWithPath: "/tmp/search-index")
+        let psd = CachedFileInfo(
+            url: root.appendingPathComponent("art/design.psd"),
+            isDirectory: false,
+            size: 1,
+            modDate: nil,
+            isHidden: false
+        )
+        let jpg = CachedFileInfo(
+            url: root.appendingPathComponent("art/design.jpg"),
+            isDirectory: false,
+            size: 1,
+            modDate: nil,
+            isHidden: false
+        )
+
+        manager.currentPath = root
+        manager.isSearching = true
+        manager.searchAllItems = [psd, jpg]
+        manager.searchScannedCount = 2
+        manager.searchExtensionCounts = ["psd": 1, "jpg": 1]
+        manager.performSearch("design")
+        manager.toggleSearchExtension("psd")
+
+        #expect(manager.searchResults.map(\.name) == ["design.psd"])
+        #expect(manager.selectedSearchExtension == "psd")
+
+        manager.toggleSearchExtension("psd")
+        #expect(manager.searchResults.map(\.name) == ["design.psd", "design.jpg"])
+        #expect(manager.selectedSearchExtension == nil)
+    }
 }
 
 // MARK: - ShortcutsManager Pin/Unpin Tests
