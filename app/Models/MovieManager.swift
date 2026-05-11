@@ -68,9 +68,8 @@ class MovieManager {
         let cacheFile = prep.cacheFile
 
         let task = Task.detached(priority: .utility) { () -> MovieInfo? in
-            let searchTerm = year.isEmpty ? title : "\(title) \(year)"
             guard let info = await Self.withTimeout(seconds: Self.movieLookupTimeoutSeconds, operation: {
-                await Self.lookupMovie(searchTerm, apiKey: apiKey)
+                await Self.lookupMovie(title: title, year: year, apiKey: apiKey)
             }) else { return nil }
             Self.saveCache(info, to: cacheFile)
             return info
@@ -161,16 +160,19 @@ class MovieManager {
     // MARK: - Lookup (nonisolated, runs off main thread)
 
     nonisolated static func lookupMovie(_ searchTerm: String, apiKey: String? = nil) async -> MovieInfo? {
+        let detected = detectMovie(folderName: searchTerm)
+        let title = detected?.title ?? searchTerm
+        let year = detected?.year ?? ""
+        return await lookupMovie(title: title, year: year, apiKey: apiKey)
+    }
+
+    nonisolated static func lookupMovie(title: String, year: String, apiKey: String? = nil) async -> MovieInfo? {
         let key: String
         if let apiKey {
             key = apiKey
         } else {
             key = await MainActor.run { AppSettings.shared.omdbAPIKey }
         }
-
-        let detected = detectMovie(folderName: searchTerm)
-        let title = detected?.title ?? searchTerm
-        let year = detected?.year ?? ""
 
         // Try OMDB first, then fall back to IMDB scraping
         if !key.isEmpty {
@@ -186,23 +188,51 @@ class MovieManager {
 
     nonisolated private static func fetchFromOMDB(title: String, year: String, apiKey: String) async -> MovieInfo? {
         // Try with year first, then without
-        if let info = await omdbRequest(params: "t=\(title)&y=\(year)", apiKey: apiKey) {
+        if let info = await omdbRequest(title: title, year: year, apiKey: apiKey) {
             return info
         }
         if !year.isEmpty {
-            return await omdbRequest(params: "t=\(title)", apiKey: apiKey)
+            return await omdbRequest(title: title, year: "", apiKey: apiKey)
         }
         return nil
     }
 
     nonisolated private static func fetchFromOMDB(imdbID: String, apiKey: String) async -> MovieInfo? {
-        await omdbRequest(params: "i=\(imdbID)", apiKey: apiKey)
+        await omdbRequest(queryItems: [
+            URLQueryItem(name: "i", value: imdbID)
+        ], apiKey: apiKey)
     }
 
-    nonisolated private static func omdbRequest(params: String, apiKey: String) async -> MovieInfo? {
-        let encoded = params.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? params
-        guard let url = URL(string: "https://www.omdbapi.com/?\(encoded)&plot=short&apikey=\(apiKey)") else { return nil }
+    nonisolated static func omdbURL(title: String, year: String, apiKey: String) -> URL? {
+        var queryItems = [
+            URLQueryItem(name: "t", value: title)
+        ]
+        if !year.isEmpty {
+            queryItems.append(URLQueryItem(name: "y", value: year))
+        }
+        return omdbURL(queryItems: queryItems, apiKey: apiKey)
+    }
 
+    nonisolated private static func omdbURL(queryItems: [URLQueryItem], apiKey: String) -> URL? {
+        var components = URLComponents(string: "https://www.omdbapi.com/")
+        components?.queryItems = queryItems + [
+            URLQueryItem(name: "plot", value: "short"),
+            URLQueryItem(name: "apikey", value: apiKey)
+        ]
+        return components?.url
+    }
+
+    nonisolated private static func omdbRequest(title: String, year: String, apiKey: String) async -> MovieInfo? {
+        guard let url = omdbURL(title: title, year: year, apiKey: apiKey) else { return nil }
+        return await omdbRequest(url: url)
+    }
+
+    nonisolated private static func omdbRequest(queryItems: [URLQueryItem], apiKey: String) async -> MovieInfo? {
+        guard let url = omdbURL(queryItems: queryItems, apiKey: apiKey) else { return nil }
+        return await omdbRequest(url: url)
+    }
+
+    nonisolated private static func omdbRequest(url: URL) async -> MovieInfo? {
         do {
             var request = URLRequest(url: url)
             request.timeoutInterval = 12
@@ -335,10 +365,10 @@ class MovieManager {
 
     nonisolated private static func cacheFileURL(for url: URL, isDir: Bool) -> URL {
         if isDir {
-            return url.appendingPathComponent(".fe-movie.json")
+            return url.appendingPathComponent("imdb.txt")
         } else {
             let dir = url.deletingLastPathComponent()
-            return dir.appendingPathComponent(".fe-\(url.lastPathComponent).json")
+            return dir.appendingPathComponent("imdb.txt")
         }
     }
 
@@ -368,16 +398,71 @@ class MovieManager {
 
     nonisolated private static func loadCache(from url: URL) -> MovieInfo? {
         guard let data = try? Data(contentsOf: url) else { return nil }
-        if let info = try? JSONDecoder().decode(MovieInfo.self, from: data) { return info }
-        try? FileManager.default.removeItem(at: url)
-        return nil
+        guard let text = String(data: data, encoding: .utf8) else { return nil }
+        return parseIMDBText(text)
     }
 
     nonisolated private static func saveCache(_ info: MovieInfo, to url: URL) {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(info) else { return }
-        try? data.write(to: url, options: .atomic)
+        let text = imdbText(for: info)
+        try? text.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    nonisolated static func imdbText(for info: MovieInfo) -> String {
+        [
+            ("link", info.imdbURL),
+            ("title", info.title),
+            ("year", info.year),
+            ("rated", info.rated),
+            ("runtime", info.runtime),
+            ("genre", info.genre),
+            ("director", info.director),
+            ("actors", info.actors),
+            ("plot", info.plot),
+            ("poster_url", info.posterURL),
+            ("imdb_rating", info.imdbRating),
+            ("imdb_id", info.imdbID),
+            ("type", info.type)
+        ]
+        .map { "\($0.0): \(cacheTextValue($0.1))" }
+        .joined(separator: "\n") + "\n"
+    }
+
+    nonisolated static func parseIMDBText(_ text: String) -> MovieInfo? {
+        var fields: [String: String] = [:]
+        for line in text.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.hasPrefix("#") { continue }
+            let parts = trimmed.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2 else { continue }
+            let key = parts[0].trimmingCharacters(in: .whitespaces).lowercased()
+            let value = parts[1].trimmingCharacters(in: .whitespaces)
+            fields[key] = value
+        }
+
+        guard let title = fields["title"], !title.isEmpty else { return nil }
+        let imdbID = fields["imdb_id"] ?? fields["imdbid"] ?? extractIMDBID(from: fields["link"] ?? "")
+        guard let imdbID, !imdbID.isEmpty else { return nil }
+
+        return MovieInfo(
+            title: title,
+            year: fields["year"] ?? "N/A",
+            rated: fields["rated"] ?? "N/A",
+            runtime: fields["runtime"] ?? "N/A",
+            genre: fields["genre"] ?? "N/A",
+            director: fields["director"] ?? "N/A",
+            actors: fields["actors"] ?? fields["cast"] ?? "N/A",
+            plot: fields["plot"] ?? "N/A",
+            posterURL: fields["poster_url"] ?? fields["poster"] ?? "N/A",
+            imdbRating: fields["imdb_rating"] ?? fields["rating"] ?? "N/A",
+            imdbID: imdbID,
+            type: fields["type"] ?? "movie"
+        )
+    }
+
+    nonisolated private static func cacheTextValue(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
     }
 
     // MARK: - Helpers

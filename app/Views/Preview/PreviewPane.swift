@@ -170,7 +170,7 @@ struct PreviewPane: View {
         case .audio:
             AudioPreviewView(url: url)
         case .video:
-            VideoPreviewView(url: url)
+            NoPreviewView(url: url)
         case .dmg:
             DMGPreviewView(url: url)
         case .packageJson:

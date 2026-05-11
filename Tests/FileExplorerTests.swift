@@ -950,6 +950,18 @@ struct MovieDetectionTests {
         #expect(result?.year == "1994")
     }
 
+    @Test("OMDB URL keeps title and year as separate query items")
+    func omdbURLIncludesYear() throws {
+        let url = try #require(MovieManager.omdbURL(title: "Blade Runner 2049", year: "2017", apiKey: "test-key"))
+        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let items = components.queryItems ?? []
+
+        #expect(items.first(where: { $0.name == "t" })?.value == "Blade Runner 2049")
+        #expect(items.first(where: { $0.name == "y" })?.value == "2017")
+        #expect(items.first(where: { $0.name == "plot" })?.value == "short")
+        #expect(items.first(where: { $0.name == "apikey" })?.value == "test-key")
+    }
+
     @Test("hasVideoFile detects video in folder")
     func hasVideoFile() throws {
         let fm = FileManager.default
@@ -980,7 +992,7 @@ struct MovieDetectionTests {
 
 @Suite("MovieManager API")
 struct MovieAPITests {
-    @Test("fetches The Matrix folder and caches as .fe-movie.json")
+    @Test("fetches The Matrix folder and caches as imdb.txt")
     @MainActor func fetchMatrixFolder() async throws {
         let fm = FileManager.default
         let tmpDir = fm.temporaryDirectory.appendingPathComponent("movie-test-\(UUID().uuidString)")
@@ -999,16 +1011,18 @@ struct MovieAPITests {
         #expect(info?.imdbRating != "N/A")
         #expect(info?.topActors.count == 3)
 
-        // Folder cache: .fe-movie.json inside the folder
-        let cacheFile = movieDir.appendingPathComponent(".fe-movie.json")
+        // Folder cache: imdb.txt inside the folder
+        let cacheFile = movieDir.appendingPathComponent("imdb.txt")
         #expect(fm.fileExists(atPath: cacheFile.path))
-        let data = try Data(contentsOf: cacheFile)
-        let cached = try JSONDecoder().decode(MovieInfo.self, from: data)
+        let text = try String(contentsOf: cacheFile, encoding: .utf8)
+        let cached = try #require(MovieManager.parseIMDBText(text))
         #expect(cached.title == "The Matrix")
+        #expect(text.hasPrefix("link: https://www.imdb.com/title/tt0133093/"))
+        #expect(text.contains("\ndirector: Lana Wachowski"))
+        #expect(text.contains("\nimdb_rating: "))
 
-        let json = String(data: data, encoding: .utf8) ?? "failed to read"
-        print("=== .fe-movie.json for folder ===")
-        print(json)
+        print("=== imdb.txt for folder ===")
+        print(text)
         print("=== end ===")
 
         // Second call should use cache
@@ -1016,7 +1030,7 @@ struct MovieAPITests {
         #expect(cached2?.title == "The Matrix")
     }
 
-    @Test("fetches movie file and caches as .fe-FILENAME.json")
+    @Test("fetches movie file and caches as imdb.txt")
     @MainActor func fetchMovieFile() async throws {
         let fm = FileManager.default
         let tmpDir = fm.temporaryDirectory.appendingPathComponent("movie-file-test-\(UUID().uuidString)")
@@ -1030,16 +1044,16 @@ struct MovieAPITests {
         #expect(info != nil)
         #expect(info?.title == "Inception")
 
-        // File cache: .fe-Inception.2010.1080p.BluRay.mkv.json in same dir
-        let cacheFile = tmpDir.appendingPathComponent(".fe-Inception.2010.1080p.BluRay.mkv.json")
+        // File cache: imdb.txt in same dir
+        let cacheFile = tmpDir.appendingPathComponent("imdb.txt")
         #expect(fm.fileExists(atPath: cacheFile.path))
-        let data = try Data(contentsOf: cacheFile)
-        let cached = try JSONDecoder().decode(MovieInfo.self, from: data)
+        let text = try String(contentsOf: cacheFile, encoding: .utf8)
+        let cached = try #require(MovieManager.parseIMDBText(text))
         #expect(cached.title == "Inception")
+        #expect(text.hasPrefix("link: https://www.imdb.com/title/tt1375666/"))
 
-        let json = String(data: data, encoding: .utf8) ?? "failed to read"
-        print("=== .fe-FILENAME.json for file ===")
-        print(json)
+        print("=== imdb.txt for file ===")
+        print(text)
         print("=== end ===")
     }
 }

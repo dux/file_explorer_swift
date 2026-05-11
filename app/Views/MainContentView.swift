@@ -77,9 +77,8 @@ func detectPreviewKind(for url: URL) -> PreviewKind {
         }
     } else {
         let ext = url.pathExtension.lowercased()
-        if MovieManager.videoExtensions.contains(ext),
-           MovieManager.detectMovie(folderName: url.lastPathComponent) != nil {
-            return .movie
+        if MovieManager.videoExtensions.contains(ext) {
+            return .none
         }
     }
 

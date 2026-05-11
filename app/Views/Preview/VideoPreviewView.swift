@@ -31,21 +31,6 @@ struct VideoPreviewView: View {
                     Spacer()
 
                     VStack(spacing: 8) {
-                        if playerManager.shouldShowSubtitleSearch {
-                            SubtitleSearchPanel(
-                                subtitleURL: playerManager.subtitleURL,
-                                query: $playerManager.subtitleSearchQuery,
-                                results: playerManager.subtitleSearchResults,
-                                totalCount: playerManager.subtitles.count,
-                                isLoading: playerManager.isLoadingSubtitles,
-                                status: playerManager.subtitleStatus,
-                                onSelect: { cue in
-                                    playerManager.seek(to: cue.startTime)
-                                    playerManager.currentTime = cue.startTime
-                                }
-                            )
-                        }
-
                         // Progress bar
                         Slider(value: $playerManager.currentTime, in: 0...max(playerManager.duration, 1)) { editing in
                             if editing {
@@ -204,116 +189,6 @@ struct VideoPreviewView: View {
 
 }
 
-struct SubtitleSearchPanel: View {
-    let subtitleURL: URL?
-    @Binding var query: String
-    let results: [SubtitleCue]
-    let totalCount: Int
-    let isLoading: Bool
-    let status: String?
-    let onSelect: (SubtitleCue) -> Void
-
-    var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "captions.bubble")
-                    .textStyle(.small)
-                    .foregroundColor(.orange)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(subtitleURL?.lastPathComponent ?? "Subtitles")
-                        .textStyle(.small, weight: .medium)
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-
-                    if totalCount > 0 {
-                        Text("\(totalCount) lines")
-                            .textStyle(.small)
-                            .foregroundColor(.white.opacity(0.65))
-                    }
-                }
-
-                Spacer()
-
-                if isLoading {
-                    ProgressView()
-                        .scaleEffect(0.6)
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                } else if !query.isEmpty {
-                    Button(action: { query = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .textStyle(.small)
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            if totalCount > 0 {
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .textStyle(.small)
-                        .foregroundColor(.white.opacity(0.65))
-
-                    TextField("Search subtitles", text: $query)
-                        .textFieldStyle(.plain)
-                        .textStyle(.small)
-                        .foregroundColor(.white)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(Color.white.opacity(0.12))
-                .cornerRadius(5)
-
-                if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    if results.isEmpty {
-                        Text("No subtitle matches")
-                            .textStyle(.small)
-                            .foregroundColor(.white.opacity(0.65))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        ScrollView {
-                            VStack(spacing: 2) {
-                                ForEach(results) { cue in
-                                    Button(action: { onSelect(cue) }) {
-                                        HStack(alignment: .top, spacing: 8) {
-                                            Text(formatTime(cue.startTime))
-                                                .textStyle(.small, mono: true)
-                                                .foregroundColor(.orange)
-                                                .frame(width: 48, alignment: .leading)
-
-                                            Text(cue.text)
-                                                .textStyle(.small)
-                                                .foregroundColor(.white)
-                                                .lineLimit(2)
-                                                .multilineTextAlignment(.leading)
-
-                                            Spacer(minLength: 0)
-                                        }
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 5)
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                        .frame(maxHeight: 110)
-                    }
-                }
-            } else if let status {
-                Text(status)
-                    .textStyle(.small)
-                    .foregroundColor(.white.opacity(0.65))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .padding(10)
-        .background(Color.black.opacity(0.55))
-        .cornerRadius(6)
-    }
-}
-
 struct VideoPlayerRepresentable: NSViewRepresentable {
     let player: AVPlayer?
 
@@ -326,17 +201,6 @@ struct VideoPlayerRepresentable: NSViewRepresentable {
 
     func updateNSView(_ nsView: AVPlayerView, context: Context) {
         nsView.player = player
-    }
-}
-
-struct SubtitleCue: Identifiable, Hashable, Sendable {
-    let id: Int
-    let startTime: Double
-    let endTime: Double
-    let text: String
-
-    var searchText: String {
-        text.lowercased()
     }
 }
 
@@ -353,30 +217,8 @@ class VideoPlayerManager: ObservableObject {
     }
     @Published var isMuted = false
     @Published var isSeeking = false
-    @Published var subtitleURL: URL?
-    @Published var subtitles: [SubtitleCue] = []
-    @Published var subtitleSearchQuery = ""
-    @Published var subtitleStatus: String?
-    @Published var isLoadingSubtitles = false
 
     private var timeObserver: Any?
-    private var subtitleLoadTask: Task<Void, Never>?
-
-    var shouldShowSubtitleSearch: Bool {
-        subtitleURL != nil || isLoadingSubtitles || subtitleStatus != nil
-    }
-
-    var subtitleSearchResults: [SubtitleCue] {
-        let terms = subtitleSearchQuery
-            .lowercased()
-            .split(whereSeparator: { $0.isWhitespace })
-
-        guard !terms.isEmpty else { return [] }
-
-        return Array(subtitles.lazy.filter { cue in
-            terms.allSatisfy { cue.searchText.contains($0) }
-        }.prefix(50))
-    }
 
     func load(url: URL) {
         // Clean up previous player
@@ -388,7 +230,6 @@ class VideoPlayerManager: ObservableObject {
         let playerItem = AVPlayerItem(url: url)
         player = AVPlayer(playerItem: playerItem)
         player?.volume = volume
-        loadSubtitles(for: url)
 
         // Get duration
         Task {
@@ -451,134 +292,6 @@ class VideoPlayerManager: ObservableObject {
     func toggleMute() {
         isMuted.toggle()
         player?.isMuted = isMuted
-    }
-
-    private func loadSubtitles(for videoURL: URL) {
-        subtitleLoadTask?.cancel()
-        subtitleLoadTask = nil
-        subtitleURL = nil
-        subtitles = []
-        subtitleSearchQuery = ""
-        subtitleStatus = nil
-        isLoadingSubtitles = false
-
-        let srtURL = Self.englishSubtitleURL(for: videoURL)
-        guard FileManager.default.fileExists(atPath: srtURL.path) else {
-            return
-        }
-
-        subtitleURL = srtURL
-        isLoadingSubtitles = true
-
-        subtitleLoadTask = Task { [weak self] in
-            let result = await Task.detached(priority: .utility) {
-                Result { try Self.loadSubtitleCues(from: srtURL) }
-            }.value
-
-            guard !Task.isCancelled, let self else { return }
-
-            self.isLoadingSubtitles = false
-
-            switch result {
-            case .success(let cues):
-                self.subtitles = cues
-                self.subtitleStatus = cues.isEmpty ? "No subtitle lines found" : nil
-            case .failure(let error):
-                self.subtitles = []
-                self.subtitleStatus = "Could not read subtitles: \(error.localizedDescription)"
-            }
-        }
-    }
-
-    nonisolated private static func englishSubtitleURL(for videoURL: URL) -> URL {
-        let baseName = videoURL.deletingPathExtension().lastPathComponent
-        return videoURL
-            .deletingLastPathComponent()
-            .appendingPathComponent("\(baseName).en.srt")
-    }
-
-    nonisolated private static func loadSubtitleCues(from url: URL) throws -> [SubtitleCue] {
-        let data = try Data(contentsOf: url)
-        let encodings: [String.Encoding] = [
-            .utf8,
-            .utf16,
-            .utf16LittleEndian,
-            .utf16BigEndian,
-            .windowsCP1250,
-            .isoLatin1
-        ]
-
-        let contents = encodings.lazy.compactMap { String(data: data, encoding: $0) }.first ?? ""
-        return parseSRT(contents)
-    }
-
-    nonisolated private static func parseSRT(_ contents: String) -> [SubtitleCue] {
-        let normalized = contents
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-
-        let blocks = normalized.components(separatedBy: "\n\n")
-        var cues: [SubtitleCue] = []
-
-        for block in blocks {
-            let lines = block
-                .split(separator: "\n", omittingEmptySubsequences: false)
-                .map(String.init)
-
-            guard let timingIndex = lines.firstIndex(where: { $0.contains("-->") }) else {
-                continue
-            }
-
-            let timingParts = lines[timingIndex].components(separatedBy: "-->")
-            guard timingParts.count == 2,
-                  let startTime = parseSubtitleTime(timingParts[0]),
-                  let endTime = parseSubtitleTime(timingParts[1]) else {
-                continue
-            }
-
-            let text = lines
-                .dropFirst(timingIndex + 1)
-                .map(stripSubtitleMarkup)
-                .joined(separator: " ")
-                .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-
-            guard !text.isEmpty else { continue }
-
-            cues.append(SubtitleCue(
-                id: cues.count,
-                startTime: startTime,
-                endTime: endTime,
-                text: text
-            ))
-        }
-
-        return cues
-    }
-
-    nonisolated private static func parseSubtitleTime(_ value: String) -> Double? {
-        let cleaned = value
-            .components(separatedBy: .whitespaces)
-            .first?
-            .replacingOccurrences(of: ",", with: ".")
-
-        guard let cleaned else { return nil }
-
-        let parts = cleaned.split(separator: ":")
-        guard parts.count == 3,
-              let hours = Double(parts[0]),
-              let minutes = Double(parts[1]),
-              let seconds = Double(parts[2]) else {
-            return nil
-        }
-
-        return (hours * 3600) + (minutes * 60) + seconds
-    }
-
-    nonisolated private static func stripSubtitleMarkup(_ line: String) -> String {
-        line
-            .replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Crop functionality
