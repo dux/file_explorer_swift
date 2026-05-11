@@ -75,13 +75,15 @@ class CopyProgressManager: ObservableObject {
 
         await MainActor.run { start() }
 
-        let count = await Task.detached { [skipFolders, itemsCopy] () -> Int in
+        let task = Task.detached { [skipFolders, itemsCopy] () -> Int in
             let fm = FileManager.default
             var copied = 0
             var fileCount = 0
             var lastUpdate = Date.distantPast
 
             for (name, url) in itemsCopy {
+                if Task.isCancelled { break }
+
                 // Compute unique destination
                 var destURL = destination.appendingPathComponent(name)
                 if fm.fileExists(atPath: destURL.path) {
@@ -109,6 +111,8 @@ class CopyProgressManager: ObservableObject {
                         }
                     }
                     copied += 1
+                } catch is CancellationError {
+                    break
                 } catch {
                     let errorMsg = error.localizedDescription
                     Task { @MainActor in
@@ -124,9 +128,20 @@ class CopyProgressManager: ObservableObject {
             }
 
             return copied
-        }.value
+        }
 
-        await MainActor.run { finish() }
+        let operationID = await MainActor.run {
+            OperationManager.shared.begin(title: "Copying files") {
+                task.cancel()
+            }
+        }
+
+        let count = await task.value
+
+        await MainActor.run {
+            finish()
+            OperationManager.shared.finish(operationID)
+        }
         return count
     }
 }
@@ -146,6 +161,34 @@ struct ToastView: View {
                 .background(manager.style == .error ? Color.red.opacity(0.85) : Color.black.opacity(0.75))
                 .cornerRadius(8)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
+        }
+    }
+}
+
+// MARK: - Cancellable Operation View
+
+struct CancellableOperationView: View {
+    @ObservedObject var manager = OperationManager.shared
+
+    var body: some View {
+        if manager.isActive {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .scaleEffect(0.5)
+                    .frame(width: 14, height: 14)
+                Text(manager.title)
+                    .textStyle(.buttons)
+                    .lineLimit(1)
+                Text("Esc to stop")
+                    .textStyle(.small)
+                    .foregroundColor(.white.opacity(0.75))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color.purple.opacity(0.85))
+            .cornerRadius(8)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
     }
 }
@@ -189,6 +232,8 @@ class iPhoneTransferProgressManager: ObservableObject {
     @Published var filesCompleted = 0
     @Published var totalFiles = 0
     @Published var direction: TransferDirection = .upload
+    private var cancelRequested = false
+    private var operationID: UUID?
 
     enum TransferDirection {
         case upload
@@ -200,7 +245,12 @@ class iPhoneTransferProgressManager: ObservableObject {
         self.totalFiles = total
         self.filesCompleted = 0
         self.currentFile = ""
+        self.cancelRequested = false
         self.isActive = true
+        self.operationID = OperationManager.shared.begin(title: direction == .upload ? "Uploading to iPhone" : "Downloading from iPhone") {
+            self.cancelRequested = true
+            self.finish()
+        }
     }
 
     func update(file: String, completed: Int) {
@@ -209,7 +259,15 @@ class iPhoneTransferProgressManager: ObservableObject {
     }
 
     func finish() {
+        if let operationID {
+            OperationManager.shared.finish(operationID)
+        }
+        operationID = nil
         isActive = false
+    }
+
+    var isCancelled: Bool {
+        cancelRequested || Task.isCancelled
     }
 }
 

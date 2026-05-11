@@ -6,6 +6,11 @@ struct AppInfo: @unchecked Sendable {
     let icon: NSImage
 }
 
+struct AppSuggestion: Sendable {
+    let url: URL
+    let name: String
+}
+
 @MainActor
 final class AppSearcher {
     static let shared = AppSearcher()
@@ -57,20 +62,34 @@ final class AppSearcher {
 
     /// Apps that can open a specific file (via Launch Services), limited to 15.
     func appsForFile(_ url: URL) -> [AppInfo] {
+        Self.suggestedAppCandidates(for: url).map { suggestion in
+            AppInfo(
+                url: suggestion.url,
+                name: suggestion.name,
+                icon: NSWorkspace.shared.icon(forFile: suggestion.url.path)
+            )
+        }
+    }
+
+    /// App URL/name lookup only. This is safe to run away from the main actor.
+    nonisolated static func suggestedAppCandidates(for url: URL, limit: Int = 15) -> [AppSuggestion] {
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+
         var appURLs: [URL] = []
         if let apps = LSCopyApplicationURLsForURL(url as CFURL, .all)?.takeRetainedValue() as? [URL] {
             appURLs = apps
         }
 
         var seen = Set<String>()
-        var result: [AppInfo] = []
+        var result: [AppSuggestion] = []
         for appURL in appURLs {
+            if Task.isCancelled { break }
+
             let name = appURL.deletingPathExtension().lastPathComponent
             guard !seen.contains(name) else { continue }
             seen.insert(name)
-            let icon = NSWorkspace.shared.icon(forFile: appURL.path)
-            result.append(AppInfo(url: appURL, name: name, icon: icon))
-            if result.count >= 15 { break }
+            result.append(AppSuggestion(url: appURL, name: name))
+            if result.count >= limit { break }
         }
         return result
     }

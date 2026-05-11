@@ -51,6 +51,7 @@ struct ContentView: View {
             }
 
             VStack(spacing: 8) {
+                CancellableOperationView()
                 CopyProgressView()
                 iPhoneTransferProgressView()
                 ToastView()

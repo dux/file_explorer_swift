@@ -7,6 +7,8 @@ import UniformTypeIdentifiers
 /// Regular files are always copied, even if their name matches a skip entry.
 /// Calls onFile with the name of each item as it's copied.
 func copyItemFiltered(at src: URL, to dst: URL, skipping: Set<String>, onFile: ((String) -> Void)? = nil) throws {
+    if Task.isCancelled { throw CancellationError() }
+
     let fm = FileManager.default
     var isDir: ObjCBool = false
     guard fm.fileExists(atPath: src.path, isDirectory: &isDir) else { return }
@@ -22,6 +24,8 @@ func copyItemFiltered(at src: URL, to dst: URL, skipping: Set<String>, onFile: (
     try fm.createDirectory(at: dst, withIntermediateDirectories: true, attributes: attrs)
 
     for child in try fm.contentsOfDirectory(atPath: src.path) {
+        if Task.isCancelled { throw CancellationError() }
+
         let childSrc = src.appendingPathComponent(child)
         var childIsDir: ObjCBool = false
         fm.fileExists(atPath: childSrc.path, isDirectory: &childIsDir)

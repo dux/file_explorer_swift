@@ -208,6 +208,8 @@ class SelectionManager: ObservableObject {
         progress.start(direction: .download, total: itemsToDownload.count)
 
         for item in itemsToDownload {
+            if progress.isCancelled { break }
+
             guard case .iPhone(let deviceId, let appId, _) = item.source else { continue }
 
             progress.update(file: item.name, completed: count)
@@ -248,6 +250,8 @@ class SelectionManager: ObservableObject {
         progress.start(direction: .upload, total: itemsToUpload.count)
 
         for item in itemsToUpload {
+            if progress.isCancelled { break }
+
             guard let url = item.localURL else { continue }
 
             progress.update(file: item.name, completed: count)

@@ -18,6 +18,11 @@ struct ActionsPane: View {
     @State private var appDataPaths: [URL] = []
     @State private var showEmojiPicker = false
     @State private var showExecuteSheet = false
+    @State private var hasLoadedSuggestedApps = false
+    @State private var isLoadingSuggestedApps = false
+    @State private var suggestedAppsLoadID: UUID?
+    @State private var suggestedAppsOperationID: UUID?
+    @State private var suggestedAppsLoadTask: Task<Void, Never>?
     @ObservedObject private var folderIconManager = FolderIconManager.shared
 
     private var targetURL: URL {
@@ -304,48 +309,75 @@ struct ActionsPane: View {
                     }
                 }
 
-                if !otherApps.isEmpty {
-                    Button(action: {
+                Button(action: {
+                    if showOtherApps {
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            showOtherApps.toggle()
+                            showOtherApps = false
                         }
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: showOtherApps ? "chevron.down" : "chevron.right")
-                                .textStyle(.small, weight: .semibold)
-                            Text("macOS suggested apps (\(otherApps.count))")
+                    } else {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showOtherApps = true
+                        }
+                        if !hasLoadedSuggestedApps && !isLoadingSuggestedApps {
+                            loadApps(for: targetURL)
+                        }
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: showOtherApps ? "chevron.down" : "chevron.right")
+                            .textStyle(.small, weight: .semibold)
+                        Text(suggestedAppsTitle)
+                            .textStyle(.buttons)
+                        Spacer()
+                        if isLoadingSuggestedApps {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                    }
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+
+                if showOtherApps {
+                    if isLoadingSuggestedApps {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Finding suggested apps...")
                                 .textStyle(.buttons)
                             Spacer()
                         }
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                    }
-                    .buttonStyle(.plain)
-
-                    if showOtherApps {
-                        ForEach(otherApps, id: \.url.path) { app in
-                            ActionButtonWithIcon(
-                                icon: app.icon,
-                                title: app.name,
-                                appURL: app.url
-                            ) {
-                                settings.addPreferredApp(for: fileType, appPath: app.url.path)
-                                NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
+                    } else if hasLoadedSuggestedApps && otherApps.isEmpty {
+                        HStack(spacing: 4) {
+                            Text("No suggested apps")
+                                .textStyle(.buttons)
+                            Spacer()
+                        }
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                    } else {
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                ForEach(otherApps, id: \.url.path) { app in
+                                    ActionButtonWithIcon(
+                                        icon: app.icon,
+                                        title: app.name,
+                                        appURL: app.url
+                                    ) {
+                                        settings.addPreferredApp(for: fileType, appPath: app.url.path)
+                                        NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
+                                    }
+                                }
                             }
                         }
+                        .frame(maxHeight: 260)
                     }
-                }
-
-                if allApps.isEmpty {
-                    HStack(spacing: 4) {
-                        Text("No suggested apps")
-                            .textStyle(.buttons)
-                        Spacer()
-                    }
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
                 }
             }
             .padding(.horizontal, 2)
@@ -353,7 +385,7 @@ struct ActionsPane: View {
         }
         .fixedSize(horizontal: false, vertical: true)
         .onChange(of: targetURL) { newURL in
-            loadApps(for: newURL)
+            resetSuggestedApps()
             manager.rightPaneItems = buildRightPaneItems()
             gitRepo.update(for: newURL)
             npmPackage.update(for: newURL)
@@ -366,10 +398,12 @@ struct ActionsPane: View {
             manager.rightPaneItems = buildRightPaneItems()
         }
         .onAppear {
-            loadApps(for: targetURL)
             manager.rightPaneItems = buildRightPaneItems()
             gitRepo.update(for: manager.currentPath)
             npmPackage.update(for: manager.currentPath)
+        }
+        .onDisappear {
+            cancelSuggestedAppsLoad()
         }
         .sheet(isPresented: $showAppSelector) {
             AppSelectorSheet(
@@ -442,7 +476,81 @@ struct ActionsPane: View {
     }
 
     private func loadApps(for url: URL) {
-        allApps = AppSearcher.shared.appsForFile(url)
+        cancelSuggestedAppsLoad()
+
+        let requestID = UUID()
+        suggestedAppsLoadID = requestID
+        isLoadingSuggestedApps = true
+        hasLoadedSuggestedApps = false
+        allApps = []
+
+        var task: Task<Void, Never>?
+        let operationID = OperationManager.shared.begin(title: "Finding suggested apps") {
+            task?.cancel()
+            Task { @MainActor in
+                if suggestedAppsLoadID == requestID {
+                    isLoadingSuggestedApps = false
+                    hasLoadedSuggestedApps = false
+                }
+            }
+        }
+        suggestedAppsOperationID = operationID
+
+        task = Task { @MainActor in
+            let suggestions = await Task.detached(priority: .userInitiated) {
+                AppSearcher.suggestedAppCandidates(for: url)
+            }.value
+
+            guard !Task.isCancelled else {
+                if suggestedAppsLoadID == requestID {
+                    suggestedAppsOperationID = nil
+                    suggestedAppsLoadTask = nil
+                }
+                OperationManager.shared.finish(operationID)
+                return
+            }
+            guard suggestedAppsLoadID == requestID else {
+                OperationManager.shared.finish(operationID)
+                return
+            }
+
+            allApps = suggestions.map { suggestion in
+                AppInfo(
+                    url: suggestion.url,
+                    name: suggestion.name,
+                    icon: NSWorkspace.shared.icon(forFile: suggestion.url.path)
+                )
+            }
+            hasLoadedSuggestedApps = true
+            isLoadingSuggestedApps = false
+            suggestedAppsOperationID = nil
+            suggestedAppsLoadTask = nil
+            OperationManager.shared.finish(operationID)
+        }
+        suggestedAppsLoadTask = task
+    }
+
+    private var suggestedAppsTitle: String {
+        guard hasLoadedSuggestedApps else { return "macOS suggested apps" }
+        return "macOS suggested apps (\(otherApps.count))"
+    }
+
+    private func resetSuggestedApps() {
+        cancelSuggestedAppsLoad()
+        allApps = []
+        hasLoadedSuggestedApps = false
+        showOtherApps = false
+    }
+
+    private func cancelSuggestedAppsLoad() {
+        if let operationID = suggestedAppsOperationID {
+            OperationManager.shared.cancel(operationID, showToast: false)
+        }
+        suggestedAppsLoadTask?.cancel()
+        suggestedAppsLoadTask = nil
+        suggestedAppsLoadID = nil
+        suggestedAppsOperationID = nil
+        isLoadingSuggestedApps = false
     }
 }
 

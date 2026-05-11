@@ -43,6 +43,10 @@ class KeyCaptureView: NSView {
             return
         }
 
+        if event.keyCode == 53 && OperationManager.shared.cancelCurrent() {
+            return
+        }
+
         // Cmd+T: toggle tree/flat view from any focus mode
         if event.keyCode == 17 && event.modifierFlags.contains(.command) {
             AppSettings.shared.flatFolders.toggle()
