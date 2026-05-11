@@ -83,26 +83,34 @@ struct CustomContextMenuOverlay: View {
         ZStack {
             if contextMenu.isShowing, let url = contextMenu.url {
                 GeometryReader { geo in
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture { contextMenu.dismiss() }
+                    let overlayFrame = geo.frame(in: .global)
+                    let menuPosition = CGPoint(
+                        x: contextMenu.position.x - overlayFrame.minX,
+                        y: contextMenu.position.y - overlayFrame.minY
+                    )
 
-                    if contextMenu.isFolderMenu {
-                        FolderContextMenuContent(
-                            url: url,
-                            manager: manager
-                        )
-                        .fixedSize()
-                        .position(x: geo.size.width / 2, y: geo.size.height * 0.4)
-                    } else {
-                        CustomContextMenuContent(
-                            url: url,
-                            isDirectory: contextMenu.isDirectory,
-                            manager: manager,
-                            tagManager: tagManager
-                        )
-                        .fixedSize()
-                        .position(x: geo.size.width / 2, y: geo.size.height * 0.4)
+                    ZStack(alignment: .topLeading) {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { contextMenu.dismiss() }
+
+                        if contextMenu.isFolderMenu {
+                            FolderContextMenuContent(
+                                url: url,
+                                manager: manager
+                            )
+                            .fixedSize()
+                            .offset(x: menuPosition.x, y: menuPosition.y)
+                        } else {
+                            CustomContextMenuContent(
+                                url: url,
+                                isDirectory: contextMenu.isDirectory,
+                                manager: manager,
+                                tagManager: tagManager
+                            )
+                            .fixedSize()
+                            .offset(x: menuPosition.x, y: menuPosition.y)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -597,10 +605,10 @@ struct RightClickableArea: NSViewRepresentable {
             let windowPoint = event.locationInWindow
             let contentHeight = contentView.frame.height
             let flippedY = contentHeight - windowPoint.y
-            // Menu position: nudge 50px right, 200px up from click
+            // Menu top-left: 50px left and 50px up from click
             let position = CGPoint(
-                x: windowPoint.x + 50,
-                y: flippedY - 200
+                x: windowPoint.x - 50,
+                y: flippedY - 50
             )
             Task { @MainActor in
                 ContextMenuManager.shared.show(url: url, isDirectory: isDirectory, at: position)
@@ -645,8 +653,8 @@ struct FolderBackgroundRightClickArea: NSViewRepresentable {
             let contentHeight = contentView.frame.height
             let flippedY = contentHeight - windowPoint.y
             let position = CGPoint(
-                x: windowPoint.x + 50,
-                y: flippedY - 200
+                x: windowPoint.x - 50,
+                y: flippedY - 50
             )
             Task { @MainActor in
                 ContextMenuManager.shared.showFolderMenu(url: url, at: position)
