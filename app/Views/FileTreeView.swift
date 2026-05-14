@@ -108,7 +108,7 @@ struct FileTreeView: View {
                 }
                 Spacer()
             }
-            .folderBackgroundContextMenu(url: manager.currentPath)
+            .customContextMenu(url: manager.currentPath)
             .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
                 handleDrop(providers: providers)
                 return true
@@ -169,7 +169,7 @@ struct FileTreeView: View {
                         .frame(maxWidth: .infinity)
                         .frame(minHeight: 200)
                         .contentShape(Rectangle())
-                        .folderBackgroundContextMenu(url: manager.currentPath)
+                        .customContextMenu(url: manager.currentPath)
                 }
                 .id("\(manager.currentPath.absoluteString)_\(settings.flatFolders)")
                 .onChange(of: manager.selectedIndex) { newIndex in
@@ -308,6 +308,7 @@ struct FlatBreadcrumbRow: View {
         )
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
+        .customContextMenu(url: manager.currentPath)
     }
 }
 
@@ -400,7 +401,7 @@ struct AncestorRow: View {
                 manager.navigateTo(url)
             }
         }
-        .customContextMenu(url: url, isDirectory: true)
+        .customContextMenu(url: url)
     }
 }
 
@@ -558,7 +559,7 @@ struct FileTreeRow: View {
             }
         }
         .opacity(isHidden ? 0.5 : 1.0)
-        .customContextMenu(url: url, isDirectory: isDirectory)
+        .customContextMenu(url: url)
     }
 }
 

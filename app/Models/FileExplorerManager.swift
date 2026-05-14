@@ -54,8 +54,10 @@ class FileExplorerManager: ObservableObject {
     @Published var showItemDialog: Bool = false
     @Published var showNewFolderDialog: Bool = false
     @Published var newFolderName: String = "New Folder"
+    @Published var newFolderTargetURL: URL? = nil
     @Published var showNewFileDialog: Bool = false
     @Published var newFileName: String = "untitled.txt"
+    @Published var newFileTargetURL: URL? = nil
     @Published var showAppSelectorForURL: URL? = nil
 
     // Sidebar focus

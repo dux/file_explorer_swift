@@ -407,8 +407,6 @@ class KeyCaptureView: NSView {
 
     private func showContextMenuForSelected(_ manager: FileExplorerManager) {
         guard let item = manager.selectedItem else { return }
-        var isDir: ObjCBool = false
-        FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir)
         // Position menu near center of the window
         let position: CGPoint
         if let window = self.window {
@@ -419,7 +417,7 @@ class KeyCaptureView: NSView {
             position = CGPoint(x: 300, y: 200)
         }
         Task { @MainActor in
-            ContextMenuManager.shared.show(url: item, isDirectory: isDir.boolValue, at: position, keyboardTriggered: true)
+            ContextMenuManager.shared.show(url: item, at: position, keyboardTriggered: true)
         }
     }
 }

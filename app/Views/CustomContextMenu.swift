@@ -1,6 +1,15 @@
 import SwiftUI
 import AppKit
 
+// Returns a clipboard-friendly path, replacing the home directory with `~`.
+private func tildePath(_ url: URL) -> String {
+    let home = FileManager.default.homeDirectoryForCurrentUser.path
+    let path = url.path
+    if path == home { return "~" }
+    if path.hasPrefix(home + "/") { return "~" + path.dropFirst(home.count) }
+    return path
+}
+
 // MARK: - Context Menu Manager
 
 @MainActor
@@ -9,8 +18,6 @@ class ContextMenuManager: ObservableObject {
 
     @Published var isShowing = false
     @Published var url: URL?
-    @Published var isDirectory = false
-    @Published var isFolderMenu = false
     @Published var position: CGPoint = .zero
     @Published var focusedIndex: Int = 0
     @Published var showDetails = false
@@ -22,10 +29,8 @@ class ContextMenuManager: ObservableObject {
     var itemActions: [() -> Void] = []
     var pendingAction: (() -> Void)?
 
-    func show(url: URL, isDirectory: Bool, at position: CGPoint, keyboardTriggered: Bool = false) {
+    func show(url: URL, at position: CGPoint, keyboardTriggered: Bool = false) {
         self.url = url
-        self.isDirectory = isDirectory
-        self.isFolderMenu = false
         self.position = position
         self.focusedIndex = keyboardTriggered ? 0 : -1
         self.itemCount = 0
@@ -33,20 +38,8 @@ class ContextMenuManager: ObservableObject {
         self.isShowing = true
     }
 
-    func showFolderMenu(url: URL, at position: CGPoint) {
-        self.url = url
-        self.isDirectory = true
-        self.isFolderMenu = true
-        self.position = position
-        self.focusedIndex = -1
-        self.itemCount = 0
-        self.itemActions = []
-        self.isShowing = true
-    }
-
     func dismiss() {
         isShowing = false
-        isFolderMenu = false
         focusedIndex = 0
         itemCount = 0
         itemActions = []
@@ -94,23 +87,13 @@ struct CustomContextMenuOverlay: View {
                             .contentShape(Rectangle())
                             .onTapGesture { contextMenu.dismiss() }
 
-                        if contextMenu.isFolderMenu {
-                            FolderContextMenuContent(
-                                url: url,
-                                manager: manager
-                            )
-                            .fixedSize()
-                            .offset(x: menuPosition.x, y: menuPosition.y)
-                        } else {
-                            CustomContextMenuContent(
-                                url: url,
-                                isDirectory: contextMenu.isDirectory,
-                                manager: manager,
-                                tagManager: tagManager
-                            )
-                            .fixedSize()
-                            .offset(x: menuPosition.x, y: menuPosition.y)
-                        }
+                        CustomContextMenuContent(
+                            url: url,
+                            manager: manager,
+                            tagManager: tagManager
+                        )
+                        .fixedSize()
+                        .offset(x: menuPosition.x, y: menuPosition.y)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -150,10 +133,14 @@ struct CustomContextMenuOverlay: View {
 
 private struct CustomContextMenuContent: View {
     let url: URL
-    let isDirectory: Bool
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject var tagManager: ColorTagManager
     @ObservedObject var contextMenu = ContextMenuManager.shared
+
+    // Detected from the URL itself — caller only passes the path.
+    private var isDirectory: Bool {
+        (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+    }
 
     private var isArchive: Bool {
         ["zip", "tar", "tgz", "gz", "bz2", "xz", "rar", "7z"].contains(url.pathExtension.lowercased())
@@ -161,6 +148,12 @@ private struct CustomContextMenuContent: View {
 
     private var isApp: Bool {
         url.pathExtension.lowercased() == "app" && isDirectory
+    }
+
+    // True when the menu targets the folder the user is currently inside
+    // (background right-click). Skip actions that operate ON the folder itself.
+    private var isCurrentFolder: Bool {
+        isDirectory && url.path == manager.currentPath.path
     }
 
     private var isHiddenFile: Bool {
@@ -211,13 +204,15 @@ private struct CustomContextMenuContent: View {
             contextMenu.detailsIsDirectory = isDirectory
             contextMenu.showDetails = true
         }))
-        items.append(MenuItem(
-            icon: manager.isInSelection(url) ? "minus.circle" : "checkmark.circle",
-            label: manager.isInSelection(url) ? "Remove from Selection" : "Add to Selection",
-            isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
-                manager.toggleFileSelection(url)
-            }
-        ))
+        if !isCurrentFolder {
+            items.append(MenuItem(
+                icon: manager.isInSelection(url) ? "minus.circle" : "checkmark.circle",
+                label: manager.isInSelection(url) ? "Remove from Selection" : "Add to Selection",
+                isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
+                    manager.toggleFileSelection(url)
+                }
+            ))
+        }
         if isDirectory && !isApp {
             items.append(MenuItem(icon: "face.smiling", label: "Assign Icon", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
                 contextMenu.emojiPickerURL = url
@@ -227,13 +222,23 @@ private struct CustomContextMenuContent: View {
         items.append(MenuItem(icon: "doc.on.clipboard", label: "Copy Path", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
-            pasteboard.setString(url.path, forType: .string)
+            pasteboard.setString(tildePath(url), forType: .string)
             ToastManager.shared.show("Path copied to clipboard")
         }))
-        items.append(MenuItem(icon: "pencil", label: "Rename", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
-            manager.selectedItem = url
-            manager.startRename()
-        }))
+        if isDirectory {
+            items.append(MenuItem(icon: "folder.badge.plus", label: "Create Folder", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
+                manager.promptForNewFolder(in: url)
+            }))
+            items.append(MenuItem(icon: "doc.badge.plus", label: "Create File", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
+                manager.promptForNewFile(in: url)
+            }))
+        }
+        if !isCurrentFolder {
+            items.append(MenuItem(icon: "pencil", label: "Rename", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
+                manager.selectedItem = url
+                manager.startRename()
+            }))
+        }
         items.append(MenuItem(icon: "folder", label: "Show in Finder", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }))
@@ -263,9 +268,11 @@ private struct CustomContextMenuContent: View {
                 manager.toggleHidden(url)
             }
         ))
-        items.append(MenuItem(icon: "trash", label: "Move to Trash", isDestructive: true, isColor: false, tagColor: nil, isTagged: false, action: act {
-            manager.moveToTrash(url)
-        }))
+        if !isCurrentFolder {
+            items.append(MenuItem(icon: "trash", label: "Move to Trash", isDestructive: true, isColor: false, tagColor: nil, isTagged: false, action: act {
+                manager.moveToTrash(url)
+            }))
+        }
         for color in TagColor.allCases {
             let tagged = tagManager.isTagged(url, color: color)
             items.append(MenuItem(icon: "", label: color.label, isDestructive: false, isColor: true, tagColor: color, isTagged: tagged, action: act {
@@ -337,7 +344,11 @@ private struct CustomContextMenuContent: View {
 
     @ViewBuilder
     private func menuRowView(item: MenuItem, index: Int, items: [MenuItem]) -> some View {
-        let needsDivider = index == sectionBreakAfterSelection(items) || index == sectionBreakAfterCopyPath(items) || index == sectionBreak2(items) || index == sectionBreak3(items)
+        let needsDivider = index == sectionBreakAfterSelection(items)
+            || index == sectionBreakAfterCopyPath(items)
+            || index == sectionBreakAfterCreateFile(items)
+            || index == sectionBreak2(items)
+            || index == sectionBreak3(items)
         let focused = contextMenu.focusedIndex == index
         if needsDivider {
             ContextMenuDivider()
@@ -356,6 +367,11 @@ private struct CustomContextMenuContent: View {
 
     private func sectionBreakAfterCopyPath(_ items: [MenuItem]) -> Int {
         guard let idx = items.firstIndex(where: { $0.label == "Copy Path" }) else { return -1 }
+        return idx + 1
+    }
+
+    private func sectionBreakAfterCreateFile(_ items: [MenuItem]) -> Int {
+        guard let idx = items.firstIndex(where: { $0.label == "Create File" }) else { return -1 }
         return idx + 1
     }
 
@@ -460,142 +476,23 @@ private struct ContextMenuDivider: View {
     }
 }
 
-// MARK: - Folder Context Menu Content
-
-private struct FolderContextMenuContent: View {
-    let url: URL
-    @ObservedObject var manager: FileExplorerManager
-    @ObservedObject var contextMenu = ContextMenuManager.shared
-
-    private func act(_ action: @escaping () -> Void) -> () -> Void {
-        { contextMenu.dismissAndRun(action) }
-    }
-
-    private struct MenuItem {
-        let icon: String
-        let label: String
-        let action: () -> Void
-    }
-
-    @ObservedObject private var selection = SelectionManager.shared
-
-    private var menuItems: [MenuItem] {
-        var items: [MenuItem] = []
-        if !selection.localItems.isEmpty {
-            let count = selection.localItems.count
-            items.append(MenuItem(icon: "doc.on.doc", label: "Copy \(count) here", action: act { [url] in
-                let items = SelectionManager.shared.localItems.compactMap { item in
-                    item.localURL.map { (name: item.name, url: $0) }
-                }
-                SelectionManager.shared.clear()
-                Task {
-                    let copied = await CopyProgressManager.shared.copyItems(items, to: url)
-                    ToastManager.shared.show("Copied \(copied) item(s)")
-                    manager.refresh()
-                }
-            }))
-            items.append(MenuItem(icon: "folder", label: "Move \(count) here", action: act { [url] in
-                let moved = SelectionManager.shared.moveLocalItems(to: url)
-                SelectionManager.shared.clear()
-                ToastManager.shared.show("Moved \(moved) file(s)")
-                manager.refresh()
-            }))
-        }
-        items.append(MenuItem(icon: "info.circle", label: "View Details", action: act { [url] in
-            contextMenu.detailsURL = url
-            contextMenu.detailsIsDirectory = true
-            contextMenu.showDetails = true
-        }))
-        items.append(MenuItem(icon: "face.smiling", label: "Assign Icon", action: act { [url] in
-            contextMenu.emojiPickerURL = url
-            contextMenu.showEmojiPicker = true
-        }))
-        items.append(MenuItem(icon: "doc.on.clipboard", label: "Copy Path", action: act { [url] in
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(url.path, forType: .string)
-            ToastManager.shared.show("Path copied to clipboard")
-        }))
-        items.append(MenuItem(icon: "folder.badge.plus", label: "Create Folder", action: act {
-            manager.promptForNewFolder()
-        }))
-        items.append(MenuItem(icon: "doc.badge.plus", label: "Create File", action: act {
-            manager.promptForNewFile()
-        }))
-        return items
-    }
-
-    var body: some View {
-        let items = menuItems
-        VStack(alignment: .leading, spacing: 0) {
-            // Title: folder icon + name
-            HStack(alignment: .center, spacing: 10) {
-                FolderIconView(url: url, size: 18)
-                    .frame(width: 18, height: 18)
-                Text(url.lastPathComponent)
-                    .textStyle(.default, weight: .semibold)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .foregroundColor(.primary)
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 4)
-            .padding(.bottom, 6)
-
-            Divider()
-                .padding(.horizontal, 8)
-                .padding(.bottom, 4)
-
-            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                if item.label == "View Details" && index > 0 {
-                    ContextMenuDivider()
-                }
-                let focused = contextMenu.focusedIndex == index
-                ContextMenuRow(icon: item.icon, label: item.label, isFocused: focused, action: item.action)
-            }
-        }
-        .padding(.vertical, 6)
-        .frame(width: 220)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(red: 0xfa / 255.0, green: 0xf9 / 255.0, blue: 0xf5 / 255.0))
-                .shadow(color: .black.opacity(0.35), radius: 24, x: 0, y: 10)
-                .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Color(red: 0.8, green: 0.8, blue: 0.8), lineWidth: 2)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .onAppear {
-            contextMenu.itemCount = items.count
-            contextMenu.itemActions = items.map { $0.action }
-        }
-    }
-}
-
 // MARK: - Right-Click Gesture (NSViewRepresentable, transparent to other events)
 
 struct RightClickableArea: NSViewRepresentable {
     let url: URL
-    let isDirectory: Bool
 
     func makeNSView(context: Context) -> RightClickNSView {
         let view = RightClickNSView()
         view.url = url
-        view.isDirectory = isDirectory
         return view
     }
 
     func updateNSView(_ nsView: RightClickNSView, context: Context) {
         nsView.url = url
-        nsView.isDirectory = isDirectory
     }
 
     class RightClickNSView: NSView {
         var url: URL?
-        var isDirectory: Bool = false
 
         override func rightMouseDown(with event: NSEvent) {
             guard let url,
@@ -610,7 +507,7 @@ struct RightClickableArea: NSViewRepresentable {
                 y: flippedY - 50
             )
             Task { @MainActor in
-                ContextMenuManager.shared.show(url: url, isDirectory: isDirectory, at: position)
+                ContextMenuManager.shared.show(url: url, at: position)
             }
         }
 
@@ -626,61 +523,12 @@ struct RightClickableArea: NSViewRepresentable {
     }
 }
 
-// MARK: - Folder Background Right-Click
-
-struct FolderBackgroundRightClickArea: NSViewRepresentable {
-    let folderURL: URL
-
-    func makeNSView(context: Context) -> FolderRightClickNSView {
-        let view = FolderRightClickNSView()
-        view.folderURL = folderURL
-        return view
-    }
-
-    func updateNSView(_ nsView: FolderRightClickNSView, context: Context) {
-        nsView.folderURL = folderURL
-    }
-
-    class FolderRightClickNSView: NSView {
-        var folderURL: URL?
-
-        override func rightMouseDown(with event: NSEvent) {
-            guard let url = folderURL,
-                  let window = self.window,
-                  let contentView = window.contentView else { return }
-            let windowPoint = event.locationInWindow
-            let contentHeight = contentView.frame.height
-            let flippedY = contentHeight - windowPoint.y
-            let position = CGPoint(
-                x: windowPoint.x - 50,
-                y: flippedY - 50
-            )
-            Task { @MainActor in
-                ContextMenuManager.shared.showFolderMenu(url: url, at: position)
-            }
-        }
-
-        override func hitTest(_ point: NSPoint) -> NSView? {
-            if let event = NSApp.currentEvent, event.type == .rightMouseDown {
-                return super.hitTest(point)
-            }
-            return nil
-        }
-    }
-}
-
 // MARK: - View Extension
 
 extension View {
-    func customContextMenu(url: URL, isDirectory: Bool) -> some View {
-        self.overlay(
-            RightClickableArea(url: url, isDirectory: isDirectory)
-        )
-    }
-
-    func folderBackgroundContextMenu(url: URL) -> some View {
-        self.overlay(
-            FolderBackgroundRightClickArea(folderURL: url)
-        )
+    // Attaches the unified right-click context menu. The menu itself detects
+    // whether the URL is a file or folder and adapts items accordingly.
+    func customContextMenu(url: URL) -> some View {
+        self.overlay(RightClickableArea(url: url))
     }
 }

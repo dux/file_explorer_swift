@@ -173,7 +173,7 @@ struct FileTableRow: View {
             }
         }
         .opacity(isHidden ? 0.5 : 1.0)
-        .customContextMenu(url: url, isDirectory: isDirectory)
+        .customContextMenu(url: url)
     }
 
     private var humanReadableDate: String {

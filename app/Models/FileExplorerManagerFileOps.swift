@@ -2,35 +2,41 @@ import Foundation
 import AppKit
 
 extension FileExplorerManager {
-    func promptForNewFolder() {
+    func promptForNewFolder(in target: URL? = nil) {
+        newFolderTargetURL = target
         newFolderName = "New Folder"
         showNewFolderDialog = true
     }
 
-    func promptForNewFile() {
+    func promptForNewFile(in target: URL? = nil) {
+        newFileTargetURL = target
         newFileName = "untitled.txt"
         showNewFileDialog = true
     }
 
     func createNewFolder(named name: String? = nil) {
+        let destination = newFolderTargetURL ?? currentPath
+        newFolderTargetURL = nil
         var folderName = name ?? "New Folder"
         var counter = 1
-        var newFolderURL = currentPath.appendingPathComponent(folderName)
+        var newFolderURL = destination.appendingPathComponent(folderName)
 
         // Find unique name if exists
         while fileManager.fileExists(atPath: newFolderURL.path) {
             folderName = "\(name ?? "New Folder") \(counter)"
-            newFolderURL = currentPath.appendingPathComponent(folderName)
+            newFolderURL = destination.appendingPathComponent(folderName)
             counter += 1
         }
 
         do {
             try fileManager.createDirectory(at: newFolderURL, withIntermediateDirectories: false)
             loadContents()
-            // Select the new folder
-            selectedItem = newFolderURL
-            if let index = allItems.firstIndex(where: { $0.url == newFolderURL }) {
-                selectedIndex = index
+            // Select the new folder only if it lives in the current path
+            if destination.path == currentPath.path {
+                selectedItem = newFolderURL
+                if let index = allItems.firstIndex(where: { $0.url == newFolderURL }) {
+                    selectedIndex = index
+                }
             }
         } catch {
             ToastManager.shared.showError("Error creating folder: \(error.localizedDescription)")
@@ -38,25 +44,29 @@ extension FileExplorerManager {
     }
 
     func createNewFile(named name: String? = nil) {
+        let destination = newFileTargetURL ?? currentPath
+        newFileTargetURL = nil
         var fileName = name ?? "untitled.txt"
         var counter = 1
-        var newFileURL = currentPath.appendingPathComponent(fileName)
+        var newFileURL = destination.appendingPathComponent(fileName)
 
         // Find unique name if exists
         let baseName = (fileName as NSString).deletingPathExtension
         let ext = (fileName as NSString).pathExtension
         while fileManager.fileExists(atPath: newFileURL.path) {
             fileName = ext.isEmpty ? "\(baseName) \(counter)" : "\(baseName) \(counter).\(ext)"
-            newFileURL = currentPath.appendingPathComponent(fileName)
+            newFileURL = destination.appendingPathComponent(fileName)
             counter += 1
         }
 
         do {
             try "".write(to: newFileURL, atomically: true, encoding: .utf8)
             loadContents()
-            selectedItem = newFileURL
-            if let index = allItems.firstIndex(where: { $0.url == newFileURL }) {
-                selectedIndex = index
+            if destination.path == currentPath.path {
+                selectedItem = newFileURL
+                if let index = allItems.firstIndex(where: { $0.url == newFileURL }) {
+                    selectedIndex = index
+                }
             }
         } catch {
             ToastManager.shared.showError("Error creating file: \(error.localizedDescription)")
