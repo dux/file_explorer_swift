@@ -201,6 +201,10 @@ struct FileTreeView: View {
     private func handleDrop(providers: [NSItemProvider]) {
         let currentPath = manager.currentPath
 
+        if ArchiveDragSession.shared.handleDrop(to: currentPath, onComplete: { manager.refresh() }) {
+            return
+        }
+
         collectDropURLs(from: providers) { uniqueURLs in
             let items = uniqueURLs
                 .filter { $0.deletingLastPathComponent().path != currentPath.path }
@@ -261,10 +265,7 @@ struct FlatBreadcrumbRow: View {
                     .onTapGesture {
                         if !isCurrent {
                             manager.navigateTo(ancestor.url)
-                        } else if isSelected {
-                            manager.selectedItem = nil
-                            manager.selectedIndex = -1
-                        } else {
+                        } else if !isSelected {
                             manager.selectedItem = ancestor.url
                             manager.selectedIndex = -1
                         }
@@ -391,10 +392,7 @@ struct AncestorRow: View {
         .onHover { isHovered = $0 }
         .onTapGesture {
             if isCurrent {
-                if isSelected {
-                    manager.selectedItem = nil
-                    manager.selectedIndex = -1
-                } else {
+                if !isSelected {
                     manager.selectedItem = url
                     manager.selectedIndex = -1
                 }
@@ -552,11 +550,8 @@ struct FileTreeRow: View {
                 }
                 lastClickTime = .distantPast
             } else {
-                // Single click — select only, no navigate
-                if manager.selectedItem == url {
-                    manager.selectedItem = nil
-                    manager.selectedIndex = -1
-                } else {
+                // Single click — select only, no navigate. ESC deselects.
+                if manager.selectedItem != url {
                     manager.selectItem(at: index, url: url)
                 }
                 lastClickTime = now

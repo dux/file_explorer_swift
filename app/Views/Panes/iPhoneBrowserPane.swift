@@ -50,13 +50,25 @@ struct iPhoneRenameDialog: View {
                 Spacer()
             }
 
-            TextField("Name", text: $deviceManager.renameText)
-                .styledInput()
-                .onSubmit {
+            RenameTextField(
+                text: $deviceManager.renameText,
+                onCommit: {
                     if !deviceManager.renameText.isEmpty {
                         Task { await deviceManager.confirmRename() }
                     }
-                }
+                },
+                onCancel: { deviceManager.cancelRename() },
+                cancelOnBlur: false,
+                bordered: false,
+                fontSize: 16
+            )
+            .frame(height: 22)
+            .padding(10)
+            .background(Color(NSColor.textBackgroundColor))
+            .overlay(
+                RoundedRectangle(cornerRadius: 5)
+                    .strokeBorder(Color.gray.opacity(0.4), lineWidth: 1)
+            )
 
             HStack {
                 Button("Cancel") {

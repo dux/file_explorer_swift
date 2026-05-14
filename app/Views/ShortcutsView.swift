@@ -422,18 +422,30 @@ struct DraggableShortcutRow: View {
         .onDrag {
             NSItemProvider(object: String(index) as NSString)
         }
-        .onDrop(of: [.text], isTargeted: $isDragTarget) { providers in
-            guard let provider = providers.first else { return false }
+        .onDrop(of: [.fileURL, .text], isTargeted: $isDragTarget) { providers in
+            // Reorder drop (text payload from another pinned row)
+            if let textProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier("public.text") }) {
+                textProvider.loadItem(forTypeIdentifier: "public.text", options: nil) { data, _ in
+                    guard let data = data as? Data,
+                          let str = String(data: data, encoding: .utf8),
+                          let sourceIndex = Int(str),
+                          sourceIndex != index else { return }
 
-            provider.loadItem(forTypeIdentifier: "public.text", options: nil) { data, _ in
-                guard let data = data as? Data,
-                      let str = String(data: data, encoding: .utf8),
-                      let sourceIndex = Int(str),
-                      sourceIndex != index else { return }
+                    DispatchQueue.main.async {
+                        let dest = sourceIndex < index ? index + 1 : index
+                        shortcutsManager.moveFolder(from: IndexSet(integer: sourceIndex), to: dest)
+                    }
+                }
+                return true
+            }
 
-                DispatchQueue.main.async {
-                    let dest = sourceIndex < index ? index + 1 : index
-                    shortcutsManager.moveFolder(from: IndexSet(integer: sourceIndex), to: dest)
+            // File URL drop (folder dragged from file tree / Finder)
+            collectDropURLs(from: providers) { uniqueURLs in
+                for url in uniqueURLs {
+                    var isDir: ObjCBool = false
+                    if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
+                        shortcutsManager.addFolder(url)
+                    }
                 }
             }
             return true

@@ -46,6 +46,8 @@ class FileExplorerManager: ObservableObject {
     @Published var showHidden: Bool = false
     @Published var renamingItem: URL? = nil
     @Published var renameText: String = ""
+    @Published var duplicatingItem: URL? = nil
+    @Published var duplicateText: String = ""
     @Published var currentPane: MainPaneType = .browser
     @Published var hiddenCount: Int = 0
     @Published var hasImages: Bool = false

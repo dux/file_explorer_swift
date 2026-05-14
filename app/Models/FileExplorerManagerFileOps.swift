@@ -90,11 +90,52 @@ extension FileExplorerManager {
         }
     }
 
-    func addToZip(_ url: URL) {
+    func promptDuplicate(_ url: URL) {
         let baseName = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension
+        duplicateText = ext.isEmpty ? "\(baseName) copy" : "\(baseName) copy.\(ext)"
+        duplicatingItem = url
+    }
+
+    func cancelDuplicate() {
+        duplicatingItem = nil
+        duplicateText = ""
+    }
+
+    func confirmDuplicate() {
+        guard let source = duplicatingItem else {
+            cancelDuplicate()
+            return
+        }
+        let newName = duplicateText.trimmingCharacters(in: .whitespaces)
+        guard !newName.isEmpty, newName != source.lastPathComponent else {
+            cancelDuplicate()
+            return
+        }
+        let newURL = source.deletingLastPathComponent().appendingPathComponent(newName)
+        do {
+            try fileManager.copyItem(at: source, to: newURL)
+            cancelDuplicate()
+            loadContents()
+            selectedItem = newURL
+            if let index = allItems.firstIndex(where: { $0.url == newURL }) {
+                selectedIndex = index
+            }
+        } catch {
+            ToastManager.shared.showError("Error duplicating file: \(error.localizedDescription)")
+            cancelDuplicate()
+        }
+    }
+
+    func addToZip(_ url: URL) {
+        let values = try? url.resourceValues(forKeys: [.isDirectoryKey])
+        let isDirectory = values?.isDirectory == true
+        let baseName = isDirectory ? url.lastPathComponent : url.deletingPathExtension().lastPathComponent
         var zipName = "\(baseName).zip"
         var counter = 1
-        var zipURL = url.deletingLastPathComponent().appendingPathComponent(zipName)
+        let parentURL = url.deletingLastPathComponent()
+        let itemName = url.lastPathComponent
+        var zipURL = parentURL.appendingPathComponent(zipName)
 
         // Find unique name
         while fileManager.fileExists(atPath: zipURL.path) {
@@ -105,17 +146,33 @@ extension FileExplorerManager {
 
         let finalZipName = zipName
         let finalZipURL = zipURL
-        let srcPath = url.path
+        let skipFolders = Self.defaultZipSkipFolders.union(AppSettings.shared.copySkipFolders)
+        let excludePatterns = Self.zipExcludePatterns(for: itemName, skipFolders: skipFolders)
 
         ToastManager.shared.show("Creating zip...")
 
         Task.detached {
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-            process.arguments = ["-c", "-k", "--sequesterRsrc", "--keepParent", srcPath, finalZipURL.path]
+            let outputPipe = Pipe()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+            process.currentDirectoryURL = parentURL
+            var arguments = [
+                "-r",
+                finalZipURL.path,
+                itemName,
+                "-x",
+                "__MACOSX/*",
+                "*/.DS_Store",
+                "*/._*"
+            ]
+            arguments.append(contentsOf: excludePatterns)
+            process.arguments = arguments
+            process.standardOutput = outputPipe
+            process.standardError = outputPipe
 
             do {
                 try process.run()
+                let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
 
                 let status = process.terminationStatus
@@ -128,7 +185,13 @@ extension FileExplorerManager {
                         }
                         ToastManager.shared.show("Created \(finalZipName)")
                     } else {
-                        ToastManager.shared.show("Error creating zip")
+                        let output = String(data: outputData, encoding: .utf8)?
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        if let output, !output.isEmpty {
+                            ToastManager.shared.showError(output)
+                        } else {
+                            ToastManager.shared.showError("Error creating zip")
+                        }
                     }
                 }
             } catch {
@@ -136,6 +199,22 @@ extension FileExplorerManager {
                     ToastManager.shared.show("Error creating zip: \(error.localizedDescription)")
                 }
             }
+        }
+    }
+
+    nonisolated private static let defaultZipSkipFolders: Set<String> = [
+        ".git", ".hg", ".idea", ".svn", ".vscode",
+        "build", "coverage"
+    ]
+
+    nonisolated private static func zipExcludePatterns(for itemName: String, skipFolders: Set<String>) -> [String] {
+        skipFolders.flatMap { folder in
+            [
+                "\(itemName)/\(folder)",
+                "\(itemName)/\(folder)/*",
+                "\(itemName)/*/\(folder)",
+                "\(itemName)/*/\(folder)/*"
+            ]
         }
     }
 

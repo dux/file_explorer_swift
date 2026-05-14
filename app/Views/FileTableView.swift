@@ -46,6 +46,10 @@ struct FileTableView: View {
     private func handleDrop(providers: [NSItemProvider]) {
         let currentPath = manager.currentPath
 
+        if ArchiveDragSession.shared.handleDrop(to: currentPath, onComplete: { manager.refresh() }) {
+            return
+        }
+
         collectDropURLs(from: providers) { uniqueURLs in
             let items = uniqueURLs
                 .filter { $0.deletingLastPathComponent().path != currentPath.path }
@@ -161,10 +165,7 @@ struct FileTableRow: View {
                         manager.selectCurrentFolder()
                     }
                 } else {
-                    if manager.selectedItem == url {
-                        manager.selectedItem = nil
-                        manager.selectedIndex = -1
-                    } else {
+                    if manager.selectedItem != url {
                         manager.selectItem(at: index, url: url)
                     }
                 }

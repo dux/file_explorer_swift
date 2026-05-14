@@ -149,8 +149,10 @@ struct FileItemDialog: View {
                 .buttonStyle(.plain)
 
                 Button(action: {
-                    manager.duplicateFile(url)
                     dismiss()
+                    DispatchQueue.main.async {
+                        manager.promptDuplicate(url)
+                    }
                 }) {
                     HStack(spacing: 8) {
                         Image(systemName: "doc.on.doc")

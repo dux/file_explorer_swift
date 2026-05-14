@@ -216,19 +216,44 @@ struct EmptySearchResultsView: View {
     }
 }
 
+// Selects basename (everything before the last '.') the moment it gains focus,
+// inside super.becomeFirstResponder() so the default select-all is never drawn.
+final class BasenameSelectingTextField: NSTextField {
+    override func becomeFirstResponder() -> Bool {
+        let didBecome = super.becomeFirstResponder()
+        if didBecome, let editor = currentEditor() {
+            let value = stringValue
+            let nsValue = value as NSString
+            let dotRange = nsValue.range(of: ".", options: .backwards)
+            let length: Int
+            if dotRange.location != NSNotFound && dotRange.location > 0 && dotRange.location < nsValue.length - 1 {
+                length = dotRange.location
+            } else {
+                length = nsValue.length
+            }
+            editor.selectedRange = NSRange(location: 0, length: length)
+        }
+        return didBecome
+    }
+}
+
 struct RenameTextField: NSViewRepresentable {
     @Binding var text: String
     var onCommit: () -> Void
     var onCancel: () -> Void
+    // Inline usage cancels on blur; sheet usage keeps the field alive until a button is clicked.
+    var cancelOnBlur: Bool = true
+    var bordered: Bool = false
+    var fontSize: CGFloat = 13
 
     func makeNSView(context: Context) -> NSTextField {
-        let textField = NSTextField()
+        let textField = BasenameSelectingTextField()
         textField.delegate = context.coordinator
-        textField.font = NSFont.systemFont(ofSize: 13)
-        textField.isBordered = false
+        textField.font = NSFont.systemFont(ofSize: fontSize)
+        textField.isBordered = bordered
         textField.drawsBackground = true
         textField.backgroundColor = NSColor.textBackgroundColor
-        textField.focusRingType = .none
+        textField.focusRingType = bordered ? .default : .none
         textField.cell?.usesSingleLineMode = true
         textField.cell?.wraps = false
         textField.cell?.isScrollable = true
@@ -240,18 +265,11 @@ struct RenameTextField: NSViewRepresentable {
             nsView.stringValue = text
         }
 
-        // Focus and select text on first appearance
+        // Focus on first appearance; selection is handled inside becomeFirstResponder.
         if !context.coordinator.didFocus {
             context.coordinator.didFocus = true
             DispatchQueue.main.async {
                 nsView.window?.makeFirstResponder(nsView)
-                // Select filename without extension
-                if let ext = text.split(separator: ".").last, text.contains(".") && ext.count < text.count - 1 {
-                    let nameLength = text.count - ext.count - 1
-                    nsView.currentEditor()?.selectedRange = NSRange(location: 0, length: nameLength)
-                } else {
-                    nsView.selectText(nil)
-                }
             }
         }
     }
@@ -291,7 +309,9 @@ struct RenameTextField: NSViewRepresentable {
                movement == NSReturnTextMovement || movement == NSTabTextMovement {
                 return
             }
-            parent.onCancel()
+            if parent.cancelOnBlur {
+                parent.onCancel()
+            }
         }
     }
 }

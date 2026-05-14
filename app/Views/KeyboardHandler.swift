@@ -16,7 +16,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
     func updateNSView(_ nsView: KeyCaptureView, context: Context) {
         nsView.manager = manager
         // Reclaim focus when no sheet/dialog is active and we don't have focus
-        if manager.renamingItem == nil && !manager.isSearching && !manager.showItemDialog && !manager.showNewFolderDialog && !manager.showNewFileDialog {
+        if manager.renamingItem == nil && manager.duplicatingItem == nil && !manager.isSearching && !manager.showItemDialog && !manager.showNewFolderDialog && !manager.showNewFileDialog {
             if let window = nsView.window {
                 let responder = window.firstResponder
                 // Reclaim if focus is on the window itself (sheet just closed) or already on us
@@ -347,6 +347,9 @@ class KeyCaptureView: NSView {
         case 53:
             if manager.browserViewMode != .files {
                 manager.browserViewMode = .files
+            } else if manager.selectedItem != nil {
+                manager.selectedItem = nil
+                manager.selectedIndex = -1
             }
             return true
         case 47: // Period key - show context menu
@@ -372,7 +375,7 @@ class KeyCaptureView: NSView {
                 let selection = SelectionManager.shared
                 let locals = selection.items.filter { if case .local = $0.source { return true } else { return false } }
                 guard locals.count == 1, let url = locals.first?.localURL else { return false }
-                manager.duplicateFile(url)
+                manager.promptDuplicate(url)
                 selection.clear()
                 return true
             }

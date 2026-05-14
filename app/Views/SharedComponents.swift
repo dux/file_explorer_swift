@@ -452,7 +452,7 @@ struct FileContextMenuItems: View {
             Label("Show in Finder", systemImage: "folder")
         }
         Divider()
-        Button(action: { manager.duplicateFile(url) }) {
+        Button(action: { manager.promptDuplicate(url) }) {
             Label("Duplicate", systemImage: "doc.on.doc")
         }
         Button(action: { manager.addToZip(url) }) {

@@ -795,7 +795,7 @@ struct SelectionSection: View {
 
                 if localItems.count == 1, let url = localItems.first?.localURL {
                     SelectionBarButton(title: "Duplicate", icon: "plus.square.on.square", color: .purple, shortcut: "Duplicate (Cmd+D)") {
-                        manager.duplicateFile(url)
+                        manager.promptDuplicate(url)
                         selection.clear()
                     }
                 }

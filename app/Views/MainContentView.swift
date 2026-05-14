@@ -203,6 +203,12 @@ struct MainContentView: View {
         )) {
             RenameDialog(manager: manager)
         }
+        .sheet(isPresented: Binding(
+            get: { manager.duplicatingItem != nil },
+            set: { if !$0 { manager.cancelDuplicate() } }
+        )) {
+            DuplicateDialog(manager: manager)
+        }
     }
 }
 
@@ -227,13 +233,25 @@ struct RenameDialog: View {
                 Spacer()
             }
 
-            TextField("Name", text: $manager.renameText)
-                .styledInput()
-                .onSubmit {
+            RenameTextField(
+                text: $manager.renameText,
+                onCommit: {
                     if !manager.renameText.isEmpty {
                         manager.confirmRename()
                     }
-                }
+                },
+                onCancel: { manager.cancelRename() },
+                cancelOnBlur: false,
+                bordered: false,
+                fontSize: 16
+            )
+            .frame(height: 22)
+            .padding(10)
+            .background(Color(NSColor.textBackgroundColor))
+            .overlay(
+                RoundedRectangle(cornerRadius: 5)
+                    .strokeBorder(Color.gray.opacity(0.4), lineWidth: 1)
+            )
 
             HStack {
                 Button("Cancel") {
@@ -251,6 +269,70 @@ struct RenameDialog: View {
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
                 .disabled(manager.renameText.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 600)
+    }
+}
+
+struct DuplicateDialog: View {
+    @ObservedObject var manager: FileExplorerManager
+
+    private var isDirectory: Bool {
+        guard let item = manager.duplicatingItem else { return false }
+        var isDir: ObjCBool = false
+        FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir)
+        return isDir.boolValue
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Image(systemName: "doc.on.doc.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.purple)
+                Text("Duplicate")
+                    .textStyle(.default, weight: .semibold)
+                Spacer()
+            }
+
+            RenameTextField(
+                text: $manager.duplicateText,
+                onCommit: {
+                    if !manager.duplicateText.isEmpty {
+                        manager.confirmDuplicate()
+                    }
+                },
+                onCancel: { manager.cancelDuplicate() },
+                cancelOnBlur: false,
+                bordered: false,
+                fontSize: 16
+            )
+            .frame(height: 22)
+            .padding(10)
+            .background(Color(NSColor.textBackgroundColor))
+            .overlay(
+                RoundedRectangle(cornerRadius: 5)
+                    .strokeBorder(Color.gray.opacity(0.4), lineWidth: 1)
+            )
+
+            HStack {
+                Button("Cancel") {
+                    manager.cancelDuplicate()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Duplicate") {
+                    if !manager.duplicateText.isEmpty {
+                        manager.confirmDuplicate()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(manager.duplicateText.isEmpty)
             }
         }
         .padding(20)

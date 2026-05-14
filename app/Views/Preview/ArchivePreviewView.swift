@@ -304,7 +304,7 @@ struct ArchiveEntryRow: View {
                 .resizable()
                 .frame(width: 22, height: 22)
 
-            Text(entry.name)
+            Text(entryDisplayName)
                 .textStyle(.default)
                 .lineLimit(1)
                 .foregroundColor(.primary)
@@ -334,25 +334,22 @@ struct ArchiveEntryRow: View {
             }
         }
         .onDrag {
-            let provider = NSItemProvider()
-            let arc = archiveURL
-            let ent = entry
-            provider.registerFileRepresentation(
-                forTypeIdentifier: UTType.fileURL.identifier,
-                fileOptions: [],
-                visibility: .all
-            ) { completion in
-                DispatchQueue.global(qos: .userInitiated).async {
-                    if let url = Self.extractToTemp(archiveURL: arc, entry: ent) {
-                        completion(url, false, nil)
-                    } else {
-                        completion(nil, false, NSError(domain: "ArchiveExtract", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to extract entry"]))
-                    }
-                }
-                return nil
+            let pending = ArchiveDragSession.Pending(
+                archive: archiveURL,
+                entryPath: entry.path,
+                entryName: entry.name,
+                isDirectory: entry.isDirectory,
+                archiveExt: archiveExt
+            )
+            let draggedURL = ArchiveDragSession.shared.beginDrag(pending: pending) {
+                manager.refresh()
             }
-            return provider
+            return NSItemProvider(object: draggedURL as NSURL)
         }
+    }
+
+    private var entryDisplayName: String {
+        entry.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 
     private func extractToCurrent() {
@@ -438,42 +435,4 @@ struct ArchiveEntryRow: View {
         }
     }
 
-    nonisolated private static func extractToTemp(archiveURL: URL, entry: ArchiveEntry) -> URL? {
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ArchiveExtract")
-            .appendingPathComponent(UUID().uuidString)
-
-        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-
-        let ext = archiveURL.pathExtension.lowercased()
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.currentDirectoryURL = tempDir
-
-        switch ext {
-        case "zip":
-            process.arguments = ["unzip", "-o", archiveURL.path, entry.path, "-d", tempDir.path]
-        case "tar", "tgz", "gz", "bz2", "xz":
-            process.arguments = ["tar", "-xf", archiveURL.path, "-C", tempDir.path, entry.path]
-        default:
-            return nil
-        }
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        do {
-            try process.run()
-            _ = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-
-            let extractedURL = tempDir.appendingPathComponent(entry.path)
-            if FileManager.default.fileExists(atPath: extractedURL.path) {
-                return extractedURL
-            }
-        } catch {}
-
-        return nil
-    }
 }

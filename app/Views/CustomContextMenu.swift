@@ -238,7 +238,7 @@ private struct CustomContextMenuContent: View {
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }))
         items.append(MenuItem(icon: "doc.on.doc", label: "Duplicate", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
-            manager.duplicateFile(url)
+            manager.promptDuplicate(url)
         }))
         items.append(MenuItem(icon: "doc.zipper", label: "Add to Zip", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
             manager.addToZip(url)
