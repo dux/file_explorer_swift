@@ -99,32 +99,9 @@ struct ShortcutsView: View {
 
 struct PinnedFoldersTitle: View {
     @ObservedObject var shortcutsManager: ShortcutsManager
-    @State private var isHovered = false
 
     var body: some View {
-        HStack {
-            Text("Pinned Folders")
-                .textStyle(.title)
-
-            Spacer()
-
-            Button(action: { shortcutsManager.addDivider() }) {
-                Text("hr")
-                    .textStyle(.small, weight: .medium)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(RoundedRectangle(cornerRadius: 3).fill(Color.gray.opacity(0.12)))
-            }
-            .buttonStyle(.plain)
-            .opacity(isHovered && shortcutsManager.customFolders.count >= 2 ? 1 : 0)
-        }
-        .padding(.leading, 38)
-        .padding(.trailing, 16)
-        .padding(.top, 22)
-        .padding(.bottom, 6)
-        .contentShape(Rectangle())
-        .onHover { isHovered = $0 }
+        SidebarSectionTitle(title: "Pinned Folders")
     }
 }
 
@@ -406,6 +383,7 @@ struct DraggableShortcutRow: View {
             isHovered: isHovered
         )
         .contentShape(Rectangle())
+        .pinnedFolderContextMenu(url: item.url, index: index)
         .onHover { hovering in
             isHovered = hovering
         }

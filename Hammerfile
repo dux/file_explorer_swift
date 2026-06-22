@@ -1,0 +1,127 @@
+# Hammerfile - build / install / run helpers for File Explorer.
+# Run with: hammer <command>   (https://github.com/dux/hammer)
+
+APP_NAME    ||= 'FileExplorerByDux'
+BINARY_NAME ||= 'FileExplorer'
+BUNDLE_DIR  ||= "#{APP_NAME}.app"
+INSTALL_DIR ||= '/Applications'
+BUILD_CFG   ||= 'debug'
+RES_BUNDLE  ||= "#{BINARY_NAME}_#{BINARY_NAME}.bundle"
+
+task :clean do
+  desc 'Remove build artifacts'
+  proc do
+    say 'cleaning build artifacts', :cyan
+    sh 'swift package clean'
+    sh 'rm -rf .build'
+    sh "rm -rf #{BUNDLE_DIR}"
+    say.green 'clean complete'
+  end
+end
+
+task :lint do
+  desc 'Run SwiftLint'
+  proc { sh 'swiftlint lint --quiet' }
+end
+
+task :test do
+  desc 'Run swift test'
+  proc { sh 'swift test' }
+end
+
+task :build do
+  desc 'Lint, build, assemble .app bundle and install to /Applications'
+  proc do
+    hammer :lint
+    say "building #{APP_NAME}", :cyan
+    sh 'git rev-parse HEAD > app/Resources/build-commit.txt'
+    sh 'swift build'
+
+    say 'creating app bundle', :cyan
+    sh "mkdir -p #{BUNDLE_DIR}/Contents/MacOS"
+    sh "mkdir -p #{BUNDLE_DIR}/Contents/Resources"
+    sh "cp app/Info.plist #{BUNDLE_DIR}/Contents/"
+    sh "cp .build/#{BUILD_CFG}/#{BINARY_NAME} #{BUNDLE_DIR}/Contents/MacOS/#{BINARY_NAME}"
+    sh "cp app/Resources/AppIcon.icns #{BUNDLE_DIR}/Contents/Resources/"
+    sh "cp -R .build/#{BUILD_CFG}/#{RES_BUNDLE} #{BUNDLE_DIR}/Contents/Resources/"
+    # second copy mirrors the Makefile - some lookups expect the bundle at the .app root
+    sh "cp -R .build/#{BUILD_CFG}/#{RES_BUNDLE} #{BUNDLE_DIR}/"
+    `codesign --force --sign - --entitlements FileExplorer.entitlements #{BUNDLE_DIR}/Contents/MacOS/#{BINARY_NAME} 2>/dev/null`
+
+    `pkill -x "#{BINARY_NAME}" 2>/dev/null`
+    sleep 0.3
+    sh "rm -rf #{INSTALL_DIR}/#{BUNDLE_DIR}"
+    sh "cp -R #{BUNDLE_DIR} #{INSTALL_DIR}/"
+    sh "rm -rf #{BUNDLE_DIR}"
+    say.green "installed to #{INSTALL_DIR}/#{BUNDLE_DIR}"
+  end
+end
+
+task :run do
+  desc 'Open the installed app'
+  proc { sh "open #{INSTALL_DIR}/#{BUNDLE_DIR}" }
+end
+
+task :dev do
+  desc 'Build + install + run (default inner-loop)'
+  proc do
+    hammer :build
+    hammer :run
+  end
+end
+
+task :gh_pub do
+  desc 'Build release, tag and publish latest to GitHub'
+  proc do
+    hammer :build
+    hash = `git rev-parse --short HEAD`.strip
+    say "publishing release #{hash}", :cyan
+
+    sh %(sed -i '' "s|/main/install.sh.*|/main/install.sh?v=#{hash} \\| bash|" README.md)
+    sh 'git add -A && git commit -m "release" --allow-empty && git push origin main'
+
+    say 'deleting old releases', :cyan
+    `gh release list --json tagName -q '.[].tagName'`.lines.map(&:strip).reject(&:empty?).each do |tag|
+      `gh release delete "#{tag}" --yes --cleanup-tag 2>/dev/null`
+    end
+
+    say 'publishing latest release', :cyan
+    tarball = "#{APP_NAME}.app.tar.gz"
+    sh "tar -czf #{tarball} -C #{INSTALL_DIR} #{BUNDLE_DIR}"
+    sh %(gh release create latest #{tarball} --title "#{APP_NAME}" --notes "Latest build" --latest)
+    sh "rm -f #{tarball}"
+    say.green 'published'
+  end
+end
+
+task :demo do
+  desc 'Start web server and open demo page'
+  proc do
+    say 'starting web server for demo', :cyan
+    `open http://localhost:8000/web-demo/`
+    sh 'python3 -m http.server 8000'
+  end
+end
+
+task :watch do
+  desc 'Rebuild + reinstall on Swift file changes'
+  proc do
+    say.cyan 'watching app/ for changes (ctrl-c to stop)'
+    stamp = '.watch_timestamp'
+    `touch #{stamp}`
+    loop do
+      changed = `find app -name "*.swift" -newer #{stamp} 2>/dev/null`.strip
+      unless changed.empty?
+        say.green 'change detected, rebuilding'
+        `touch #{stamp}`
+        `pkill -x "#{BINARY_NAME}" 2>/dev/null`
+        begin
+          hammer :build
+        rescue StandardError => e
+          say.red "build failed: #{e.message}"
+        end
+      end
+      sleep 1
+    end
+  end
+end

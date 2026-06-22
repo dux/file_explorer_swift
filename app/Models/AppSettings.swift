@@ -321,11 +321,14 @@ class AppSettings: ObservableObject {
         return trimmed.isEmpty ? "__empty__" : trimmed
     }
 
+    // Append new picks at the end so opening with a non-default app
+    // does not silently promote it to the default slot (index 0).
+    // First pick still becomes default because the list starts empty.
     func addPreferredApp(for fileType: String, appPath: String) {
         let key = normalizeFileType(fileType)
         var apps = preferredApps[key] ?? []
         if !apps.contains(appPath) {
-            apps.insert(appPath, at: 0)
+            apps.append(appPath)
             preferredApps[key] = apps
         }
     }

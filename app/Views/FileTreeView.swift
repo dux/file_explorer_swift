@@ -308,6 +308,9 @@ struct FlatBreadcrumbRow: View {
         )
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
+        .onDrag {
+            NSItemProvider(object: manager.currentPath as NSURL)
+        }
         .customContextMenu(url: manager.currentPath)
     }
 }

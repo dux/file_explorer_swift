@@ -226,6 +226,7 @@ struct SearchResultRow: View {
     let item: CachedFileInfo
     let index: Int
     @ObservedObject var manager: FileExplorerManager
+    @State private var lastClickTime: Date = .distantPast
 
     private var parentPath: String {
         let parent = item.url.deletingLastPathComponent().path
@@ -247,8 +248,16 @@ struct SearchResultRow: View {
             isSelected: manager.selectedItem == item.url
         )
         .onTapGesture {
-            manager.listCursorIndex = index
-            manager.selectItem(at: -1, url: item.url)
+            let now = Date()
+            if now.timeIntervalSince(lastClickTime) < 0.3 {
+                // Double click — open file or navigate into directory.
+                manager.listActivateItem(url: item.url, isDirectory: item.isDirectory)
+                lastClickTime = .distantPast
+            } else {
+                manager.listCursorIndex = index
+                manager.selectItem(at: -1, url: item.url)
+                lastClickTime = now
+            }
         }
     }
 }

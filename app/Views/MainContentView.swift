@@ -589,6 +589,7 @@ struct ActionButtonBar: View {
             }
         }
         .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+        .customContextMenu(url: manager.currentPath)
     }
 }
 

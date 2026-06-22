@@ -10,6 +10,15 @@ private func tildePath(_ url: URL) -> String {
     return path
 }
 
+// Anchor preference used to locate the "Assign color" row's frame so its
+// side submenu can be rendered above the parent menu's border overlay.
+private struct ColorAssignRowAnchorKey: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = nextValue() ?? value
+    }
+}
+
 // MARK: - Context Menu Manager
 
 @MainActor
@@ -22,6 +31,7 @@ class ContextMenuManager: ObservableObject {
     @Published var focusedIndex: Int = 0
     @Published var showDetails = false
     @Published var showEmojiPicker = false
+    @Published var pinnedFolderIndex: Int? = nil
     var detailsURL: URL?
     var detailsIsDirectory = false
     var emojiPickerURL: URL?
@@ -35,6 +45,17 @@ class ContextMenuManager: ObservableObject {
         self.focusedIndex = keyboardTriggered ? 0 : -1
         self.itemCount = 0
         self.itemActions = []
+        self.pinnedFolderIndex = nil
+        self.isShowing = true
+    }
+
+    func showPinnedFolder(url: URL, at position: CGPoint, index: Int, keyboardTriggered: Bool = false) {
+        self.url = url
+        self.position = position
+        self.focusedIndex = keyboardTriggered ? 0 : -1
+        self.itemCount = 0
+        self.itemActions = []
+        self.pinnedFolderIndex = index
         self.isShowing = true
     }
 
@@ -43,6 +64,7 @@ class ContextMenuManager: ObservableObject {
         focusedIndex = 0
         itemCount = 0
         itemActions = []
+        pinnedFolderIndex = nil
     }
 
     func dismissAndRun(_ action: @escaping () -> Void) {
@@ -168,6 +190,7 @@ private struct CustomContextMenuContent: View {
         let isColor: Bool
         let tagColor: TagColor?
         let isTagged: Bool
+        var isColorAssign: Bool = false
         let action: () -> Void
     }
 
@@ -177,7 +200,18 @@ private struct CustomContextMenuContent: View {
 
     @ObservedObject private var selection = SelectionManager.shared
 
+    @State private var hoveredColorRow = false
+    @State private var hoveredColorSubmenu = false
+
+    private func isColorRowFocused(items: [MenuItem]) -> Bool {
+        guard let idx = items.firstIndex(where: { $0.isColorAssign }) else { return false }
+        return contextMenu.focusedIndex == idx
+    }
+
     private var menuItems: [MenuItem] {
+        if let pinnedIndex = contextMenu.pinnedFolderIndex {
+            return pinnedFolderMenuItems(pinnedIndex: pinnedIndex)
+        }
         var items: [MenuItem] = []
         if isDirectory && !selection.localItems.isEmpty {
             let count = selection.localItems.count
@@ -218,6 +252,16 @@ private struct CustomContextMenuContent: View {
                 contextMenu.emojiPickerURL = url
                 contextMenu.showEmojiPicker = true
             }))
+            let alreadyPinned = ShortcutsManager.shared.customFolders.contains { $0.path == url.path }
+            if alreadyPinned {
+                items.append(MenuItem(icon: "pin.slash", label: "Remove from Pinned", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
+                    ShortcutsManager.shared.removeFolder(url)
+                }))
+            } else {
+                items.append(MenuItem(icon: "pin", label: "Add to Pinned Folders", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
+                    ShortcutsManager.shared.addFolder(url)
+                }))
+            }
         }
         items.append(MenuItem(icon: "doc.on.clipboard", label: "Copy Path", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
             let pasteboard = NSPasteboard.general
@@ -273,12 +317,7 @@ private struct CustomContextMenuContent: View {
                 manager.moveToTrash(url)
             }))
         }
-        for color in TagColor.allCases {
-            let tagged = tagManager.isTagged(url, color: color)
-            items.append(MenuItem(icon: "", label: color.label, isDestructive: false, isColor: true, tagColor: color, isTagged: tagged, action: act {
-                tagManager.toggleTag(url, color: color)
-            }))
-        }
+        items.append(MenuItem(icon: "", label: "Assign color", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, isColorAssign: true, action: {}))
         let currentColors = tagManager.colorsForFile(url)
         if !currentColors.isEmpty {
             items.append(MenuItem(icon: "xmark.circle", label: "Remove All Labels", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
@@ -288,8 +327,25 @@ private struct CustomContextMenuContent: View {
         return items
     }
 
+    private func pinnedFolderMenuItems(pinnedIndex: Int) -> [MenuItem] {
+        let targetURL = url
+        return [
+            MenuItem(icon: "pin.slash", label: "Remove from pinned", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
+                ShortcutsManager.shared.removeFolder(targetURL)
+            }),
+            MenuItem(icon: "face.smiling", label: "Assign Icon", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
+                contextMenu.emojiPickerURL = targetURL
+                contextMenu.showEmojiPicker = true
+            }),
+            MenuItem(icon: "minus", label: "Add ruler (below)", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
+                ShortcutsManager.shared.addDivider(after: pinnedIndex)
+            })
+        ]
+    }
+
     var body: some View {
         let items = menuItems
+        let showColorSubmenu = hoveredColorRow || hoveredColorSubmenu || isColorRowFocused(items: items)
         VStack(alignment: .leading, spacing: 0) {
             // Title: file icon + name
             HStack(alignment: .center, spacing: 10) {
@@ -320,11 +376,11 @@ private struct CustomContextMenuContent: View {
                 .padding(.bottom, 4)
 
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                menuRowView(item: item, index: index, items: items)
+                menuRowView(item: item, index: index, items: items, showColorSubmenu: showColorSubmenu)
             }
         }
         .padding(.vertical, 6)
-        .frame(width: 220)
+        .frame(width: 245)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color(red: 0xfa / 255.0, green: 0xf9 / 255.0, blue: 0xf5 / 255.0))
@@ -335,15 +391,51 @@ private struct CustomContextMenuContent: View {
             RoundedRectangle(cornerRadius: 10)
                 .strokeBorder(Color(red: 0.8, green: 0.8, blue: 0.8), lineWidth: 2)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        // Outermost overlay paints above the border, so the side submenu
+        // is not occluded by the parent menu's border or background corners.
+        .overlayPreferenceValue(ColorAssignRowAnchorKey.self) { anchor in
+            GeometryReader { proxy in
+                if showColorSubmenu, let anchor {
+                    let rect = proxy[anchor]
+                    colorSubmenu
+                        .offset(x: rect.maxX - 80, y: rect.minY - 6)
+                        .onHover { hoveredColorSubmenu = $0 }
+                }
+            }
+        }
         .onAppear {
             contextMenu.itemCount = items.count
             contextMenu.itemActions = items.map { $0.action }
         }
     }
 
+    private var colorSubmenu: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(TagColor.allCases) { color in
+                ContextMenuColorRow(
+                    color: color,
+                    isTagged: tagManager.isTagged(url, color: color),
+                    isFocused: false,
+                    action: { tagManager.toggleTag(url, color: color) }
+                )
+            }
+        }
+        .padding(.vertical, 6)
+        .frame(width: 140)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(red: 0xfa / 255.0, green: 0xf9 / 255.0, blue: 0xf5 / 255.0))
+                .shadow(color: .black.opacity(0.35), radius: 24, x: 0, y: 10)
+                .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color(red: 0.8, green: 0.8, blue: 0.8), lineWidth: 2)
+        )
+    }
+
     @ViewBuilder
-    private func menuRowView(item: MenuItem, index: Int, items: [MenuItem]) -> some View {
+    private func menuRowView(item: MenuItem, index: Int, items: [MenuItem], showColorSubmenu: Bool) -> some View {
         let needsDivider = index == sectionBreakAfterSelection(items)
             || index == sectionBreakAfterCopyPath(items)
             || index == sectionBreakAfterCreateFile(items)
@@ -353,7 +445,12 @@ private struct CustomContextMenuContent: View {
         if needsDivider {
             ContextMenuDivider()
         }
-        if item.isColor, let tagColor = item.tagColor {
+        if item.isColorAssign {
+            ContextMenuColorAssignRow(
+                isHighlighted: showColorSubmenu,
+                onHover: { hoveredColorRow = $0 }
+            )
+        } else if item.isColor, let tagColor = item.tagColor {
             ContextMenuColorRow(color: tagColor, isTagged: item.isTagged, isFocused: focused, action: item.action)
         } else {
             ContextMenuRow(icon: item.icon, label: item.label, isDestructive: item.isDestructive, isFocused: focused, action: item.action)
@@ -376,11 +473,11 @@ private struct CustomContextMenuContent: View {
     }
 
     private func sectionBreak2(_ items: [MenuItem]) -> Int {
-        items.firstIndex(where: { $0.label == "Move to Trash" }) ?? 0
+        items.firstIndex(where: { $0.label == "Move to Trash" }) ?? -1
     }
 
     private func sectionBreak3(_ items: [MenuItem]) -> Int {
-        items.firstIndex(where: { $0.isColor }) ?? 0
+        items.firstIndex(where: { $0.isColorAssign || $0.isColor }) ?? -1
     }
 }
 
@@ -466,6 +563,35 @@ private struct ContextMenuColorRow: View {
     }
 }
 
+// MARK: - Color Assign Row (side submenu rendered by parent)
+
+private struct ContextMenuColorAssignRow: View {
+    var isHighlighted: Bool
+    var onHover: (Bool) -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "tag")
+                .font(.system(size: 13))
+                .frame(width: 18, height: 18)
+                .foregroundColor(isHighlighted ? .white : .secondary)
+            Text("Assign color")
+                .textStyle(.default)
+                .foregroundColor(isHighlighted ? .white : .primary)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(isHighlighted ? .white : .secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(isHighlighted ? Color.accentColor : Color.clear)
+        .contentShape(Rectangle())
+        .onHover(perform: onHover)
+        .anchorPreference(key: ColorAssignRowAnchorKey.self, value: .bounds) { $0 }
+    }
+}
+
 // MARK: - Menu Divider
 
 private struct ContextMenuDivider: View {
@@ -502,9 +628,10 @@ struct RightClickableArea: NSViewRepresentable {
             let contentHeight = contentView.frame.height
             let flippedY = contentHeight - windowPoint.y
             // Menu top-left: 50px left and 50px up from click
+            // Clamp top so the menu stays inside the window when clicking near the top edge
             let position = CGPoint(
                 x: windowPoint.x - 50,
-                y: flippedY - 50
+                y: max(flippedY - 50, 35)
             )
             Task { @MainActor in
                 ContextMenuManager.shared.show(url: url, at: position)
@@ -523,6 +650,54 @@ struct RightClickableArea: NSViewRepresentable {
     }
 }
 
+// MARK: - Pinned Folder Right-Click Gesture
+
+struct PinnedFolderRightClickArea: NSViewRepresentable {
+    let url: URL
+    let index: Int
+
+    func makeNSView(context: Context) -> RightClickNSView {
+        let view = RightClickNSView()
+        view.url = url
+        view.pinnedIndex = index
+        return view
+    }
+
+    func updateNSView(_ nsView: RightClickNSView, context: Context) {
+        if nsView.url != url { nsView.url = url }
+        if nsView.pinnedIndex != index { nsView.pinnedIndex = index }
+    }
+
+    class RightClickNSView: NSView {
+        var url: URL?
+        var pinnedIndex: Int?
+
+        override func rightMouseDown(with event: NSEvent) {
+            guard let url, let pinnedIndex,
+                  let window = self.window,
+                  let contentView = window.contentView else { return }
+            let windowPoint = event.locationInWindow
+            let contentHeight = contentView.frame.height
+            let flippedY = contentHeight - windowPoint.y
+            // Clamp top so the menu stays inside the window when clicking near the top edge
+            let position = CGPoint(
+                x: windowPoint.x - 50,
+                y: max(flippedY - 50, 35)
+            )
+            Task { @MainActor in
+                ContextMenuManager.shared.showPinnedFolder(url: url, at: position, index: pinnedIndex)
+            }
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            if let event = NSApp.currentEvent, event.type == .rightMouseDown {
+                return super.hitTest(point)
+            }
+            return nil
+        }
+    }
+}
+
 // MARK: - View Extension
 
 extension View {
@@ -530,5 +705,10 @@ extension View {
     // whether the URL is a file or folder and adapts items accordingly.
     func customContextMenu(url: URL) -> some View {
         self.overlay(RightClickableArea(url: url))
+    }
+
+    // Right-click menu for pinned-sidebar rows: remove, assign icon, add ruler.
+    func pinnedFolderContextMenu(url: URL, index: Int) -> some View {
+        self.overlay(PinnedFolderRightClickArea(url: url, index: index))
     }
 }

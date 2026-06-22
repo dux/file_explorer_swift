@@ -102,6 +102,12 @@ class ShortcutsManager: ObservableObject {
         saveCustomFolders()
     }
 
+    func addDivider(after index: Int) {
+        guard index >= 0 && index < customFolders.count else { return }
+        customFolders.insert(Self.makeDividerURL(), at: index + 1)
+        saveCustomFolders()
+    }
+
     func removeDivider(at index: Int) {
         guard index >= 0 && index < customFolders.count && Self.isDivider(customFolders[index]) else { return }
         customFolders.remove(at: index)
