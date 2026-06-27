@@ -1,0 +1,186 @@
+<script>
+  class {
+    FAST = true
+
+    init() {
+      // finder/fe: 'yes' (full), 'partial' (basic/limited), 'no' (none)
+      this.state.categories = [
+        { name: 'Navigation & browsing', rows: [
+          { feature: 'Three-pane tree view with ancestor breadcrumbs', finder: 'no', fe: 'yes' },
+          { feature: 'Full keyboard-driven navigation + context menu', finder: 'partial', fe: 'yes' },
+          { feature: 'Fast recursive search with extension filters', finder: 'partial', fe: 'yes' },
+          { feature: 'Pinned folders with custom emoji icons', finder: 'partial', fe: 'yes' },
+          { feature: 'Color tags per file', finder: 'yes', fe: 'yes' }
+        ]},
+        { name: 'Right-pane preview', rows: [
+          { feature: 'Always-on inline preview pane', finder: 'partial', fe: 'yes' },
+          { feature: 'Code syntax highlighting (50+ languages)', finder: 'no', fe: 'yes' },
+          { feature: 'JSON tree viewer', finder: 'no', fe: 'yes' },
+          { feature: 'Markdown rendering', finder: 'no', fe: 'yes' },
+          { feature: 'PDF, EPUB & comic reader', finder: 'partial', fe: 'yes' },
+          { feature: 'Archive & disk image browsing (no extract)', finder: 'no', fe: 'yes' },
+          { feature: 'Movie info & posters from OMDB', finder: 'no', fe: 'yes' }
+        ]},
+        { name: 'Right-pane edit & actions', rows: [
+          { feature: 'Image resize, crop & format convert', finder: 'partial', fe: 'yes' },
+          { feature: 'Audio & video trim (ffmpeg)', finder: 'partial', fe: 'yes' },
+          { feature: 'EXIF / metadata viewer', finder: 'partial', fe: 'yes' },
+          { feature: 'Inline rename & duplicate', finder: 'yes', fe: 'yes' },
+          { feature: 'Open with any app (smart picker)', finder: 'yes', fe: 'yes' },
+          { feature: 'Multi-file batch operations', finder: 'yes', fe: 'yes' }
+        ]},
+        { name: 'Devices & apps', rows: [
+          { feature: 'iPhone file management over USB', finder: 'partial', fe: 'yes' },
+          { feature: 'App uninstaller with full data cleanup', finder: 'no', fe: 'yes' },
+          { feature: 'Mount & install DMG / ISO directly', finder: 'partial', fe: 'yes' }
+        ]}
+      ]
+    }
+  }
+</script>
+
+<style>
+  :fez {
+    display: block;
+    overflow-x: auto;
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    thead th {
+      padding: 14px 16px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 13px;
+      color: #374151;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    thead th.col {
+      text-align: center;
+      width: 132px;
+    }
+
+    thead th.fe {
+      color: #2563eb;
+      background: #f5f9ff;
+      border-bottom-color: #bfdbfe;
+    }
+
+    tbody td {
+      padding: 12px 16px;
+      color: #374151;
+    }
+
+    tbody td.col {
+      text-align: center;
+      width: 132px;
+    }
+
+    tbody td.fe {
+      background: #f5f9ff;
+    }
+
+    tr.feature {
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    tr.feature:hover td {
+      background: #f9fafb;
+    }
+
+    tr.feature:hover td.fe {
+      background: #eef5ff;
+    }
+
+    tr.cat td {
+      padding: 18px 16px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #94a3b8;
+      background: #fff;
+    }
+
+    .mark {
+      display: inline-flex;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .mark.yes {
+      background: #10b981;
+      color: #fff;
+    }
+
+    .mark.partial {
+      background: #fde68a;
+      color: #b45309;
+    }
+
+    .mark.no {
+      background: #f3f4f6;
+      color: #cbd5e1;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      padding: 16px;
+      border-top: 1px solid #f3f4f6;
+      font-size: 12px;
+      color: #6b7280;
+
+      .item {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .mark {
+        width: 16px;
+        height: 16px;
+        font-size: 9px;
+      }
+    }
+  }
+</style>
+
+<table>
+  <thead>
+    <tr>
+      <th class="feat">Feature</th>
+      <th class="col">Finder</th>
+      <th class="col fe">FileExplorer</th>
+    </tr>
+  </thead>
+  <tbody>
+    {#each state.categories as cat}
+      <tr class="cat">
+        <td colspan="3">{cat.name}</td>
+      </tr>
+      {#each cat.rows as row}
+        <tr class="feature">
+          <td class="feat">{row.feature}</td>
+          <td class="col"><span class={'mark ' + row.finder}>{row.finder === 'no' ? '−' : '✔︎'}</span></td>
+          <td class="col fe"><span class={'mark ' + row.fe}>{row.fe === 'no' ? '−' : '✔︎'}</span></td>
+        </tr>
+      {/each}
+    {/each}
+  </tbody>
+</table>
+<div class="legend">
+  <span class="item"><span class="mark yes">{'✔︎'}</span> Full support</span>
+  <span class="item"><span class="mark partial">{'✔︎'}</span> Basic / limited</span>
+  <span class="item"><span class="mark no">{'−'}</span> Not available</span>
+</div>

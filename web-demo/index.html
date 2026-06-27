@@ -4,12 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FileExplorer - Native macOS Finder Replacement</title>
-  <script src="postwind.js"></script>
-  <script>PostWind.init({ tailwind: true })</script>
+  <script type="module">
+    import PostWind from 'https://dux.github.io/postwind/dist/postwind.js'
+    PostWind.init({ tailwind: true })
+  </script>
   <script src="https://dux.github.io/fez/dist/fez.js"></script>
-  <script fez="screenshot-gallery.fez"></script>
-  <script fez="feature-card.fez"></script>
-  <script fez="comparison-table.fez"></script>
+  <script fez="fez/screenshot-gallery.fez"></script>
+  <script fez="fez/feature-card.fez"></script>
+  <script fez="fez/comparison-table.fez"></script>
   <style>
     html { scroll-behavior: smooth; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
@@ -52,7 +54,7 @@
   </section>
 
   <!-- Screenshots -->
-  <section id="screenshots" class="max-w-4xl mx-auto px-4 md:px-6 pb-12 md:pb-20">
+  <section id="screenshots" class="max-w-[1096px] mx-auto px-4 md:px-6 pb-12 md:pb-20">
     <screenshot-gallery></screenshot-gallery>
   </section>
 
@@ -63,6 +65,7 @@
       <p class="text-gray-500 text-center mb-8 md:mb-12 max-w-xl mx-auto">Built for power users who need more than drag-and-drop.</p>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <feature-card icon="&#x1F333;" title="Tree View" desc="Three-pane layout with ancestor path breadcrumbs and indented children. Sort by name or modified date."></feature-card>
+        <feature-card icon="&#x26A1;" title="Fuzzy Search" desc="Fuzzy search thousands of files in milliseconds. Live results and extension filters as you type, powered by fd. Jump straight to any result's folder."></feature-card>
         <feature-card icon="&#x1F50D;" title="Preview Pane" desc="Images, code with syntax highlighting, JSON trees, markdown, PDF, audio, video, archives, EPUB, and more."></feature-card>
         <feature-card icon="&#x2328;&#xFE0F;" title="Keyboard Driven" desc="Full arrow-key navigation, tab cycling between panes, Enter to rename, Space to select, context menu via period key, and many more shortcuts."></feature-card>
         <feature-card icon="&#x1F4F1;" title="iPhone Files" desc="Browse iPhone app sandboxes via USB. Upload, download, delete, and create folders on connected devices."></feature-card>
@@ -71,7 +74,6 @@
         <feature-card icon="&#x1F3A8;" title="Color Tags" desc="7 colors, multiple tags per file. Browse all files by tag color from the sidebar. Persists across sessions."></feature-card>
         <feature-card icon="&#x1F4E6;" title="Archive Browser" desc="Browse zip, tar, gz, rar, 7z, DMG, and ISO contents without extracting. Mount disk images directly."></feature-card>
         <feature-card icon="&#x1F5D1;&#xFE0F;" title="App Uninstaller" desc="Uninstall .app bundles with full associated data cleanup: caches, preferences, app support, and containers."></feature-card>
-        <feature-card icon="&#x26A1;" title="Fast Search" desc="Recursive search powered by fd with real-time results as you type. Navigate to any result's parent folder."></feature-card>
         <feature-card icon="&#x1F4C1;" title="Pinned Folders" desc="Pin any folder to the sidebar with custom emoji icons. Emoji picker with search and category tabs."></feature-card>
         <feature-card icon="&#x2702;&#xFE0F;" title="Audio/Video Trim" desc="Built-in audio and video player with waveform display and trim functionality via ffmpeg."></feature-card>
       </div>
