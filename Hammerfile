@@ -54,6 +54,8 @@ task :build do
     sh "cp -R #{BUNDLE_DIR} #{INSTALL_DIR}/"
     sh "rm -rf #{BUNDLE_DIR}"
     say.green "installed to #{INSTALL_DIR}/#{BUNDLE_DIR}"
+
+    hammer :run
   end
 end
 

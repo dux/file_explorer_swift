@@ -37,7 +37,7 @@ struct ContentView: View {
                                     leftPaneDragStartWidth = settings.leftPaneWidth
                                 }
                                 let newWidth = leftPaneDragStartWidth + value.translation.width
-                                settings.leftPaneWidth = min(400, max(150, newWidth))
+                                settings.leftPaneWidth = min(700, max(150, newWidth))
                             }
                             .onEnded { _ in
                                 isDraggingLeftPane = false

@@ -66,9 +66,38 @@ struct FileExplorerApp: App {
         }
         .windowStyle(.titleBar)
         .windowResizability(.contentSize)
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About \(Self.appName)") {
+                    Self.showAboutPanel()
+                }
+            }
+        }
 
         Settings {
             SettingsView()
         }
+    }
+
+    private static let githubURL = "https://github.com/dux/file_explorer_swift"
+
+    private static var appName: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "File Explorer"
+    }
+
+    private static func showAboutPanel() {
+        let credits = NSMutableAttributedString(
+            string: "github.com/dux/file_explorer_swift",
+            attributes: [
+                .link: URL(string: githubURL) as Any,
+                .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+            ]
+        )
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        credits.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: credits.length))
+
+        NSApplication.shared.orderFrontStandardAboutPanel(options: [.credits: credits])
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 }

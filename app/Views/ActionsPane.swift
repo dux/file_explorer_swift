@@ -254,6 +254,35 @@ struct ActionsPane: View {
                     .truncationMode(.middle)
 
                 Spacer()
+
+                // Pane width controls: expand (<) / contract (>) in 50px steps
+                Button(action: {
+                    settings.rightPaneWidth = min(1200, settings.rightPaneWidth + 50)
+                }) {
+                    Image(systemName: "chevron.left")
+                        .textStyle(.buttons)
+                        .foregroundColor(.gray)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Expand pane")
+                .onHover { hovering in
+                    if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                }
+
+                Button(action: {
+                    settings.rightPaneWidth = max(200, settings.rightPaneWidth - 50)
+                }) {
+                    Image(systemName: "chevron.right")
+                        .textStyle(.buttons)
+                        .foregroundColor(.gray)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Contract pane")
+                .onHover { hovering in
+                    if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

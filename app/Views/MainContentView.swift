@@ -124,7 +124,7 @@ struct MainContentView: View {
                                     isDraggingRightPane = true
                                     rightPaneDragStartWidth = settings.rightPaneWidth
                                 }
-                                let newWidth = min(900, max(200, rightPaneDragStartWidth - value.translation.width))
+                                let newWidth = min(1200, max(200, rightPaneDragStartWidth - value.translation.width))
                                 dragRightPaneWidth = newWidth
                             }
                             .onEnded { _ in
