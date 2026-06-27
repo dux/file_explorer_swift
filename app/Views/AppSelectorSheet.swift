@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct AppSelectorSheet: View {
     let targetURL: URL
@@ -13,8 +14,13 @@ struct AppSelectorSheet: View {
     @State private var selectedIndex: Int = -1
     @State private var isListFocused = false
     @State private var searchFieldRef: NSTextField? = nil
+    @State private var setAsSystemDefault = true
 
     private let searcher = AppSearcher.shared
+
+    private var hasRealExtension: Bool {
+        !fileType.hasPrefix("__") && !fileType.isEmpty
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -128,6 +134,20 @@ struct AppSelectorSheet: View {
                     }
                 }
             }
+
+            if hasRealExtension {
+                Divider()
+                HStack(spacing: 8) {
+                    Toggle(isOn: $setAsSystemDefault) {
+                        Text("Set as macOS default for .\(fileType) files")
+                            .textStyle(.small)
+                    }
+                    .toggleStyle(.checkbox)
+                    Spacer()
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+            }
         }
         .frame(width: 350, height: 450)
         .background(Color(NSColor.controlBackgroundColor))
@@ -183,7 +203,21 @@ struct AppSelectorSheet: View {
         settings.addPreferredApp(for: fileType, appPath: app.url.path)
         AppSettings.shared.addRecentlyUsedApp(appPath: app.url.path)
         NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
+        if setAsSystemDefault && hasRealExtension {
+            setSystemDefault(app: app.url, forExtension: fileType)
+        }
         isPresented = false
+    }
+
+    /// Make `app` the system-wide handler for files with this extension
+    /// (same effect as Finder's "Open With > Change All").
+    private func setSystemDefault(app: URL, forExtension ext: String) {
+        guard let type = UTType(filenameExtension: ext) else { return }
+        NSWorkspace.shared.setDefaultApplication(at: app, toOpen: type) { error in
+            if let error {
+                NSLog("Failed to set default app for .\(ext): \(error.localizedDescription)")
+            }
+        }
     }
 
     private func loadApps() {
