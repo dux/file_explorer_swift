@@ -47,6 +47,10 @@ struct FileTreeView: View {
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject private var settings = AppSettings.shared
     @State private var isDragOver = false
+    @State private var viewportHeight: CGFloat = 0
+    @State private var scrollTopIndex: Int = 0
+
+    private let rowHeight: CGFloat = 32   // icon 22 + vertical padding 10
 
     private static let home = FileManager.default.homeDirectoryForCurrentUser
 
@@ -172,12 +176,18 @@ struct FileTreeView: View {
                         .customContextMenu(url: manager.currentPath)
                 }
                 .id("\(manager.currentPath.absoluteString)_\(settings.flatFolders)")
-                .onChange(of: manager.selectedIndex) { newIndex in
-                    if newIndex >= 0, let item = manager.allItems[safe: newIndex] {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            proxy.scrollTo(item.id, anchor: .center)
-                        }
+                .background(
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear { viewportHeight = geo.size.height }
+                            .onChange(of: geo.size.height) { viewportHeight = $0 }
                     }
+                )
+                .onChange(of: manager.selectedIndex) { newIndex in
+                    springScroll(to: newIndex, proxy: proxy)
+                }
+                .onChange(of: manager.currentPath) { _ in
+                    scrollTopIndex = 0
                 }
                 .overlay(
                     Group {
@@ -223,6 +233,36 @@ struct FileTreeView: View {
             guard count > 0 else { return }
             ToastManager.shared.show("Saved \(count) link(s)")
             self.manager.refresh()
+        }
+    }
+
+    /// Lets the keyboard cursor move freely inside the visible window and only
+    /// re-scrolls ("springs") when the selection enters the top/bottom 20% margin,
+    /// re-centering it - so the list stops jumping on every keystroke.
+    private func springScroll(to newIndex: Int, proxy: ScrollViewProxy) {
+        guard newIndex >= 0, let item = manager.allItems[safe: newIndex] else { return }
+
+        let total = manager.allItems.count
+        let visibleCount = max(3, Int(viewportHeight / rowHeight))
+
+        // Whole list fits in the viewport -> never scroll.
+        guard total > visibleCount else {
+            scrollTopIndex = 0
+            return
+        }
+
+        let margin = max(1, Int(Double(visibleCount) * 0.2))
+        let posInWindow = newIndex - scrollTopIndex
+        let nearEdge = posInWindow < margin || posInWindow > visibleCount - 1 - margin
+        guard nearEdge else { return }   // cursor still comfortably inside -> don't move the list
+
+        let maxTop = total - visibleCount
+        let newTop = min(max(0, newIndex - visibleCount / 2), maxTop)
+        guard newTop != scrollTopIndex else { return }   // already clamped at an edge
+
+        scrollTopIndex = newTop
+        withAnimation(.easeInOut(duration: 0.15)) {
+            proxy.scrollTo(item.id, anchor: .center)
         }
     }
 }
