@@ -795,19 +795,25 @@ struct SelectionSection: View {
                         }
                     }
                     SelectionBarButton(title: "Move to", icon: "folder", color: .orange, shortcut: "Move here (Cmd+M)") {
-                        let count = selection.moveLocalItems(to: manager.currentPath)
+                        let items = selection.localItems.compactMap { item in
+                            item.localURL.map { (name: item.name, url: $0) }
+                        }
+                        let dest = manager.currentPath
                         selection.clear()
-                        ToastManager.shared.show("Moved \(count) file(s)")
-                        manager.refresh()
+                        Task {
+                            let count = await selection.moveItems(items, to: dest)
+                            ToastManager.shared.show("Moved \(count) file(s)")
+                            manager.refresh()
+                        }
                     }
                     SelectionBarButton(title: "Trash", icon: "trash", color: .red) {
-                        let result = selection.trashLocalItems()
-                        if result.failed > 0 {
-                            ToastManager.shared.showError("Failed to trash \(result.failed) file(s)")
-                        } else {
-                            ToastManager.shared.show("Trashed \(result.trashed) file(s)")
+                        let items = selection.localItems
+                        selection.clear()
+                        Task {
+                            let trashed = await selection.trashItems(items)
+                            ToastManager.shared.show("Trashed \(trashed) file(s)")
+                            manager.refresh()
                         }
-                        manager.refresh()
                     }
                 }
 

@@ -229,10 +229,11 @@ struct FileItemDialog: View {
             try FileManager.default.moveItem(at: url, to: newURL)
             SelectionManager.shared.updateLocalPath(from: url.path, to: newURL.path)
             isRenaming = false
-            manager.loadContents()
-            manager.selectedItem = newURL
-            if let index = manager.allItems.firstIndex(where: { $0.url == newURL }) {
-                manager.selectedIndex = index
+            manager.loadContents {
+                manager.selectedItem = newURL
+                if let index = manager.allItems.firstIndex(where: { $0.url == newURL }) {
+                    manager.selectedIndex = index
+                }
             }
             dismiss()
         } catch {

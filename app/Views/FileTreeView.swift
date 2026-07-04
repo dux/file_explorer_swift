@@ -109,7 +109,7 @@ struct FileTreeView: View {
                 Spacer()
             }
             .customContextMenu(url: manager.currentPath)
-            .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
+            .onDrop(of: [.fileURL, .url], isTargeted: $isDragOver) { providers in
                 handleDrop(providers: providers)
                 return true
             }
@@ -190,7 +190,7 @@ struct FileTreeView: View {
                     }
                     .allowsHitTesting(false)
                 )
-                .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
+                .onDrop(of: [.fileURL, .url], isTargeted: $isDragOver) { providers in
                     handleDrop(providers: providers)
                     return true
                 }
@@ -215,6 +215,14 @@ struct FileTreeView: View {
                 ToastManager.shared.show("Copied \(count) item(s)")
                 self.manager.refresh()
             }
+        }
+
+        collectWebURLs(from: providers) { webURLs in
+            guard !webURLs.isEmpty else { return }
+            let count = writeWeblocFiles(for: webURLs, in: currentPath)
+            guard count > 0 else { return }
+            ToastManager.shared.show("Saved \(count) link(s)")
+            self.manager.refresh()
         }
     }
 }

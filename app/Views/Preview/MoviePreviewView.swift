@@ -1,9 +1,11 @@
 import SwiftUI
 import AppKit
+import WebKit
 
 struct MoviePreviewView: View {
     let folderURL: URL
     @State private var movieInfo: MovieInfo?
+    @State private var coverData: Data?
     @State private var isLoading = true
     @State private var imdbInput: String = ""
     @State private var isLookingUp = false
@@ -23,7 +25,9 @@ struct MoviePreviewView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let info = movieInfo {
-                movieContent(info)
+                // Static HTML page. WebKit reflows internally on resize, so nothing
+                // in SwiftUI recomputes - which is what used to crash on pane resize.
+                MovieWebView(info: info, coverData: coverData)
             } else {
                 notFoundView
             }
@@ -31,8 +35,12 @@ struct MoviePreviewView: View {
         .task(id: folderURL) {
             isLoading = true
             movieInfo = nil
+            coverData = nil
 
             let info = await MovieManager.shared.getMovieInfo(for: folderURL)
+            if let info {
+                coverData = await Self.loadCoverData(for: folderURL, posterURLString: info.posterURL)
+            }
             movieInfo = info
             isLoading = false
         }
@@ -89,249 +97,46 @@ struct MoviePreviewView: View {
         isLookingUp = true
         Task { @MainActor in
             let info = await MovieManager.shared.getMovieInfoByIMDB(id: imdbID, for: folderURL)
+            if let info {
+                coverData = await Self.loadCoverData(for: folderURL, posterURLString: info.posterURL)
+            }
             movieInfo = info
             isLookingUp = false
             imdbInput = ""
         }
     }
 
-    @ViewBuilder
-    private func movieContent(_ info: MovieInfo) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(info.title)
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.primary)
-                            .lineLimit(2)
+    // MARK: - Poster (cover.jpg) caching
 
-                        HStack(spacing: 8) {
-                            Text(info.year)
-                                .textStyle(.default, weight: .medium)
-                                .foregroundColor(.secondary)
+    /// Returns the cached `cover.jpg` bytes, downloading and caching them once if missing.
+    private static func loadCoverData(for movieURL: URL, posterURLString: String) async -> Data? {
+        let coverPath = diskCachePath(for: movieURL)
 
-                            if info.rated != "N/A" {
-                                Text(info.rated)
-                                    .textStyle(.small, weight: .semibold)
-                                    .foregroundColor(.secondary)
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 3)
-                                            .stroke(Color.secondary.opacity(0.5), lineWidth: 0.5)
-                                    )
-                            }
-
-                            if info.runtime != "N/A" {
-                                Text(info.runtime)
-                                    .textStyle(.default)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-
-                    HStack(spacing: 14) {
-                        if info.imdbRating != "N/A" {
-                            ratingBadge(label: "IMDb", value: info.imdbRating, badgeColor: .yellow, textColor: .black, url: info.imdbURL)
-                        }
-
-                        searchButton(label: "RT", color: .red, query: "site:rottentomatoes.com/m \(info.title) \(info.year)")
-                        searchButton(label: "MC", color: .green, query: "site:metacritic.com \(info.title) \(info.year)")
-                    }
-
-                    if info.genre != "N/A" {
-                        Text(info.genre)
-                            .textStyle(.default)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-
-                    if info.plot != "N/A" {
-                        Text(info.plot)
-                            .textStyle(.default)
-                            .foregroundColor(.primary.opacity(0.8))
-                            .lineLimit(5)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    if info.director != "N/A" {
-                        HStack(alignment: .top, spacing: 6) {
-                            Text("Director")
-                                .textStyle(.default, weight: .semibold)
-                                .foregroundColor(.secondary)
-                                .frame(width: 65, alignment: .leading)
-                            Text(info.director)
-                                .textStyle(.default)
-                                .foregroundColor(.primary)
-                                .lineLimit(1)
-                        }
-                    }
-
-                    if info.actors != "N/A" {
-                        HStack(alignment: .top, spacing: 6) {
-                            Text("Cast")
-                                .textStyle(.default, weight: .semibold)
-                                .foregroundColor(.secondary)
-                                .frame(width: 65, alignment: .leading)
-                            VStack(alignment: .leading, spacing: 3) {
-                                ForEach(info.topActors, id: \.self) { actor in
-                                    Text(actor)
-                                        .textStyle(.default)
-                                        .foregroundColor(.primary)
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(14)
-
-                if info.posterURL != "N/A" {
-                    Divider()
-                    if let posterURL = URL(string: info.posterURL) {
-                        PosterImageView(imageURL: posterURL, movieURL: folderURL)
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: 620, maxHeight: .infinity, alignment: .top)
-                    } else {
-                        Text("Poster unavailable")
-                            .textStyle(.small)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 20)
-                    }
-                }
-            }
-        }
-    }
-
-    private func ratingBadge(label: String, value: String, badgeColor: Color, textColor: Color, url: String) -> some View {
-        Button(action: {
-            if let link = URL(string: url) {
-                NSWorkspace.shared.open(link)
-            }
-        }) {
-            HStack(spacing: 5) {
-                Text(label)
-                    .textStyle(.small, weight: .bold)
-                    .foregroundColor(textColor)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 3)
-                    .background(badgeColor)
-                    .cornerRadius(3)
-
-                Text(value)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
-            }
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            if hovering {
-                NSCursor.pointingHand.push()
-            } else {
-                NSCursor.pop()
-            }
-        }
-    }
-
-    private func searchButton(label: String, color: Color, query: String) -> some View {
-        Button(action: {
-            let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-            if let url = URL(string: "https://duckduckgo.com/?q=\(encoded)") {
-                NSWorkspace.shared.open(url)
-            }
-        }) {
-            Text(label)
-                .textStyle(.small, weight: .bold)
-                .foregroundColor(.white)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 3)
-                .background(color)
-                .cornerRadius(3)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-        }
-    }
-}
-
-private struct PosterImageView: View {
-    let imageURL: URL
-    let movieURL: URL
-    @State private var nsImage: NSImage?
-    @State private var failed = false
-
-    var body: some View {
-        Group {
-            if let nsImage {
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-            } else if failed {
-                Text("Poster unavailable")
-                    .textStyle(.small)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 20)
-            } else {
-                ProgressView()
-                    .scaleEffect(0.8)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 40)
-            }
-        }
-        .task(id: imageURL) {
-            nsImage = nil
-            failed = false
-            await loadImage()
-        }
-    }
-
-    private func loadImage() async {
-        let url = Self.upgradePosterURL(imageURL)
-        let diskCache = Self.diskCachePath(for: movieURL)
-
-        if let cached = Self.imageCache.object(forKey: url.absoluteString as NSString) {
-            nsImage = cached
-            return
+        if let coverPath, let data = try? Data(contentsOf: coverPath), !data.isEmpty {
+            return data
         }
 
-        // Try disk cache
-        if let diskCache, FileManager.default.fileExists(atPath: diskCache.path) {
-            if let image = NSImage(contentsOf: diskCache) {
-                Self.imageCache.setObject(image, forKey: url.absoluteString as NSString)
-                nsImage = image
-                return
-            }
-        }
+        guard posterURLString != "N/A", let poster = URL(string: posterURLString) else { return nil }
+        let url = upgradePosterURL(poster)
 
-        let result: (Data, URL?)? = await Task.detached(priority: .utility) {
+        let data: Data? = await Task.detached(priority: .utility) {
             do {
                 var request = URLRequest(url: url)
                 request.timeoutInterval = 8
-                let (data, response) = try await Self.posterSession.data(for: request)
+                let (data, response) = try await posterSession.data(for: request)
                 guard let http = response as? HTTPURLResponse,
                       (200..<300).contains(http.statusCode),
                       !data.isEmpty else { return nil }
-                return (data, diskCache)
+                return data
             } catch {
                 return nil
             }
         }.value
-        guard !Task.isCancelled else { return }
-        if let result, let image = NSImage(data: result.0) {
-            Self.imageCache.setObject(image, forKey: url.absoluteString as NSString)
-            nsImage = image
-            // Save to disk cache
-            if let cachePath = result.1 {
-                Task.detached(priority: .utility) {
-                    try? result.0.write(to: cachePath, options: .atomic)
-                }
-            }
-        } else {
-            failed = true
+
+        if let data, let coverPath {
+            try? data.write(to: coverPath, options: .atomic)
         }
+        return data
     }
 
     private static let posterSession: URLSession = {
@@ -342,16 +147,6 @@ private struct PosterImageView: View {
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: config)
     }()
-
-    // MARK: - Memory Cache
-
-    private static let imageCache: NSCache<NSString, NSImage> = {
-        let cache = NSCache<NSString, NSImage>()
-        cache.countLimit = 30
-        return cache
-    }()
-
-    // MARK: - Disk Cache
 
     private static func diskCachePath(for movieURL: URL) -> URL? {
         var isDir: ObjCBool = false
@@ -364,8 +159,6 @@ private struct PosterImageView: View {
         return dir.appendingPathComponent("\(name).jpg")
     }
 
-    // MARK: - URL Upgrade
-
     // IMDb posters often include a size token like ._V1_...jpg; request a larger height to preserve poster framing.
     private static func upgradePosterURL(_ url: URL) -> URL {
         let absolute = url.absoluteString
@@ -376,5 +169,120 @@ private struct PosterImageView: View {
         let prefix = absolute[..<range.lowerBound]
         let upgraded = "\(prefix)._V1_SY2000_.jpg"
         return URL(string: upgraded) ?? url
+    }
+}
+
+/// Renders the movie info + cached poster as a single static HTML page in a WKWebView.
+/// Building the page once means pane resizes never trigger SwiftUI/AppKit relayout.
+private struct MovieWebView: NSViewRepresentable {
+    let info: MovieInfo
+    let coverData: Data?
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> WKWebView {
+        let webView = WKWebView()
+        webView.setValue(false, forKey: "drawsBackground")
+        webView.navigationDelegate = context.coordinator
+        webView.loadHTMLString(buildHTML(), baseURL: nil)
+        return webView
+    }
+
+    func updateNSView(_ webView: WKWebView, context: Context) {
+        // Static page - nothing to recompute.
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
+            // Open link clicks in the system browser; allow the initial page load itself.
+            if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url {
+                NSWorkspace.shared.open(url)
+                decisionHandler(.cancel)
+                return
+            }
+            decisionHandler(.allow)
+        }
+    }
+
+    private func buildHTML() -> String {
+        func esc(_ s: String) -> String {
+            s.replacingOccurrences(of: "&", with: "&amp;")
+                .replacingOccurrences(of: "<", with: "&lt;")
+                .replacingOccurrences(of: ">", with: "&gt;")
+                .replacingOccurrences(of: "\"", with: "&quot;")
+        }
+        func ddg(_ query: String) -> String {
+            let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+            return "https://duckduckgo.com/?q=\(encoded)"
+        }
+
+        var meta: [String] = [esc(info.year)]
+        if info.rated != "N/A" { meta.append("<span class=\"rated\">\(esc(info.rated))</span>") }
+        if info.runtime != "N/A" { meta.append(esc(info.runtime)) }
+
+        var badges = ""
+        if info.imdbRating != "N/A" {
+            badges += "<a class=\"badge imdb\" href=\"\(esc(info.imdbURL))\"><b>IMDb</b> \(esc(info.imdbRating))</a>"
+        }
+        badges += "<a class=\"badge rt\" href=\"\(esc(ddg("site:rottentomatoes.com/m \(info.title) \(info.year)")))\">RT</a>"
+        badges += "<a class=\"badge mc\" href=\"\(esc(ddg("site:metacritic.com \(info.title) \(info.year)")))\">MC</a>"
+
+        var details = ""
+        if info.genre != "N/A" { details += "<div class=\"genre\">\(esc(info.genre))</div>" }
+        if info.plot != "N/A" { details += "<p class=\"plot\">\(esc(info.plot))</p>" }
+        if info.director != "N/A" {
+            details += "<div class=\"row\"><span class=\"label\">Director</span><span>\(esc(info.director))</span></div>"
+        }
+        if info.actors != "N/A" {
+            details += "<div class=\"row\"><span class=\"label\">Cast</span><span>\(esc(info.topActors.joined(separator: ", ")))</span></div>"
+        }
+
+        var poster = ""
+        if let coverData, !coverData.isEmpty {
+            poster = "<img class=\"poster\" src=\"data:image/jpeg;base64,\(coverData.base64EncodedString())\">"
+        }
+
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                :root { color-scheme: light dark; }
+                * { box-sizing: border-box; }
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+                    margin: 0;
+                    padding: 14px;
+                    background: transparent;
+                    color: #24292f;
+                    -webkit-user-select: none;
+                }
+                @media (prefers-color-scheme: dark) { body { color: #e6e6e6; } }
+                h1 { font-size: 20px; font-weight: 700; margin: 0 0 6px; line-height: 1.2; }
+                .meta { color: #888; font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+                .rated { border: 0.5px solid rgba(128,128,128,0.6); border-radius: 3px; padding: 1px 5px; font-size: 11px; font-weight: 600; }
+                .badges { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+                .badge { text-decoration: none; font-size: 14px; font-weight: 700; color: #fff; padding: 3px 8px; border-radius: 3px; }
+                .badge.imdb { background: #f5c518; color: #000; }
+                .badge.rt { background: #fa320a; }
+                .badge.mc { background: #00a83e; }
+                .genre { color: #888; font-size: 13px; margin-bottom: 10px; }
+                .plot { font-size: 13px; line-height: 1.5; margin: 0 0 12px; opacity: 0.85; }
+                .row { display: flex; gap: 8px; font-size: 13px; margin-bottom: 6px; }
+                .row .label { color: #888; font-weight: 600; min-width: 60px; }
+                .poster { display: block; max-width: 100%; height: auto; border-radius: 6px; margin-top: 14px; }
+            </style>
+        </head>
+        <body>
+            <h1>\(esc(info.title))</h1>
+            <div class="meta">\(meta.joined(separator: " · "))</div>
+            <div class="badges">\(badges)</div>
+            \(details)
+            \(poster)
+        </body>
+        </html>
+        """
     }
 }

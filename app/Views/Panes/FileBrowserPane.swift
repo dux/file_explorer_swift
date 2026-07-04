@@ -305,19 +305,25 @@ struct SelectionBar: View {
                             }
                         }
                         SelectionBarButton(title: "Move to", icon: "folder", color: .orange) {
-                            let count = selection.moveLocalItems(to: manager.currentPath)
+                            let items = selection.localItems.compactMap { item in
+                                item.localURL.map { (name: item.name, url: $0) }
+                            }
+                            let dest = manager.currentPath
                             selection.clear()
-                            ToastManager.shared.show("Moved \(count) file(s)")
-                            manager.refresh()
+                            Task {
+                                let count = await selection.moveItems(items, to: dest)
+                                ToastManager.shared.show("Moved \(count) file(s)")
+                                manager.refresh()
+                            }
                         }
                         SelectionBarButton(title: "Trash", icon: "trash", color: .red) {
-                            let result = selection.trashLocalItems()
-                            if result.failed > 0 {
-                                ToastManager.shared.showError("Failed to trash \(result.failed) file(s)")
-                            } else {
-                                ToastManager.shared.show("Moved \(result.trashed) file(s) to Trash")
+                            let items = selection.localItems
+                            selection.clear()
+                            Task {
+                                let trashed = await selection.trashItems(items)
+                                ToastManager.shared.show("Moved \(trashed) file(s) to Trash")
+                                manager.refresh()
                             }
-                            manager.refresh()
                         }
                     }
 
@@ -575,35 +581,46 @@ struct SelectedFilesView: View {
     }
 
     private func moveLocalFilesHere() {
-        let count = selection.moveLocalItems(to: manager.currentPath)
-        ToastManager.shared.show("Moved \(count) file(s)")
-        manager.refresh()
+        let items = selection.localItems.compactMap { item in
+            item.localURL.map { (name: item.name, url: $0) }
+        }
+        let dest = manager.currentPath
+        selection.clear()
+        Task {
+            let count = await selection.moveItems(items, to: dest)
+            ToastManager.shared.show("Moved \(count) file(s)")
+            manager.refresh()
+        }
     }
 
     private func trashLocalFiles() {
-        let result = selection.trashLocalItems()
-        if result.failed > 0 {
-            ToastManager.shared.showError("Failed to trash \(result.failed) file(s)")
+        let items = selection.localItems
+        selection.clear()
+        Task {
+            _ = await selection.trashItems(items)
+            manager.refresh()
         }
-        manager.refresh()
     }
 
     private func permanentDeleteLocalFiles() {
-        var failed = 0
-        for item in localItems {
-            if let url = item.localURL {
-                do {
-                    try FileManager.default.removeItem(at: url)
-                } catch {
-                    failed += 1
+        let urls = localItems.compactMap { $0.localURL }
+        selection.clear()
+        guard !urls.isEmpty else { return }
+        Task {
+            let failed = await OperationManager.shared.run(title: "Deleting") { () -> Int in
+                let fm = FileManager.default
+                var failed = 0
+                for url in urls {
+                    if Task.isCancelled { break }
+                    do { try fm.removeItem(at: url) } catch { failed += 1 }
                 }
-                selection.remove(item)
+                return failed
             }
+            if failed > 0 {
+                ToastManager.shared.showError("Failed to delete \(failed) file(s)")
+            }
+            manager.refresh()
         }
-        if failed > 0 {
-            ToastManager.shared.showError("Failed to delete \(failed) file(s)")
-        }
-        manager.refresh()
     }
 
     private func downloadiPhoneFilesHere() async {

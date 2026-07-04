@@ -272,51 +272,38 @@ class SelectionManager: ObservableObject {
         return count
     }
 
-    /// Delete all selected items
+    /// Delete all selected items. Local items are trashed on a background thread
+    /// (with the running indicator); iPhone items are deleted over the wire.
     func deleteAll() async -> Int {
+        let localURLs = localItems.compactMap { $0.localURL }
+        let iPhone = iPhoneItems
+        clear()
+
         var count = 0
-        let iPhoneManager = iPhoneManager.shared
-        let fm = FileManager.default
-
-        for item in items {
-            switch item.source {
-            case .local:
-                do {
-                    try fm.trashItem(at: URL(fileURLWithPath: item.path), resultingItemURL: nil)
-                    count += 1
-                } catch {
-                    ToastManager.shared.showError("Failed to trash \(item.name): \(error.localizedDescription)")
-                }
-
-            case .iPhone(let deviceId, let appId, _):
-                let success = await iPhoneManager.deleteFileFromContext(
-                    deviceId: deviceId,
-                    appId: appId,
-                    remotePath: item.path
-                )
-                if success { count += 1 }
-            }
+        if !localURLs.isEmpty {
+            count += await OperationManager.shared.run(title: "Moving to Trash") { trashURLs(localURLs) }
         }
 
-        clear()
+        let iPhoneManager = iPhoneManager.shared
+        for item in iPhone {
+            guard case .iPhone(let deviceId, let appId, _) = item.source else { continue }
+            let success = await iPhoneManager.deleteFileFromContext(
+                deviceId: deviceId,
+                appId: appId,
+                remotePath: item.path
+            )
+            if success { count += 1 }
+        }
+
         return count
     }
 
-    func trashLocalItems() -> (trashed: Int, failed: Int) {
-        var trashed = 0
-        var failed = 0
-        for item in localItems {
-            if let url = item.localURL {
-                do {
-                    try FileManager.default.trashItem(at: url, resultingItemURL: nil)
-                    trashed += 1
-                } catch {
-                    failed += 1
-                }
-            }
-            remove(item)
-        }
-        return (trashed, failed)
+    /// Move the given local items to Trash on a background thread. Returns the
+    /// number trashed; per-batch failures are reported via toast.
+    func trashItems(_ items: [FileItem]) async -> Int {
+        let urls = items.compactMap { $0.localURL }
+        guard !urls.isEmpty else { return 0 }
+        return await OperationManager.shared.run(title: "Moving to Trash") { trashURLs(urls) }
     }
 
     /// Find a unique destination URL, appending " 2", " 3", etc. if needed
@@ -336,25 +323,40 @@ class SelectionManager: ObservableObject {
         return destURL
     }
 
-    /// Move local items to local destination
-    func moveLocalItems(to destination: URL) -> Int {
-        var count = 0
-        let fm = FileManager.default
+    /// Move local items to a local destination on a background thread (with the
+    /// running indicator). `items` is captured by the caller so the selection can be
+    /// cleared immediately, mirroring `CopyProgressManager.copyItems`.
+    func moveItems(_ items: [(name: String, url: URL)], to destination: URL) async -> Int {
+        guard !items.isEmpty else { return 0 }
+        return await OperationManager.shared.run(title: "Moving files") { () -> Int in
+            let fm = FileManager.default
+            var moved = 0
+            for (name, url) in items {
+                if Task.isCancelled { break }
 
-        for item in localItems {
-            guard let url = item.localURL else { continue }
-            let destPath = uniqueDestination(for: item.name, in: destination)
+                var destURL = destination.appendingPathComponent(name)
+                if fm.fileExists(atPath: destURL.path) {
+                    let baseName = (name as NSString).deletingPathExtension
+                    let ext = (name as NSString).pathExtension
+                    var counter = 2
+                    repeat {
+                        let newName = ext.isEmpty ? "\(baseName) \(counter)" : "\(baseName) \(counter).\(ext)"
+                        destURL = destination.appendingPathComponent(newName)
+                        counter += 1
+                    } while fm.fileExists(atPath: destURL.path)
+                }
 
-            do {
-                try fm.moveItem(at: url, to: destPath)
-                count += 1
-                remove(item)
-            } catch {
-                ToastManager.shared.showError("Failed to move \(item.name): \(error.localizedDescription)")
+                do {
+                    try fm.moveItem(at: url, to: destURL)
+                    moved += 1
+                } catch {
+                    let msg = error.localizedDescription
+                    let n = name
+                    Task { @MainActor in ToastManager.shared.showError("Failed to move \(n): \(msg)") }
+                }
             }
+            return moved
         }
-
-        return count
     }
 
     /// Copy local items to local destination
@@ -376,4 +378,26 @@ class SelectionManager: ObservableObject {
 
         return count
     }
+}
+
+/// Trashes the given URLs off the main actor, returning how many succeeded.
+/// Honours cancellation between items and reports the failure count via toast.
+private func trashURLs(_ urls: [URL]) -> Int {
+    let fm = FileManager.default
+    var trashed = 0
+    var failed = 0
+    for url in urls {
+        if Task.isCancelled { break }
+        do {
+            try fm.trashItem(at: url, resultingItemURL: nil)
+            trashed += 1
+        } catch {
+            failed += 1
+        }
+    }
+    if failed > 0 {
+        let f = failed
+        Task { @MainActor in ToastManager.shared.showError("Failed to trash \(f) item(s)") }
+    }
+    return trashed
 }

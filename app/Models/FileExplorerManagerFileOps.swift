@@ -30,12 +30,14 @@ extension FileExplorerManager {
 
         do {
             try fileManager.createDirectory(at: newFolderURL, withIntermediateDirectories: false)
-            loadContents()
-            // Select the new folder only if it lives in the current path
-            if destination.path == currentPath.path {
-                selectedItem = newFolderURL
-                if let index = allItems.firstIndex(where: { $0.url == newFolderURL }) {
-                    selectedIndex = index
+            loadContents { [weak self] in
+                guard let self else { return }
+                // Select the new folder only if it lives in the current path
+                if destination.path == self.currentPath.path {
+                    self.selectedItem = newFolderURL
+                    if let index = self.allItems.firstIndex(where: { $0.url == newFolderURL }) {
+                        self.selectedIndex = index
+                    }
                 }
             }
         } catch {
@@ -61,11 +63,13 @@ extension FileExplorerManager {
 
         do {
             try "".write(to: newFileURL, atomically: true, encoding: .utf8)
-            loadContents()
-            if destination.path == currentPath.path {
-                selectedItem = newFileURL
-                if let index = allItems.firstIndex(where: { $0.url == newFileURL }) {
-                    selectedIndex = index
+            loadContents { [weak self] in
+                guard let self else { return }
+                if destination.path == self.currentPath.path {
+                    self.selectedItem = newFileURL
+                    if let index = self.allItems.firstIndex(where: { $0.url == newFileURL }) {
+                        self.selectedIndex = index
+                    }
                 }
             }
         } catch {
@@ -87,16 +91,36 @@ extension FileExplorerManager {
             counter += 1
         }
 
-        do {
-            try fileManager.copyItem(at: url, to: newURL)
-            loadContents()
-            // Select the duplicate
-            selectedItem = newURL
-            if let index = allItems.firstIndex(where: { $0.url == newURL }) {
-                selectedIndex = index
+        let dst = newURL
+        Task {
+            guard await backgroundCopy(from: url, to: dst) else { return }
+            // Select the duplicate once the refreshed listing is in
+            loadContents { [weak self] in
+                guard let self else { return }
+                self.selectedItem = dst
+                if let index = self.allItems.firstIndex(where: { $0.url == dst }) {
+                    self.selectedIndex = index
+                }
             }
-        } catch {
-            ToastManager.shared.showError("Error duplicating file: \(error.localizedDescription)")
+        }
+    }
+
+    /// Faithfully copies `src` to `dst` off the main thread, showing the running
+    /// indicator. Cleans up a partial copy on cancel; reports errors via toast.
+    /// Returns true on success.
+    func backgroundCopy(from src: URL, to dst: URL) async -> Bool {
+        await OperationManager.shared.run(title: "Duplicating") { () -> Bool in
+            do {
+                try copyItemFiltered(at: src, to: dst, skipping: [])
+                return true
+            } catch is CancellationError {
+                try? FileManager.default.removeItem(at: dst)
+                return false
+            } catch {
+                let msg = error.localizedDescription
+                Task { @MainActor in ToastManager.shared.showError("Error duplicating file: \(msg)") }
+                return false
+            }
         }
     }
 
@@ -122,18 +146,17 @@ extension FileExplorerManager {
             cancelDuplicate()
             return
         }
-        let newURL = source.deletingLastPathComponent().appendingPathComponent(newName)
-        do {
-            try fileManager.copyItem(at: source, to: newURL)
-            cancelDuplicate()
-            loadContents()
-            selectedItem = newURL
-            if let index = allItems.firstIndex(where: { $0.url == newURL }) {
-                selectedIndex = index
+        let dst = source.deletingLastPathComponent().appendingPathComponent(newName)
+        cancelDuplicate()
+        Task {
+            guard await backgroundCopy(from: source, to: dst) else { return }
+            loadContents { [weak self] in
+                guard let self else { return }
+                self.selectedItem = dst
+                if let index = self.allItems.firstIndex(where: { $0.url == dst }) {
+                    self.selectedIndex = index
+                }
             }
-        } catch {
-            ToastManager.shared.showError("Error duplicating file: \(error.localizedDescription)")
-            cancelDuplicate()
         }
     }
 
@@ -188,10 +211,12 @@ extension FileExplorerManager {
                 let status = process.terminationStatus
                 await MainActor.run {
                     if status == 0 {
-                        self.loadContents()
-                        self.selectedItem = finalZipURL
-                        if let index = self.allItems.firstIndex(where: { $0.url == finalZipURL }) {
-                            self.selectedIndex = index
+                        self.loadContents { [weak self] in
+                            guard let self else { return }
+                            self.selectedItem = finalZipURL
+                            if let index = self.allItems.firstIndex(where: { $0.url == finalZipURL }) {
+                                self.selectedIndex = index
+                            }
                         }
                         ToastManager.shared.show("Created \(finalZipName)")
                     } else {
@@ -284,22 +309,30 @@ extension FileExplorerManager {
         let isCurrentOrAncestor = currentPath.path == url.path ||
             currentPath.path.hasPrefix(url.path + "/")
 
-        do {
-            try fileManager.trashItem(at: url, resultingItemURL: nil)
+        Task {
+            let ok = await OperationManager.shared.run(title: "Moving to Trash") { () -> Bool in
+                do {
+                    try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                    return true
+                } catch {
+                    let msg = error.localizedDescription
+                    Task { @MainActor in ToastManager.shared.showError("Error moving to trash: \(msg)") }
+                    return false
+                }
+            }
+            guard ok else { return }
+
             // Remove from selection if it was selected
             SelectionManager.shared.removeByPath(url.path)
 
             if isCurrentOrAncestor {
                 // Navigate to the parent of the deleted folder and focus it
                 let parent = url.deletingLastPathComponent()
-                navigateTo(parent)
-                selectCurrentFolder()
+                navigateToFolder(parent)
             } else {
                 loadContents()
             }
             ToastManager.shared.show("Moved to Trash")
-        } catch {
-            ToastManager.shared.showError("Error moving to trash: \(error.localizedDescription)")
         }
     }
 
@@ -347,11 +380,13 @@ extension FileExplorerManager {
             // Update path in selection if it was selected
             SelectionManager.shared.updateLocalPath(from: item.path, to: newURL.path)
             cancelRename()
-            loadContents()
-            // Select the renamed item
-            selectedItem = newURL
-            if let index = allItems.firstIndex(where: { $0.url == newURL }) {
-                selectedIndex = index
+            // Select the renamed item once the refreshed listing is in
+            loadContents { [weak self] in
+                guard let self else { return }
+                self.selectedItem = newURL
+                if let index = self.allItems.firstIndex(where: { $0.url == newURL }) {
+                    self.selectedIndex = index
+                }
             }
         } catch {
             ToastManager.shared.showError("Error renaming: \(error.localizedDescription)")
@@ -367,10 +402,12 @@ extension FileExplorerManager {
             newValues.isHidden = !isCurrentlyHidden
             var mutableURL = url
             try mutableURL.setResourceValues(newValues)
-            loadContents()
-            selectedItem = url
-            if let index = allItems.firstIndex(where: { $0.url == url }) {
-                selectedIndex = index
+            loadContents { [weak self] in
+                guard let self else { return }
+                self.selectedItem = url
+                if let index = self.allItems.firstIndex(where: { $0.url == url }) {
+                    self.selectedIndex = index
+                }
             }
             ToastManager.shared.show(isCurrentlyHidden ? "Made visible" : "Made hidden")
         } catch {

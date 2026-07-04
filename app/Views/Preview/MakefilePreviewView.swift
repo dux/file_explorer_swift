@@ -45,12 +45,11 @@ struct MakefilePreviewView: View {
             // Syntax highlighted content
             SyntaxHighlightView(code: content, language: "makefile", fontSize: settings.previewFontSize)
         }
-        .onAppear { loadContent() }
-        .onChange(of: url) { _ in loadContent() }
+        .task(id: url) { await loadContent() }
     }
 
-    private func loadContent() {
-        if let text = try? String(contentsOf: url, encoding: .utf8) {
+    private func loadContent() async {
+        if let text = await readFileText(url, maxBytes: 400_000) {
             content = String(text.prefix(100000))
             parseTargets(from: text)
         } else {

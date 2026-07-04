@@ -63,7 +63,7 @@ struct PackageJsonPreviewView: View {
             if showRaw {
                 SyntaxHighlightView(code: rawContent, language: "json", fontSize: settings.previewFontSize)
             } else if let pkg {
-                packageInfoView(pkg)
+                HTMLPreviewView(bodyHTML: packageInfoHTML(pkg), extraCSS: Self.infoCSS)
             } else {
                 VStack {
                     Text("Unable to parse package.json")
@@ -72,241 +72,121 @@ struct PackageJsonPreviewView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .onAppear { loadContent() }
-        .onChange(of: url) { _ in loadContent() }
+        .task(id: url) { await loadContent() }
     }
 
-    private func packageInfoView(_ pkg: PackageInfo) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                // Package manager detection
-                packageManagerBadge
+    // MARK: - Info HTML
 
-                if let description = pkg.description {
-                    sectionRow(icon: "text.quote", label: "Description", color: .secondary) {
-                        Text(description)
-                            .textStyle(.default)
-                            .foregroundColor(.primary)
-                    }
-                }
+    private static let infoCSS = """
+    body { padding: 0 0 12px; }
+    .pm { display: flex; align-items: center; gap: 6px; padding: 10px 16px; background: rgba(127,127,127,0.10); color: var(--pm); font-weight: 600; }
+    .pm .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pm); display: inline-block; }
+    .row { display: flex; gap: 10px; padding: 6px 16px; align-items: baseline; }
+    .row .label { color: #888; font-weight: 600; min-width: 80px; flex-shrink: 0; }
+    .row .val { flex: 1; word-break: break-word; }
+    .section { padding: 12px 16px 4px; font-weight: 600; }
+    .section .dim { font-weight: 400; }
+    .kvrow { display: flex; gap: 10px; padding: 2px 16px; }
+    .kvrow .k { min-width: 110px; flex-shrink: 0; }
+    .kvrow .v { flex: 1; opacity: 0.8; word-break: break-word; }
+    .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; font-size: 12px; }
+    .dim { opacity: 0.65; }
+    """
 
-                if let license = pkg.license {
-                    sectionRow(icon: "doc.text", label: "License", color: .blue) {
-                        Text(license)
-                            .textStyle(.default, mono: true)
-                    }
-                }
-
-                if let main = pkg.main {
-                    sectionRow(icon: "arrow.right.circle", label: "Entry", color: .purple) {
-                        Text(main)
-                            .textStyle(.default, mono: true)
-                    }
-                }
-
-                if let type = pkg.type {
-                    sectionRow(icon: "cube", label: "Type", color: .indigo) {
-                        Text(type)
-                            .textStyle(.default, mono: true)
-                    }
-                }
-
-                if let engines = pkg.engines, !engines.isEmpty {
-                    sectionRow(icon: "gearshape.2", label: "Engines", color: .gray) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            ForEach(engines.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-                                HStack(spacing: 4) {
-                                    Text(key)
-                                        .textStyle(.default, weight: .medium, mono: true)
-                                    Text(value)
-                                        .textStyle(.default, mono: true)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Scripts
-                if let scripts = pkg.scripts, !scripts.isEmpty {
-                    scriptSection(scripts)
-                }
-
-                // Dependencies
-                if let deps = pkg.dependencies, !deps.isEmpty {
-                    depSection(title: "Dependencies", deps: deps, color: .green, icon: "cube.fill", count: deps.count)
-                }
-
-                if let devDeps = pkg.devDependencies, !devDeps.isEmpty {
-                    depSection(title: "Dev Dependencies", deps: devDeps, color: .orange, icon: "hammer.fill", count: devDeps.count)
-                }
-
-                if let peerDeps = pkg.peerDependencies, !peerDeps.isEmpty {
-                    depSection(title: "Peer Dependencies", deps: peerDeps, color: .purple, icon: "link", count: peerDeps.count)
-                }
-            }
-            .padding(.vertical, 4)
-        }
-    }
-
-    // MARK: - Package Manager Detection
-
-    private var packageManagerBadge: some View {
+    private func packageInfoHTML(_ pkg: PackageInfo) -> String {
+        let esc = HTMLPreviewView.escape
         let pm = detectPackageManager()
-        return HStack(spacing: 8) {
-            Image(systemName: pm.icon)
-                .textStyle(.default)
-                .foregroundColor(pm.color)
-            Text(pm.name)
-                .textStyle(.default, weight: .medium)
-                .foregroundColor(pm.color)
 
-            if let pmField = pkg?.packageManager {
-                Text(pmField)
-                    .textStyle(.buttons, mono: true)
-                    .foregroundColor(.secondary)
+        func row(_ label: String, _ value: String, mono: Bool = false) -> String {
+            "<div class=\"row\"><span class=\"label\">\(esc(label))</span><span class=\"val\(mono ? " mono" : "")\">\(esc(value))</span></div>"
+        }
+
+        var html = ""
+
+        var pmExtra = ""
+        if let pmField = pkg.packageManager { pmExtra = " <span class=\"mono dim\">\(esc(pmField))</span>" }
+        html += "<div class=\"pm\" style=\"--pm:\(pm.color)\"><span class=\"dot\"></span>\(esc(pm.name))\(pmExtra)</div>"
+
+        if let description = pkg.description { html += row("Description", description) }
+        if let license = pkg.license { html += row("License", license, mono: true) }
+        if let main = pkg.main { html += row("Entry", main, mono: true) }
+        if let type = pkg.type { html += row("Type", type, mono: true) }
+
+        if let engines = pkg.engines, !engines.isEmpty {
+            let items = engines.sorted { $0.key < $1.key }
+                .map { "<div><span class=\"mono\">\(esc($0.key))</span> <span class=\"mono dim\">\(esc($0.value))</span></div>" }
+                .joined()
+            html += "<div class=\"row\"><span class=\"label\">Engines</span><span class=\"val\">\(items)</span></div>"
+        }
+
+        if let scripts = pkg.scripts, !scripts.isEmpty {
+            html += sectionHeaderHTML("Scripts", scripts.count, accent: "#26a5c4")
+            for (key, value) in scripts.sorted(by: { $0.key < $1.key }) {
+                html += "<div class=\"kvrow\"><span class=\"k mono\" style=\"color:#26a5c4\">\(esc(key))</span><span class=\"v mono\">\(esc(value))</span></div>"
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(pm.color.opacity(0.06))
+
+        html += depBlockHTML("Dependencies", pkg.dependencies, accent: "#2ea043")
+        html += depBlockHTML("Dev Dependencies", pkg.devDependencies, accent: "#d29922")
+        html += depBlockHTML("Peer Dependencies", pkg.peerDependencies, accent: "#a371f7")
+
+        return html
     }
 
-    private func detectPackageManager() -> (name: String, icon: String, color: Color) {
+    private func sectionHeaderHTML(_ title: String, _ count: Int, accent: String) -> String {
+        "<div class=\"section\" style=\"color:\(accent)\">\(HTMLPreviewView.escape(title)) <span class=\"dim\">(\(count))</span></div>"
+    }
+
+    private func depBlockHTML(_ title: String, _ deps: [String: String]?, accent: String) -> String {
+        guard let deps, !deps.isEmpty else { return "" }
+        var html = sectionHeaderHTML(title, deps.count, accent: accent)
+        for (key, value) in deps.sorted(by: { $0.key < $1.key }) {
+            html += "<div class=\"kvrow\"><span class=\"k mono\">\(HTMLPreviewView.escape(key))</span><span class=\"v mono dim\">\(HTMLPreviewView.escape(value))</span></div>"
+        }
+        return html
+    }
+
+    private func detectPackageManager() -> (name: String, color: String) {
         let dir = url.deletingLastPathComponent()
         let fm = FileManager.default
 
         // Check packageManager field first
         if let pmField = pkg?.packageManager {
             let lower = pmField.lowercased()
-            if lower.hasPrefix("pnpm") { return ("pnpm", "p.circle.fill", .orange) }
-            if lower.hasPrefix("yarn") { return ("Yarn", "y.circle.fill", .blue) }
-            if lower.hasPrefix("bun") { return ("Bun", "b.circle.fill", .pink) }
-            if lower.hasPrefix("npm") { return ("npm", "n.circle.fill", .red) }
+            if lower.hasPrefix("pnpm") { return ("pnpm", "#f69220") }
+            if lower.hasPrefix("yarn") { return ("Yarn", "#2188b6") }
+            if lower.hasPrefix("bun") { return ("Bun", "#e94aa0") }
+            if lower.hasPrefix("npm") { return ("npm", "#cb3837") }
         }
 
         // Check lock files
         if fm.fileExists(atPath: dir.appendingPathComponent("bun.lockb").path) ||
            fm.fileExists(atPath: dir.appendingPathComponent("bun.lock").path) {
-            return ("Bun", "b.circle.fill", .pink)
+            return ("Bun", "#e94aa0")
         }
         if fm.fileExists(atPath: dir.appendingPathComponent("pnpm-lock.yaml").path) {
-            return ("pnpm", "p.circle.fill", .orange)
+            return ("pnpm", "#f69220")
         }
         if fm.fileExists(atPath: dir.appendingPathComponent("yarn.lock").path) {
-            return ("Yarn", "y.circle.fill", .blue)
+            return ("Yarn", "#2188b6")
         }
         if fm.fileExists(atPath: dir.appendingPathComponent("package-lock.json").path) {
-            return ("npm", "n.circle.fill", .red)
+            return ("npm", "#cb3837")
         }
 
-        return ("npm", "n.circle.fill", .red)
-    }
-
-    // MARK: - Sections
-
-    private func sectionRow<Content: View>(icon: String, label: String, color: Color, @ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: icon)
-                .textStyle(.buttons)
-                .foregroundColor(color)
-                .frame(width: 18, alignment: .center)
-
-            Text(label)
-                .textStyle(.default, weight: .medium)
-                .foregroundColor(.secondary)
-                .frame(width: 80, alignment: .leading)
-
-            content()
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-    }
-
-    private func scriptSection(_ scripts: [String: String]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
-                Image(systemName: "terminal.fill")
-                    .textStyle(.default)
-                    .foregroundColor(.cyan)
-                Text("Scripts")
-                    .textStyle(.default, weight: .semibold)
-                Text("(\(scripts.count))")
-                    .textStyle(.buttons)
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-            .padding(.bottom, 4)
-
-            ForEach(scripts.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-                HStack(alignment: .top, spacing: 6) {
-                    Text(key)
-                        .textStyle(.default, weight: .medium, mono: true)
-                        .foregroundColor(.cyan)
-                        .frame(minWidth: 80, alignment: .trailing)
-
-                    Text(value)
-                        .textStyle(.default, mono: true)
-                        .foregroundColor(.primary.opacity(0.8))
-                        .lineLimit(2)
-                        .textSelection(.enabled)
-
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 3)
-            }
-        }
-    }
-
-    private func depSection(title: String, deps: [String: String], color: Color, icon: String, count: Int) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .textStyle(.default)
-                    .foregroundColor(color)
-                Text(title)
-                    .textStyle(.default, weight: .semibold)
-                Text("(\(count))")
-                    .textStyle(.buttons)
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-            .padding(.bottom, 4)
-
-            ForEach(deps.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-                HStack(spacing: 6) {
-                    Text(key)
-                        .textStyle(.default, mono: true)
-                        .foregroundColor(.primary)
-
-                    Spacer(minLength: 0)
-
-                    Text(value)
-                        .textStyle(.default, mono: true)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 2)
-            }
-        }
+        return ("npm", "#cb3837")
     }
 
     // MARK: - Load & Parse
 
-    private func loadContent() {
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+    private func loadContent() async {
+        guard let text = await readFileText(url) else {
             rawContent = "Unable to load file"
             pkg = nil
             return
         }
 
-        // Format raw JSON
+        // Format raw JSON (package.json is small, so parsing on main is fine)
         if let data = text.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: data),
            let formatted = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),

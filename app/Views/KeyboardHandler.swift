@@ -359,10 +359,16 @@ class KeyCaptureView: NSView {
             if event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) {
                 let selection = SelectionManager.shared
                 guard !selection.items.isEmpty else { return false }
-                let count = selection.moveLocalItems(to: manager.currentPath)
+                let items = selection.localItems.compactMap { item in
+                    item.localURL.map { (name: item.name, url: $0) }
+                }
+                let dest = manager.currentPath
                 selection.clear()
-                ToastManager.shared.show("Moved \(count) file(s)")
-                manager.refresh()
+                Task {
+                    let count = await selection.moveItems(items, to: dest)
+                    ToastManager.shared.show("Moved \(count) file(s)")
+                    manager.refresh()
+                }
                 return true
             }
         case 46: // M key - Cmd+Shift+M: context menu
@@ -399,9 +405,11 @@ class KeyCaptureView: NSView {
         FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory)
         guard isDirectory.boolValue else { return }
 
-        manager.navigateTo(item)
-        if manager.selectedItem == nil && !manager.allItems.isEmpty {
-            manager.selectItem(at: 0, url: manager.allItems[0].url)
+        manager.navigateTo(item) {
+            manager.restoreSelection()
+            if manager.selectedItem == nil && !manager.allItems.isEmpty {
+                manager.selectItem(at: 0, url: manager.allItems[0].url)
+            }
         }
     }
 

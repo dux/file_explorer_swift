@@ -98,8 +98,6 @@ class FileExplorerManager: ObservableObject {
         }
     }
 
-    private static let imageExtensions = FileExtensions.images
-
     // Use unified SelectionManager
     var selection: SelectionManager { SelectionManager.shared }
 
@@ -178,12 +176,14 @@ class FileExplorerManager: ObservableObject {
         if isDirectory.boolValue {
             navigateTo(url)
         } else {
-            // Navigate to parent, then select the file
+            // Navigate to parent, then select the file once its listing is in
             let parent = url.deletingLastPathComponent()
-            navigateTo(parent)
-            selectedItem = url
-            if let index = allItems.firstIndex(where: { $0.url.path == url.path }) {
-                selectedIndex = index
+            navigateTo(parent) { [weak self] in
+                guard let self else { return }
+                self.selectedItem = url
+                if let index = self.allItems.firstIndex(where: { $0.url.path == url.path }) {
+                    self.selectedIndex = index
+                }
             }
         }
 
@@ -191,19 +191,90 @@ class FileExplorerManager: ObservableObject {
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
 
-    func loadContents() {
+    private var loadGeneration = 0
+
+    struct DirectoryListing: Sendable {
+        let directories: [CachedFileInfo]
+        let files: [CachedFileInfo]
+        let hiddenCount: Int
+        let hasImages: Bool
+    }
+
+    enum DirectoryLoadResult: Sendable {
+        case success(DirectoryListing)
+        case failure(String)
+    }
+
+    /// Directories with at most this many entries load synchronously so ordinary
+    /// navigation swaps atomically (no flash of the previous folder). It's a heuristic:
+    /// small folders never freeze the UI, and this many local `stat`s stays well under
+    /// a frame. Larger folders enumerate off the main thread instead.
+    private static let syncLoadThreshold = 1000
+
+    /// Loads the current directory. Small directories enumerate synchronously; large
+    /// ones do the read, per-file stat, and sort off the main thread and publish on
+    /// main. `completion` runs on main once results are in (used to restore or select
+    /// an item). A generation token discards stale async loads so rapid navigation
+    /// only ever shows the newest folder.
+    func loadContents(completion: (() -> Void)? = nil) {
+        loadGeneration &+= 1
+        let generation = loadGeneration
+        let path = currentPath
+        let mode = sortMode
+        // For Trash folder, show all files including hidden
+        let isTrash = path.lastPathComponent == ".Trash"
+        let showAll = showHidden || isTrash
+
+        // Fast path: enumerating a small directory is instant, so do it inline - the
+        // listing swaps in the same update with no flicker of the previous folder.
+        // The name-only count is one cheap directory read (no per-file stats).
+        let entryCount = (try? fileManager.contentsOfDirectory(atPath: path.path).count) ?? 0
+        if entryCount <= Self.syncLoadThreshold {
+            applyLoadResult(Self.enumerateDirectory(at: path, showAll: showAll, isTrash: isTrash, sortMode: mode))
+            completion?()
+            return
+        }
+
+        // Slow path: large directories enumerate off the main thread. The outer Task
+        // inherits this method's main-actor isolation, so `completion` never crosses
+        // actors; only the enumeration hops off the main thread.
+        Task { [weak self] in
+            let outcome = await Task.detached(priority: .userInitiated) {
+                Self.enumerateDirectory(at: path, showAll: showAll, isTrash: isTrash, sortMode: mode)
+            }.value
+            guard let self, self.loadGeneration == generation else { return }
+            self.applyLoadResult(outcome)
+            completion?()
+        }
+    }
+
+    private func applyLoadResult(_ result: DirectoryLoadResult) {
+        switch result {
+        case .success(let listing):
+            directories = listing.directories
+            files = listing.files
+            hiddenCount = listing.hiddenCount
+            hasImages = listing.hasImages
+            selectedIndex = -1
+            selectedItem = nil
+        case .failure(let message):
+            ToastManager.shared.showError("Error loading directory: \(message)")
+            directories = []
+            files = []
+        }
+    }
+
+    /// Directory read + per-file stat + sort. Runs off the main actor; returns a
+    /// message on failure so the result stays Sendable.
+    nonisolated private static func enumerateDirectory(at path: URL, showAll: Bool, isTrash: Bool, sortMode: SortMode) -> DirectoryLoadResult {
+        let fm = FileManager.default
+        let resourceKeys: Set<URLResourceKey> = [.isDirectoryKey, .contentModificationDateKey, .fileSizeKey, .isHiddenKey]
         do {
-            let resourceKeys: Set<URLResourceKey> = [.isDirectoryKey, .contentModificationDateKey, .fileSizeKey, .isHiddenKey]
-
-            // For Trash folder, show all files including hidden
-            let isTrash = currentPath.lastPathComponent == ".Trash"
-            let showAll = showHidden || isTrash
-
-            var contents = try fileManager.contentsOfDirectory(at: currentPath, includingPropertiesForKeys: Array(resourceKeys), options: [])
+            var contents = try fm.contentsOfDirectory(at: path, includingPropertiesForKeys: Array(resourceKeys), options: [])
 
             // Fallback for Trash: TCC may silently return empty, use /bin/ls
             if isTrash && contents.isEmpty {
-                contents = listViaProcess(currentPath)
+                contents = listViaProcess(path)
             }
 
             var dirs: [CachedFileInfo] = []
@@ -231,23 +302,20 @@ class FileExplorerManager: ObservableObject {
                 }
             }
 
-            directories = sortItems(dirs)
-            files = sortItems(fils)
-            hiddenCount = hiddenSkipped
-            hasImages = fils.contains { Self.imageExtensions.contains($0.url.pathExtension.lowercased()) }
-
-            selectedIndex = -1
-            selectedItem = nil
-
+            let hasImages = fils.contains { FileExtensions.images.contains($0.url.pathExtension.lowercased()) }
+            return .success(DirectoryListing(
+                directories: sortItems(dirs, sortMode: sortMode),
+                files: sortItems(fils, sortMode: sortMode),
+                hiddenCount: hiddenSkipped,
+                hasImages: hasImages
+            ))
         } catch {
-            ToastManager.shared.showError("Error loading directory: \(error.localizedDescription)")
-            directories = []
-            files = []
+            return .failure(error.localizedDescription)
         }
     }
 
     /// Fallback directory listing using /bin/ls for TCC-protected folders
-    nonisolated private func listViaProcess(_ dir: URL) -> [URL] {
+    nonisolated private static func listViaProcess(_ dir: URL) -> [URL] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/ls")
         process.arguments = ["-1A", dir.path]
@@ -271,7 +339,7 @@ class FileExplorerManager: ObservableObject {
         }
     }
 
-    private func sortItems(_ items: [CachedFileInfo]) -> [CachedFileInfo] {
+    nonisolated private static func sortItems(_ items: [CachedFileInfo], sortMode: SortMode) -> [CachedFileInfo] {
         switch sortMode {
         case .name:
             return items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
@@ -318,7 +386,7 @@ class FileExplorerManager: ObservableObject {
         }
     }
 
-    private func restoreSelection() {
+    func restoreSelection() {
         if let remembered = selectionMemory[currentPath.path],
            let index = allItems.firstIndex(where: { $0.url == remembered }) {
             selectedIndex = index
@@ -329,7 +397,10 @@ class FileExplorerManager: ObservableObject {
         }
     }
 
-    func navigateTo(_ url: URL) {
+    /// Navigate to a folder. Once the (async) listing is in, `onLoaded` runs on main;
+    /// when nil it restores the remembered selection. Callers that want a specific
+    /// post-navigation selection pass their own closure instead of racing the load.
+    func navigateTo(_ url: URL, onLoaded: (() -> Void)? = nil) {
         let targetURL = url.standardizedFileURL
         var isDirectory: ObjCBool = false
 
@@ -357,8 +428,9 @@ class FileExplorerManager: ObservableObject {
             suppressSortDidSet = true
             sortMode = defaultSortMode(for: targetURL)
             suppressSortDidSet = false
-            loadContents()
-            restoreSelection()
+            loadContents { [weak self] in
+                if let onLoaded { onLoaded() } else { self?.restoreSelection() }
+            }
             saveLastFolder(targetURL)
             startMonitoringDirectory()
         } else {
@@ -367,6 +439,12 @@ class FileExplorerManager: ObservableObject {
                 selectedIndex = index
             }
         }
+    }
+
+    /// Navigate into a folder and select the folder itself (no child highlighted).
+    /// Used by sidebar/breadcrumb/volume taps that shouldn't restore a child selection.
+    func navigateToFolder(_ url: URL) {
+        navigateTo(url) { [weak self] in self?.selectCurrentFolder() }
     }
 
     func navigateUp() {
@@ -419,8 +497,7 @@ class FileExplorerManager: ObservableObject {
             iPhoneManager.shared.currentDevice = nil
             currentPane = .browser
         }
-        navigateTo(url)
-        selectCurrentFolder()
+        navigateToFolder(url)
     }
 
     func focusSidebar() {
@@ -480,8 +557,7 @@ class FileExplorerManager: ObservableObject {
         saveSelection()
         historyIndex = index
         currentPath = history[index]
-        loadContents()
-        restoreSelection()
+        loadContents { [weak self] in self?.restoreSelection() }
         startMonitoringDirectory()
     }
 
@@ -542,8 +618,7 @@ class FileExplorerManager: ObservableObject {
         while !fileManager.fileExists(atPath: parent.path) && parent.path != "/" {
             parent = parent.deletingLastPathComponent()
         }
-        navigateTo(parent)
-        selectCurrentFolder()
+        navigateToFolder(parent)
     }
 
     private func debounceReloadContents() {

@@ -234,8 +234,7 @@ struct ShortcutRow: View {
                         iPhoneManager.shared.currentDevice = nil
                         manager.currentPane = .browser
                     }
-                    manager.navigateTo(localApps)
-                    manager.selectCurrentFolder()
+                    manager.navigateToFolder(localApps)
                 }) {
                     Text("local")
                         .textStyle(.small, weight: isShowingLocalApps ? .semibold : .medium)
@@ -279,8 +278,7 @@ struct ShortcutRow: View {
                 }
                 manager.currentPane = .browser
             }
-            manager.navigateTo(item.url)
-            manager.selectCurrentFolder()
+            manager.navigateToFolder(item.url)
         }
     }
 }
@@ -394,8 +392,7 @@ struct DraggableShortcutRow: View {
                 }
                 manager.currentPane = .browser
             }
-            manager.navigateTo(item.url)
-            manager.selectCurrentFolder()
+            manager.navigateToFolder(item.url)
         }
         .onDrag {
             NSItemProvider(object: String(index) as NSString)
@@ -546,8 +543,7 @@ struct VolumeRow: View {
                 }
                 manager.currentPane = .browser
             }
-            manager.navigateTo(volume.url)
-            manager.selectCurrentFolder()
+            manager.navigateToFolder(volume.url)
         }
     }
 }

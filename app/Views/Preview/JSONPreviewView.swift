@@ -4,6 +4,7 @@ struct JSONPreviewView: View {
     let url: URL
     @ObservedObject private var settings = AppSettings.shared
     @State private var content: String = ""
+    @State private var rawText: String = ""
     @State private var isFormatted: Bool = true
 
     var body: some View {
@@ -44,21 +45,27 @@ struct JSONPreviewView: View {
 
             SyntaxHighlightView(code: content, language: "json", fontSize: settings.previewFontSize)
         }
-        .onAppear { loadContent() }
-        .onChange(of: url) { _ in
+        .task(id: url) {
             isFormatted = true
-            loadContent()
+            await loadContent()
         }
     }
 
-    private func loadContent() {
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+    private func loadContent() async {
+        guard let text = await readFileText(url) else {
+            rawText = ""
             content = "Unable to load file"
             return
         }
+        rawText = text
+        await applyFormat()
+    }
 
+    private func applyFormat() async {
+        let text = rawText
         if isFormatted {
-            content = formatJSON(text)
+            // JSONSerialization pretty-print can be slow on large files - keep it off main.
+            content = await Task.detached(priority: .userInitiated) { Self.formatJSON(text) }.value
         } else {
             content = String(text.prefix(100000))
         }
@@ -66,10 +73,10 @@ struct JSONPreviewView: View {
 
     private func toggleFormat() {
         isFormatted.toggle()
-        loadContent()
+        Task { await applyFormat() }
     }
 
-    private func formatJSON(_ text: String) -> String {
+    private nonisolated static func formatJSON(_ text: String) -> String {
         guard let data = text.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data),
               let formatted = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),

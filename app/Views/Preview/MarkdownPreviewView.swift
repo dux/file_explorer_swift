@@ -4,6 +4,7 @@ import WebKit
 struct MarkdownPreviewView: View {
     let url: URL
     @ObservedObject private var settings = AppSettings.shared
+    @State private var markdown: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -15,32 +16,37 @@ struct MarkdownPreviewView: View {
                 FontSizeControls(settings: settings)
             }
             Divider()
-            MarkdownWebView(url: url, fontSize: settings.previewFontSize)
+            MarkdownWebView(markdown: markdown, fontSize: settings.previewFontSize)
+        }
+        .task(id: url) {
+            markdown = await readFileText(url) ?? "Unable to load file"
         }
     }
 }
 
 struct MarkdownWebView: NSViewRepresentable {
-    let url: URL
+    let markdown: String
     let fontSize: CGFloat
+
+    // marked.js is bundled locally and inlined into the page, so previews render offline.
+    private static let markedJS: String = {
+        guard let jsURL = Bundle.module.url(forResource: "marked.min", withExtension: "js"),
+              let js = try? String(contentsOf: jsURL, encoding: .utf8) else { return "" }
+        return js
+    }()
 
     func makeNSView(context: Context) -> WKWebView {
         let webView = WKWebView()
         webView.setValue(false, forKey: "drawsBackground")
-        loadMarkdown(webView)
+        render(webView)
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        loadMarkdown(webView)
+        render(webView)
     }
 
-    private func loadMarkdown(_ webView: WKWebView) {
-        guard let markdown = try? String(contentsOf: url, encoding: .utf8) else {
-            webView.loadHTMLString("<p>Unable to load file</p>", baseURL: nil)
-            return
-        }
-
+    private func render(_ webView: WKWebView) {
         let escapedMarkdown = markdown
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "`", with: "\\`")
@@ -52,7 +58,7 @@ struct MarkdownWebView: NSViewRepresentable {
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+            <script>\(Self.markedJS)</script>
             <style>
                 :root { color-scheme: light dark; }
                 body {

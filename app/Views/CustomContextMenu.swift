@@ -227,10 +227,15 @@ private struct CustomContextMenuContent: View {
                 }
             }))
             items.append(MenuItem(icon: "folder", label: "Move \(count) here", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
-                let moved = SelectionManager.shared.moveLocalItems(to: url)
+                let sources = SelectionManager.shared.localItems.compactMap { item in
+                    item.localURL.map { (name: item.name, url: $0) }
+                }
                 SelectionManager.shared.clear()
-                ToastManager.shared.show("Moved \(moved) file(s)")
-                manager.refresh()
+                Task {
+                    let moved = await SelectionManager.shared.moveItems(sources, to: url)
+                    ToastManager.shared.show("Moved \(moved) file(s)")
+                    manager.refresh()
+                }
             }))
         }
         items.append(MenuItem(icon: "info.circle", label: "View Details", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url, isDirectory] in
@@ -241,7 +246,7 @@ private struct CustomContextMenuContent: View {
         if !isCurrentFolder {
             items.append(MenuItem(
                 icon: manager.isInSelection(url) ? "minus.circle" : "checkmark.circle",
-                label: manager.isInSelection(url) ? "Remove from Selection" : "Add to Selection",
+                label: manager.isInSelection(url) ? "Remove from Selection" : "Add to Selection (copy)",
                 isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
                     manager.toggleFileSelection(url)
                 }

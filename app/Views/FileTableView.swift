@@ -8,7 +8,7 @@ struct FileTableView: View {
     var body: some View {
         if manager.allItems.isEmpty {
             EmptyFolderView()
-                .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
+                .onDrop(of: [.fileURL, .url], isTargeted: $isDragOver) { providers in
                     handleDrop(providers: providers)
                     return true
                 }
@@ -35,7 +35,7 @@ struct FileTableView: View {
                         .stroke(isDragOver ? Color.accentColor : Color.clear, lineWidth: 3)
                         .allowsHitTesting(false)
                 )
-                .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
+                .onDrop(of: [.fileURL, .url], isTargeted: $isDragOver) { providers in
                     handleDrop(providers: providers)
                     return true
                 }
@@ -48,6 +48,14 @@ struct FileTableView: View {
 
         if ArchiveDragSession.shared.handleDrop(to: currentPath, onComplete: { manager.refresh() }) {
             return
+        }
+
+        collectWebURLs(from: providers) { webURLs in
+            guard !webURLs.isEmpty else { return }
+            let count = writeWeblocFiles(for: webURLs, in: currentPath)
+            guard count > 0 else { return }
+            ToastManager.shared.show("Saved \(count) link(s)")
+            self.manager.refresh()
         }
 
         collectDropURLs(from: providers) { uniqueURLs in
@@ -161,8 +169,7 @@ struct FileTableRow: View {
                 if isDirectory {
                     manager.selectItem(at: index, url: url)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        manager.navigateTo(url)
-                        manager.selectCurrentFolder()
+                        manager.navigateToFolder(url)
                     }
                 } else {
                     if manager.selectedItem != url {

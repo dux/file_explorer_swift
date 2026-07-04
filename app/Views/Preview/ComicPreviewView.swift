@@ -32,29 +32,8 @@ struct ComicPreviewView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                GeometryReader { geometry in
-                    let halfWidth = floor(geometry.size.width / 2)
-                    ScrollView {
-                        LazyVStack(spacing: 2) {
-                            if totalPages > 0 {
-                                Text("\(totalPages) pages")
-                                    .textStyle(.small)
-                                    .foregroundColor(.secondary)
-                                    .padding(.vertical, 4)
-                            }
-                            ForEach(spreads, id: \.id) { spread in
-                                HStack(spacing: 2) {
-                                    ComicPageView(url: spread.left, width: halfWidth)
-                                    if let right = spread.right {
-                                        ComicPageView(url: right, width: halfWidth)
-                                    } else {
-                                        Color.clear.frame(width: halfWidth)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                // Static two-up spread page, rendered in a web view: no SwiftUI relayout on resize.
+                HTMLPreviewView(bodyHTML: pagesHTML, extraCSS: Self.css)
             }
         }
         .task(id: url) {
@@ -62,14 +41,19 @@ struct ComicPreviewView: View {
         }
     }
 
-    private var spreads: [PageSpread] {
-        stride(from: 0, to: pages.count, by: 2).map { i in
-            PageSpread(
-                left: pages[i],
-                right: i + 1 < pages.count ? pages[i + 1] : nil,
-                id: i
-            )
-        }
+    private static let css = """
+    body { padding: 0; }
+    .count { color: #888; text-align: center; font-size: 12px; padding: 6px 0; }
+    .pages { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+    .pages img { width: 100%; height: auto; display: block; }
+    """
+
+    private var pagesHTML: String {
+        let imgs = pages
+            .map { "<img src=\"\(HTMLPreviewView.fileSrc(for: $0))\">" }
+            .joined()
+        let count = totalPages > 0 ? "<div class=\"count\">\(totalPages) pages</div>" : ""
+        return count + "<div class=\"pages\">\(imgs)</div>"
     }
 
     private func extractPages() async {
@@ -90,44 +74,6 @@ struct ComicPreviewView: View {
             error = err.localizedDescription
         }
         isLoading = false
-    }
-}
-
-private struct PageSpread: Identifiable {
-    let left: URL
-    let right: URL?
-    let id: Int
-}
-
-struct ComicPageView: View {
-    let url: URL
-    let width: CGFloat
-    @State private var image: NSImage?
-
-    var body: some View {
-        Group {
-            if let image {
-                let aspect = image.size.height / max(image.size.width, 1)
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: width, height: width * aspect)
-            } else {
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.1))
-                    .frame(width: width, height: width * 1.4)
-            }
-        }
-        .task(id: url) {
-            image = nil
-            let pageURL = url
-            let data = await Task.detached(priority: .userInitiated) {
-                try? Data(contentsOf: pageURL)
-            }.value
-            if let data {
-                image = NSImage(data: data)
-            }
-        }
     }
 }
 

@@ -317,7 +317,8 @@ class VideoPlayerManager: ObservableObject {
 
         pause()
 
-        guard let ffmpeg = Self.findFFmpeg() else {
+        // Path probe + `which` fallback run off main.
+        guard let ffmpeg = await Task.detached(priority: .userInitiated) { Self.findFFmpeg() }.value else {
             cropMessage = "ffmpeg not found. Install: brew install ffmpeg"
             isCropping = false
             return

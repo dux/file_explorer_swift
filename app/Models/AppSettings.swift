@@ -73,6 +73,11 @@ class AppSettings: ObservableObject {
         didSet { saveAsync() }
     }
 
+    // Auto-advance to the next track when the current audio finishes
+    @Published var audioAutoNext: Bool {
+        didSet { saveAsync() }
+    }
+
     // OMDB API key for movie preview
     @Published var omdbAPIKey: String {
         didSet { saveAsync() }
@@ -114,6 +119,7 @@ class AppSettings: ObservableObject {
         preferredApps = [:]
         defaultFolderHandler = false
         flatFolders = false
+        audioAutoNext = true
         omdbAPIKey = ""
         fontDefault = 14
         fontButtons = 12
@@ -206,6 +212,9 @@ class AppSettings: ObservableObject {
         if let flat = json["flatFolders"] as? Bool {
             flatFolders = flat
         }
+        if let autoNext = json["audioAutoNext"] as? Bool {
+            audioAutoNext = autoNext
+        }
         if let key = json["omdbAPIKey"] as? String {
             omdbAPIKey = key
         }
@@ -241,6 +250,7 @@ class AppSettings: ObservableObject {
             apps: preferredApps,
             folderHandler: defaultFolderHandler,
             flatFolders: flatFolders,
+            audioAutoNext: audioAutoNext,
             omdbKey: omdbAPIKey,
             recentApps: recentlyUsedApps,
             fontDefault: fontDefault,
@@ -273,6 +283,7 @@ class AppSettings: ObservableObject {
         let apps: [String: [String]]
         let folderHandler: Bool
         let flatFolders: Bool
+        let audioAutoNext: Bool
         let omdbKey: String
         let recentApps: [String]
         let fontDefault: CGFloat
@@ -302,6 +313,7 @@ class AppSettings: ObservableObject {
 
         json["defaultFolderHandler"] = s.folderHandler
         json["flatFolders"] = s.flatFolders
+        json["audioAutoNext"] = s.audioAutoNext
         json["omdbAPIKey"] = s.omdbKey
         json["recentlyUsedApps"] = s.recentApps
         json["fontDefault"] = s.fontDefault

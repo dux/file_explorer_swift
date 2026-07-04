@@ -30,7 +30,8 @@ let package = Package(
                 .copy("Resources/Icons"),
                 .copy("Resources/AppIcon.icns"),
                 .copy("Resources/AppIcon.svg"),
-                .copy("Resources/build-commit.txt")
+                .copy("Resources/build-commit.txt"),
+                .copy("Resources/marked.min.js")
             ]
         ),
         .testTarget(

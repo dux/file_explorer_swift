@@ -4,7 +4,29 @@ import AppKit
 
 struct AudioPreviewView: View {
     let url: URL
+    var manager: FileExplorerManager?
     @StateObject private var player = AudioPlayerManager()
+    @ObservedObject private var settings = AppSettings.shared
+
+    // Sibling audio files in the current folder + the track playing right now.
+    // Kept internal to the preview so browsing tracks does not move the file selection.
+    @State private var playlist: [URL] = []
+    @State private var currentURL: URL
+
+    init(url: URL, manager: FileExplorerManager? = nil) {
+        self.url = url
+        self.manager = manager
+        _currentURL = State(initialValue: url)
+    }
+
+    private var currentIndex: Int? {
+        playlist.firstIndex { $0.standardizedFileURL == currentURL.standardizedFileURL }
+    }
+    private var hasPrev: Bool { (currentIndex ?? 0) > 0 }
+    private var hasNext: Bool {
+        guard let i = currentIndex else { return false }
+        return i < playlist.count - 1
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -58,10 +80,20 @@ struct AudioPreviewView: View {
                 .padding(.horizontal, 16)
 
                 // Controls
-                HStack(spacing: 24) {
+                HStack(spacing: 20) {
+                    Button(action: { goToPrevious() }) {
+                        Image(systemName: "backward.end.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(.primary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!hasPrev)
+                    .opacity(hasPrev ? 1 : 0.3)
+                    .help("Previous track")
+
                     Button(action: { player.skipBackward() }) {
                         Image(systemName: "gobackward.10")
-                            .font(.system(size: 20))
+                            .font(.system(size: 18))
                             .foregroundColor(.primary)
                     }
                     .buttonStyle(.plain)
@@ -75,11 +107,27 @@ struct AudioPreviewView: View {
 
                     Button(action: { player.skipForward() }) {
                         Image(systemName: "goforward.10")
-                            .font(.system(size: 20))
+                            .font(.system(size: 18))
                             .foregroundColor(.primary)
                     }
                     .buttonStyle(.plain)
+
+                    Button(action: { goToNext() }) {
+                        Image(systemName: "forward.end.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(.primary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!hasNext)
+                    .opacity(hasNext ? 1 : 0.3)
+                    .help("Next track")
                 }
+
+                Toggle(isOn: $settings.audioAutoNext) {
+                    Text("Autoplay next")
+                        .textStyle(.small)
+                }
+                .toggleStyle(.checkbox)
 
                 // Volume
                 HStack(spacing: 6) {
@@ -206,14 +254,71 @@ struct AudioPreviewView: View {
             .frame(maxWidth: .infinity)
         }
         .onAppear {
-            player.load(url: url)
+            currentURL = url
+            player.load(url: currentURL)
+            Task { await loadPlaylist(for: url) }
         }
         .onDisappear {
             player.stop()
         }
         .onChange(of: url) { newURL in
+            // External selection changed - reset to that track without auto-playing
+            currentURL = newURL
             player.load(url: newURL)
+            Task { await loadPlaylist(for: newURL) }
         }
+        .onChange(of: player.finishTick) { _ in
+            if settings.audioAutoNext {
+                goToNext()
+            }
+        }
+    }
+
+    // MARK: - Playlist navigation
+
+    /// Audio siblings in play order: the folder's current sort when a manager is
+    /// present, otherwise the parent directory sorted like Finder. The disk walk
+    /// (only needed without a manager) runs off the main thread.
+    private func loadPlaylist(for base: URL) async {
+        let exts = PreviewType.audioExtensions
+
+        if let manager {
+            let urls = manager.files
+                .map(\.url)
+                .filter { exts.contains($0.pathExtension.lowercased()) }
+            if !urls.isEmpty {
+                playlist = urls
+                return
+            }
+        }
+
+        let dir = base.deletingLastPathComponent()
+        playlist = await Task.detached(priority: .userInitiated) { () -> [URL] in
+            let contents = (try? FileManager.default.contentsOfDirectory(
+                at: dir,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )) ?? []
+            return contents
+                .filter { exts.contains($0.pathExtension.lowercased()) }
+                .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+        }.value
+    }
+
+    private func goToPrevious() {
+        guard let i = currentIndex, i > 0 else { return }
+        play(playlist[i - 1])
+    }
+
+    private func goToNext() {
+        guard let i = currentIndex, i < playlist.count - 1 else { return }
+        play(playlist[i + 1])
+    }
+
+    private func play(_ newURL: URL) {
+        currentURL = newURL
+        player.load(url: newURL)
+        player.play()
     }
 
 }
@@ -226,6 +331,8 @@ class AudioPlayerManager: ObservableObject {
     @Published var isPlaying = false
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
+    // Bumped each time a track finishes on its own so the view can auto-advance
+    @Published var finishTick = 0
     @Published var volume: Float = 0.8 {
         didSet {
             player?.volume = volume
@@ -301,6 +408,14 @@ class AudioPlayerManager: ObservableObject {
         isPlaying = player.isPlaying
     }
 
+    /// Start playback from the current position (used by prev/next and auto-advance).
+    func play() {
+        guard let player else { return }
+        player.play()
+        isPlaying = player.isPlaying
+        startTimer()
+    }
+
     func stop() {
         player?.stop()
         stopTimer()
@@ -335,7 +450,9 @@ class AudioPlayerManager: ObservableObject {
                 // Check if playback finished
                 if !player.isPlaying && self.isPlaying {
                     self.isPlaying = false
+                    self.currentTime = self.duration
                     self.stopTimer()
+                    self.finishTick += 1
                 }
             }
         }
@@ -370,8 +487,8 @@ class AudioPlayerManager: ObservableObject {
         // Stop playback
         stop()
 
-        // Check if ffmpeg is available
-        let ffmpegPath = Self.findFFmpeg()
+        // Check if ffmpeg is available (path probe + `which` fallback run off main)
+        let ffmpegPath = await Task.detached(priority: .userInitiated) { Self.findFFmpeg() }.value
         guard let ffmpeg = ffmpegPath else {
             cropMessage = "ffmpeg not found. Install with: brew install ffmpeg"
             isCropping = false

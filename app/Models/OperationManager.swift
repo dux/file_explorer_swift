@@ -55,4 +55,29 @@ final class OperationManager: ObservableObject {
         }
         return true
     }
+
+    /// Runs `work` off the main actor and returns its result. The cancellable
+    /// "… - Esc to stop" indicator only appears if the work is still running after
+    /// `showDelay` seconds, so instant operations (e.g. same-volume moves) don't
+    /// flicker it. Pressing Esc cancels the underlying task (observe `Task.isCancelled`).
+    @discardableResult
+    func run<T: Sendable>(
+        title: String,
+        showDelay: Double = 0.15,
+        work: @escaping @Sendable () async -> T
+    ) async -> T {
+        let task = Task.detached(priority: .userInitiated) { await work() }
+
+        // Show the indicator only if the work outlives the delay.
+        let indicator: Task<UUID?, Never> = Task { @MainActor [weak self] in
+            do { try await Task.sleep(nanoseconds: UInt64(showDelay * 1_000_000_000)) }
+            catch { return nil }
+            return self?.begin(title: title) { task.cancel() }
+        }
+
+        let result = await task.value
+        indicator.cancel()
+        if let id = await indicator.value { finish(id) }
+        return result
+    }
 }

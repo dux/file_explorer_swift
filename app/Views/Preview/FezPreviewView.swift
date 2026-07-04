@@ -54,12 +54,11 @@ struct FezPreviewView: View {
                 FezLivePreviewWebView(source: content, fileURL: url)
             }
         }
-        .onAppear { loadContent() }
-        .onChange(of: url) { _ in loadContent() }
+        .task(id: url) { await loadContent() }
     }
 
-    private func loadContent() {
-        if let text = try? String(contentsOf: url, encoding: .utf8) {
+    private func loadContent() async {
+        if let text = await readFileText(url, maxBytes: 800_000) {
             content = String(text.prefix(200_000))
             infoItems = extractInfo(from: text)
         } else {

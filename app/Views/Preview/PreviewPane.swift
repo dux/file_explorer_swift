@@ -18,6 +18,11 @@ enum PreviewType {
     case packageJson
     case none
 
+    // Audio file extensions - shared by detect() and the audio preview playlist
+    static let audioExtensions: Set<String> = [
+        "mp3", "m4a", "wav", "aac", "flac", "ogg", "wma", "aiff", "aif", "alac", "opus"
+    ]
+
     static func detect(for url: URL) -> Self {
         let ext = url.pathExtension.lowercased()
         let filename = url.lastPathComponent.lowercased()
@@ -65,7 +70,7 @@ enum PreviewType {
         }
 
         // Audio files
-        if ["mp3", "m4a", "wav", "aac", "flac", "ogg", "wma", "aiff", "aif", "alac", "opus"].contains(ext) {
+        if audioExtensions.contains(ext) {
             return .audio
         }
 
@@ -168,7 +173,7 @@ struct PreviewPane: View {
         case .epub:
             EpubPreviewView(url: url)
         case .audio:
-            AudioPreviewView(url: url)
+            AudioPreviewView(url: url, manager: manager)
         case .video:
             NoPreviewView(url: url)
         case .dmg:

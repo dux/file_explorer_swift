@@ -38,6 +38,77 @@ private final class URLCollector: @unchecked Sendable {
         var seen = Set<String>()
         return urls.filter { seen.insert($0.path).inserted }
     }
+
+    /// All collected URLs, deduplicated by full string (for web links where paths collide).
+    var uniqueByString: [URL] {
+        var seen = Set<String>()
+        return urls.filter { seen.insert($0.absoluteString).inserted }
+    }
+}
+
+/// Collects web (http/https) links from drop providers, deduplicated. File-URL drags are
+/// skipped here (they are handled as copies); only genuine web links are returned.
+func collectWebURLs(from providers: [NSItemProvider], completion: @escaping ([URL]) -> Void) {
+    let collector = URLCollector()
+    let group = DispatchGroup()
+
+    for provider in providers {
+        guard provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
+              !provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) else { continue }
+        group.enter()
+        provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { data, _ in
+            defer { group.leave() }
+            let resolved: URL?
+            if let data = data as? Data {
+                resolved = URL(dataRepresentation: data, relativeTo: nil)
+            } else if let url = data as? URL {
+                resolved = url
+            } else {
+                resolved = nil
+            }
+            guard let url = resolved,
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https" else { return }
+            collector.add(url)
+        }
+    }
+
+    group.notify(queue: .main) {
+        completion(collector.uniqueByString)
+    }
+}
+
+/// Writes `.webloc` internet-location files for the given web links into `directory`,
+/// choosing non-colliding names. Returns how many were written.
+@discardableResult
+func writeWeblocFiles(for urls: [URL], in directory: URL) -> Int {
+    let fm = FileManager.default
+    var written = 0
+    for url in urls {
+        let base = weblocBaseName(for: url)
+        var name = "\(base).webloc"
+        var dest = directory.appendingPathComponent(name)
+        var counter = 2
+        while fm.fileExists(atPath: dest.path) {
+            name = "\(base) \(counter).webloc"
+            dest = directory.appendingPathComponent(name)
+            counter += 1
+        }
+        let plist: [String: Any] = ["URL": url.absoluteString]
+        guard let data = try? PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0) else { continue }
+        if (try? data.write(to: dest)) != nil { written += 1 }
+    }
+    return written
+}
+
+/// Derives a readable, filesystem-safe base name for a web link's `.webloc` file.
+private func weblocBaseName(for url: URL) -> String {
+    let leaf = url.pathComponents.last(where: { $0 != "/" && !$0.isEmpty })
+    let raw = leaf ?? url.host ?? "link"
+    let illegal = CharacterSet(charactersIn: "/\\:?%*|\"<>\n\t")
+    let cleaned = raw.components(separatedBy: illegal).joined(separator: "-")
+    let trimmed = cleaned.trimmingCharacters(in: .whitespaces)
+    return trimmed.isEmpty ? "link" : String(trimmed.prefix(80))
 }
 
 // MARK: - Shared File Extension Sets
@@ -153,6 +224,23 @@ func calculateFileSize(url: URL, isDirectory: Bool, completion: @MainActor @esca
             }
         }
     }
+}
+
+/// Reads `url` as UTF-8 text off the main thread (lossy decoding). When `maxBytes`
+/// is set, reads at most that many bytes instead of the whole file - so previewing a
+/// huge file never blocks the UI or pulls it entirely into memory. Returns nil only
+/// when the file can't be opened.
+func readFileText(_ url: URL, maxBytes: Int? = nil) async -> String? {
+    await Task.detached(priority: .userInitiated) {
+        if let maxBytes {
+            guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+            defer { try? handle.close() }
+            let data = (try? handle.read(upToCount: maxBytes)) ?? Data()
+            return String(decoding: data, as: UTF8.self)
+        }
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return String(decoding: data, as: UTF8.self)
+    }.value
 }
 
 // MARK: - Sheet Header
