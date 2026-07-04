@@ -919,6 +919,42 @@ struct MovieDetectionTests {
         #expect(result == nil)
     }
 
+    @Test("ignores a 4-digit token followed by a letter")
+    func ignoresResolutionTag() {
+        // "2000p" is a resolution-like tag, not a year
+        let result = MovieManager.detectMovie(folderName: "Some Movie 2000p")
+        #expect(result == nil)
+    }
+
+    @Test("picks the real year over a resolution-like token")
+    func skipsResolutionTagKeepsYear() {
+        // "2000p" must not be read as the year; the actual year wins
+        let result = MovieManager.detectMovie(folderName: "Some Movie 2000p 2015")
+        #expect(result?.year == "2015")
+    }
+
+    @Test("detects a leading year with the title after it")
+    func yearFirst() {
+        let result = MovieManager.detectMovie(folderName: "2000 The Movie")
+        #expect(result?.title == "The Movie")
+        #expect(result?.year == "2000")
+    }
+
+    @Test("ignores a 5-digit number")
+    func ignoresLongerNumber() {
+        let result = MovieManager.detectMovie(folderName: "Catalog 20000")
+        #expect(result == nil)
+    }
+
+    @Test("strips multiple release tags after a leading year")
+    func stripsMultipleTagsYearFirst() {
+        // Year-first name whose title carries several release tags; used to crash
+        // when cleanTitle sliced a truncated string with a stale index.
+        let result = MovieManager.detectMovie(folderName: "2013 Searching for Sugar Man 1080p BluRay x264")
+        #expect(result?.title == "Searching for Sugar Man")
+        #expect(result?.year == "2013")
+    }
+
     @Test("strips release tags from title")
     func stripsReleaseTags() {
         let result = MovieManager.detectMovie(folderName: "Interstellar.2014.1080p.BluRay.x264")

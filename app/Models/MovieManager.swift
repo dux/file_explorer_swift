@@ -117,38 +117,38 @@ class MovieManager {
             name = (name as NSString).deletingPathExtension
         }
 
-        // "Title (YYYY)"
-        let parenPattern = /^(.+?)\s*\((\d{4})\)/
-        if let match = try? parenPattern.firstMatch(in: name) {
-            let year = String(match.2)
-            if let y = Int(year), y >= 1900 && y <= 2100 {
-                let title = cleanTitle(String(match.1))
-                if !title.isEmpty { return (title, year) }
-            }
+        // A year is any 4-digit number in 1900...2100. A parenthesized year wins
+        // over a bare one, so "Blade Runner 2049 (2017)" resolves to 2017.
+        let parenPattern = /\((\d{4})\)/
+        if let match = try? parenPattern.firstMatch(in: name), isYear(String(match.1)) {
+            let title = titleAround(name, yearRange: match.0.startIndex..<match.0.endIndex)
+            if !title.isEmpty { return (title, String(match.1)) }
         }
 
-        // "Title.YYYY." or "Title YYYY " with dots/spaces as separators
-        let dotPattern = /^(.+?)[\.\s_-]+(\d{4})(?:[\.\s_-]|$)/
-        if let match = try? dotPattern.firstMatch(in: name) {
-            let year = String(match.2)
-            if let y = Int(year), y >= 1900 && y <= 2100 {
-                let title = cleanTitle(String(match.1))
-                if !title.isEmpty { return (title, year) }
-            }
-        }
-
-        // Fallback: first 4-digit year in range
-        let yearPattern = /\b(\d{4})\b/
-        for match in name.matches(of: yearPattern) {
-            let year = String(match.1)
-            if let y = Int(year), y >= 1900 && y <= 2100,
-               let range = name.range(of: year) {
-                let title = cleanTitle(String(name[name.startIndex..<range.lowerBound]))
-                if !title.isEmpty { return (title, year) }
-            }
+        // First bare 4-digit year in range. The year must stand alone: not glued to
+        // another digit (so "20000" is skipped) and not followed by a letter (so
+        // resolution tags like "2000p" are skipped). The title is the text on
+        // whichever side has it, letting the year lead ("2000 Foo") or trail.
+        let yearPattern = /(?:^|[^0-9A-Za-z])(\d{4})(?![0-9A-Za-z])/
+        for match in name.matches(of: yearPattern) where isYear(String(match.1)) {
+            let title = titleAround(name, yearRange: match.1.startIndex..<match.1.endIndex)
+            if !title.isEmpty { return (title, String(match.1)) }
         }
 
         return nil
+    }
+
+    nonisolated private static func isYear(_ s: String) -> Bool {
+        guard let y = Int(s) else { return false }
+        return y >= 1900 && y <= 2100
+    }
+
+    /// Cleaned title taken from the text before the year, falling back to the text
+    /// after it for year-first names like "2000 The Movie".
+    nonisolated private static func titleAround(_ name: String, yearRange: Range<String.Index>) -> String {
+        let before = cleanTitle(String(name[name.startIndex..<yearRange.lowerBound]))
+        if !before.isEmpty { return before }
+        return cleanTitle(String(name[yearRange.upperBound...]))
     }
 
     nonisolated static func extractIMDBID(from input: String) -> String? {
@@ -480,11 +480,18 @@ class MovieManager {
             "aac", "dts", "ac3", "remux", "repack", "proper",
             "extended", "directors cut", "unrated", "theatrical"
         ]
-        let lower = title.lowercased()
+        // Cut at the first release tag. Every index is derived from `title` itself
+        // (not a separate lowercased copy) so an earlier truncation can't leave a
+        // stale index pointing past the string's end.
+        var cutoff: String.Index?
         for tag in removals {
-            if let range = lower.range(of: tag) {
-                title = String(title[title.startIndex..<range.lowerBound])
+            if let range = title.range(of: tag, options: .caseInsensitive),
+               cutoff.map({ range.lowerBound < $0 }) ?? true {
+                cutoff = range.lowerBound
             }
+        }
+        if let cutoff {
+            title = String(title[title.startIndex..<cutoff])
         }
         return title.trimmingCharacters(in: .whitespaces)
     }
