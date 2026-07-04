@@ -226,7 +226,7 @@ struct ActionsPane: View {
         for app in preferredApps {
             let appURL = app.url
             items.append(RightPaneItem(id: "app-\(app.url.path)", title: app.name) { [url] in
-                NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
+                openInApp(url, withApplicationAt: appURL)
             })
         }
         return items
@@ -326,7 +326,7 @@ struct ActionsPane: View {
                             index: idx,
                             isDefault: idx == 0,
                             onOpen: {
-                                NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
+                                openInApp(targetURL, withApplicationAt: app.url)
                             },
                             onRemove: {
                                 settings.removePreferredApp(for: fileType, appPath: app.url.path)
@@ -400,7 +400,7 @@ struct ActionsPane: View {
                                         appURL: app.url
                                     ) {
                                         settings.addPreferredApp(for: fileType, appPath: app.url.path)
-                                        NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
+                                        openInApp(targetURL, withApplicationAt: app.url)
                                     }
                                 }
                             }
@@ -620,10 +620,12 @@ struct ActionButton: View {
                 isFocused: isFocused,
                 isHovered: isHovered
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering in
             isHovered = hovering
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
         }
     }
 }
@@ -663,10 +665,12 @@ struct ActionButtonWithIcon: View {
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(isDragTarget ? Color.accentColor : Color.clear, lineWidth: 2)
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering in
             isHovered = hovering
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
         }
         .onDrop(of: [.fileURL], isTargeted: $isDragTarget) { providers in
             guard let app = appURL else { return false }
@@ -723,6 +727,7 @@ struct PreferredAppButton: View {
 
                     Spacer()
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -742,6 +747,7 @@ struct PreferredAppButton: View {
         )
         .onHover { hovering in
             isHovered = hovering
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
         }
         .onDrag {
             NSItemProvider(object: String(index) as NSString)

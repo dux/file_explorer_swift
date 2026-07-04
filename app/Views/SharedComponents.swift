@@ -582,9 +582,51 @@ func handleFileDrop(providers: [NSItemProvider], appURL: URL) -> Bool {
             guard let data = item as? Data,
                   let fileURL = URL(dataRepresentation: data, relativeTo: nil) else { return }
             DispatchQueue.main.async {
-                NSWorkspace.shared.open([fileURL], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
+                openInApp(fileURL, withApplicationAt: appURL)
             }
         }
     }
     return true
+}
+
+// MARK: - Open With App
+
+/// Opens `url` in the given application.
+///
+/// Codex Desktop (`com.openai.codex`) ignores the standard macOS "open folder as document"
+/// event that editors like VS Code honor - opening a directory that way lands Codex on its
+/// previous workspace instead of the one we asked for. Its `codex app <path>` CLI is the
+/// supported way to set the workspace, so route directory opens through it. That CLI is a
+/// node script exposed as a shell function, and GUI apps don't inherit the login shell's
+/// PATH, so run it through an interactive login shell - the same environment the user's
+/// Terminal uses. Everything else opens normally via NSWorkspace.
+func openInApp(_ url: URL, withApplicationAt appURL: URL) {
+    var isDir: ObjCBool = false
+    let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+    if exists, isDir.boolValue,
+       Bundle(url: appURL)?.bundleIdentifier == "com.openai.codex",
+       runCodexApp(workspace: url.path) {
+        return
+    }
+    NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
+}
+
+/// Launches `codex app <workspace>` via the user's interactive login shell (fire-and-forget).
+/// Returns false if the shell can't be spawned, so the caller falls back to NSWorkspace.
+@discardableResult
+private func runCodexApp(workspace path: String) -> Bool {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+    // -i so the `codex` shell function and node PATH resolve as they do in Terminal, -l to
+    // load the full login profile. The path is passed positionally ($1) to avoid quoting issues.
+    process.arguments = ["-ilc", "codex app \"$1\"", "codex", path]
+    var env = ProcessInfo.processInfo.environment
+    env["TERM"] = "dumb"   // silence zle/prompt setup that expects a tty
+    process.environment = env
+    do {
+        try process.run()   // fire-and-forget; don't block the UI waiting on the app to launch
+        return true
+    } catch {
+        return false
+    }
 }

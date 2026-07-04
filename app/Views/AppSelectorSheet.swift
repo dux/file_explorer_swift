@@ -202,7 +202,7 @@ struct AppSelectorSheet: View {
     private func openWithApp(_ app: AppInfo) {
         settings.addPreferredApp(for: fileType, appPath: app.url.path)
         AppSettings.shared.addRecentlyUsedApp(appPath: app.url.path)
-        NSWorkspace.shared.open([targetURL], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
+        openInApp(targetURL, withApplicationAt: app.url)
         if setAsSystemDefault && hasRealExtension {
             setSystemDefault(app: app.url, forExtension: fileType)
         }
