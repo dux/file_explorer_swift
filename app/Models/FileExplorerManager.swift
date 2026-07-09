@@ -825,6 +825,18 @@ class FileExplorerManager: ObservableObject {
         }
     }
 
+    // Shift+click: add the contiguous range between the cursor and the clicked row
+    func selectRange(to index: Int) {
+        guard let target = allItems[safe: index] else { return }
+        let anchor = (selectedIndex >= 0 && selectedIndex < allItems.count) ? selectedIndex : index
+        let urls = (min(anchor, index)...max(anchor, index)).compactMap { allItems[safe: $0]?.url }
+        let added = selection.addLocals(urls)
+        if added > 0 {
+            ToastManager.shared.show("Added to selection (\(selection.count) item\(selection.count == 1 ? "" : "s"))")
+        }
+        selectItem(at: index, url: target.url)
+    }
+
     // Select all files in current folder
     func selectAllFiles() {
         for file in files {

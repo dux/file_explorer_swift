@@ -464,7 +464,6 @@ struct FileTreeRow: View {
     let index: Int
     let depth: Int
     let indentStep: CGFloat
-    @State private var lastClickTime: Date = .distantPast
     @State private var isHovered = false
 
     private var url: URL { fileInfo.url }
@@ -588,29 +587,50 @@ struct FileTreeRow: View {
         )
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
-        .onDrag {
-            return NSItemProvider(object: url as NSURL)
-        }
-        .onTapGesture {
-            let now = Date()
-            if now.timeIntervalSince(lastClickTime) < 0.3 {
-                // Double click
-                if isDirectory {
-                    manager.navigateTo(url)
-                } else {
-                    manager.openItem(url)
-                }
-                lastClickTime = .distantPast
-            } else {
-                // Single click — select only, no navigate. ESC deselects.
-                if manager.selectedItem != url {
-                    manager.selectItem(at: index, url: url)
-                }
-                lastClickTime = now
-            }
-        }
+        .overlay(FileRowMouseArea(dragURLs: { dragURLs }, onClick: handleClick))
         .opacity(isHidden ? 0.5 : 1.0)
         .customContextMenu(url: url)
+    }
+
+    // Dragging a row that is part of the green selection drags the whole selection
+    private var dragURLs: [URL] {
+        if isInSelection {
+            let urls = selection.sortedItems.compactMap { $0.localURL }
+            if !urls.isEmpty { return urls }
+        }
+        return [url]
+    }
+
+    private func handleClick(at point: CGPoint, clickCount: Int, modifiers: NSEvent.ModifierFlags) {
+        if modifiers.contains(.command) {
+            // Cmd+click: toggle in green selection
+            manager.toggleFileSelection(url)
+            manager.selectItem(at: index, url: url)
+            return
+        }
+        if modifiers.contains(.shift) {
+            // Shift+click: add range from cursor to clicked row
+            manager.selectRange(to: index)
+            return
+        }
+        if clickCount >= 2 {
+            if isDirectory {
+                manager.navigateTo(url)
+            } else {
+                manager.openItem(url)
+            }
+            return
+        }
+        // Hover chevron in the indent gutter enters the directory directly
+        let iconLeading = CGFloat(depth) * indentStep + 12
+        if isDirectory && point.x >= iconLeading - 18 && point.x < iconLeading {
+            manager.navigateTo(url)
+            return
+        }
+        // Single click - select only, no navigate. ESC deselects.
+        if manager.selectedItem != url {
+            manager.selectItem(at: index, url: url)
+        }
     }
 }
 
