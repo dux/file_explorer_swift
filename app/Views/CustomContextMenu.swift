@@ -159,9 +159,21 @@ private struct CustomContextMenuContent: View {
     @ObservedObject var tagManager: ColorTagManager
     @ObservedObject var contextMenu = ContextMenuManager.shared
 
-    // Detected from the URL itself — caller only passes the path.
+    // Prefer the listing row; fall back to a disk stat for local URLs that
+    // aren't in the current listing (breadcrumb, sidebar).
     private var isDirectory: Bool {
-        (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+        if let info = manager.cachedInfo(for: url) { return info.isDirectory }
+        if url.path == manager.currentPath.path { return true }
+        guard url.isFileURL else { return false }
+        return (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+    }
+
+    private var isLocal: Bool {
+        url.isFileURL
+    }
+
+    private var itemCaps: SourceCapabilities {
+        SourceRegistry.shared.source(for: url).capabilities(at: url)
     }
 
     private var isArchive: Bool {
@@ -179,6 +191,7 @@ private struct CustomContextMenuContent: View {
     }
 
     private var isHiddenFile: Bool {
+        guard isLocal else { return url.lastPathComponent.hasPrefix(".") }
         let resourceValues = try? url.resourceValues(forKeys: [.isHiddenKey])
         return resourceValues?.isHidden ?? url.lastPathComponent.hasPrefix(".")
     }
@@ -213,29 +226,41 @@ private struct CustomContextMenuContent: View {
             return pinnedFolderMenuItems(pinnedIndex: pinnedIndex)
         }
         var items: [MenuItem] = []
-        if isDirectory && !selection.localItems.isEmpty {
-            let count = selection.localItems.count
+        if isDirectory && isLocal && !selection.isEmpty {
+            // Local items copy/move on disk; iPhone items in the selection
+            // download over the wire in the same action.
+            let count = selection.count
             items.append(MenuItem(icon: "doc.on.doc", label: "Copy \(count) here", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
-                let items = SelectionManager.shared.localItems.compactMap { item in
+                let localPairs = SelectionManager.shared.localItems.compactMap { item in
                     item.localURL.map { (name: item.name, url: $0) }
                 }
-                SelectionManager.shared.clear()
                 Task {
-                    let copied = await CopyProgressManager.shared.copyItems(items, to: url)
-                    ToastManager.shared.show("Copied \(copied) item(s)")
+                    let downloaded = await SelectionManager.shared.downloadIPhoneItems(to: url)
+                    SelectionManager.shared.clear()
+                    let copied = await CopyProgressManager.shared.copyItems(localPairs, to: url)
+                    ToastManager.shared.show("Copied \(copied + downloaded) item(s)")
                     manager.refresh()
                 }
             }))
             items.append(MenuItem(icon: "folder", label: "Move \(count) here", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
-                let sources = SelectionManager.shared.localItems.compactMap { item in
+                let localPairs = SelectionManager.shared.localItems.compactMap { item in
                     item.localURL.map { (name: item.name, url: $0) }
                 }
-                SelectionManager.shared.clear()
                 Task {
-                    let moved = await SelectionManager.shared.moveItems(sources, to: url)
-                    ToastManager.shared.show("Moved \(moved) file(s)")
+                    let downloaded = await SelectionManager.shared.downloadIPhoneItems(to: url, move: true)
+                    SelectionManager.shared.clear()
+                    let moved = await SelectionManager.shared.moveItems(localPairs, to: url)
+                    ToastManager.shared.show("Moved \(moved + downloaded) item(s)")
                     manager.refresh()
                 }
+            }))
+        }
+        if isDirectory && !isLocal && itemCaps.contains(.write) && !selection.localItems.isEmpty {
+            let count = selection.localItems.count
+            items.append(MenuItem(icon: "square.and.arrow.up", label: "Upload \(count) here", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
+                let localURLs = SelectionManager.shared.localItems.compactMap { $0.localURL }
+                SelectionManager.shared.clear()
+                manager.uploadItems(localURLs, to: url)
             }))
         }
         items.append(MenuItem(icon: "info.circle", label: "View Details", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url, isDirectory] in
@@ -252,7 +277,7 @@ private struct CustomContextMenuContent: View {
                 }
             ))
         }
-        if isDirectory && !isApp {
+        if isDirectory && !isApp && isLocal {
             items.append(MenuItem(icon: "face.smiling", label: "Assign Icon", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
                 contextMenu.emojiPickerURL = url
                 contextMenu.showEmojiPicker = true
@@ -274,7 +299,7 @@ private struct CustomContextMenuContent: View {
             pasteboard.setString(tildePath(url), forType: .string)
             ToastManager.shared.show("Path copied to clipboard")
         }))
-        if isDirectory {
+        if isDirectory && itemCaps.contains(.write) {
             items.append(MenuItem(icon: "folder.badge.plus", label: "Create Folder", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url] in
                 manager.promptForNewFolder(in: url)
             }))
@@ -282,27 +307,29 @@ private struct CustomContextMenuContent: View {
                 manager.promptForNewFile(in: url)
             }))
         }
-        if !isCurrentFolder {
+        if !isCurrentFolder && itemCaps.contains(.rename) {
             items.append(MenuItem(icon: "pencil", label: "Rename", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
                 manager.selectedItem = url
                 manager.startRename()
             }))
         }
-        items.append(MenuItem(icon: "folder", label: "Show in Finder", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
-            NSWorkspace.shared.activateFileViewerSelecting([url])
-        }))
-        items.append(MenuItem(icon: "doc.on.doc", label: "Duplicate", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
-            manager.promptDuplicate(url)
-        }))
-        items.append(MenuItem(icon: "doc.zipper", label: "Add to Zip", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
-            manager.addToZip(url)
-        }))
-        if isArchive {
+        if isLocal {
+            items.append(MenuItem(icon: "folder", label: "Show in Finder", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }))
+            items.append(MenuItem(icon: "doc.on.doc", label: "Duplicate", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
+                manager.promptDuplicate(url)
+            }))
+            items.append(MenuItem(icon: "doc.zipper", label: "Add to Zip", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
+                manager.addToZip(url)
+            }))
+        }
+        if isArchive && isLocal {
             items.append(MenuItem(icon: "arrow.down.doc", label: "Extract to folder", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
                 manager.extractArchive(url)
             }))
         }
-        if isApp {
+        if isApp && isLocal {
             items.append(MenuItem(icon: "play.circle", label: "Run", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
                 manager.runApp(url)
             }))
@@ -310,24 +337,29 @@ private struct CustomContextMenuContent: View {
                 manager.enableUnsafeApp(url)
             }))
         }
-        items.append(MenuItem(
-            icon: isHiddenFile ? "eye" : "eye.slash",
-            label: isHiddenFile ? "Make Visible" : "Make Hidden",
-            isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
-                manager.toggleHidden(url)
-            }
-        ))
-        if !isCurrentFolder {
-            items.append(MenuItem(icon: "trash", label: "Move to Trash", isDestructive: true, isColor: false, tagColor: nil, isTagged: false, action: act {
+        if itemCaps.contains(.hiddenToggle) {
+            items.append(MenuItem(
+                icon: isHiddenFile ? "eye" : "eye.slash",
+                label: isHiddenFile ? "Make Visible" : "Make Hidden",
+                isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
+                    manager.toggleHidden(url)
+                }
+            ))
+        }
+        if !isCurrentFolder && itemCaps.contains(.delete) {
+            let usesTrash = itemCaps.contains(.trash)
+            items.append(MenuItem(icon: "trash", label: usesTrash ? "Move to Trash" : "Delete", isDestructive: true, isColor: false, tagColor: nil, isTagged: false, action: act {
                 manager.moveToTrash(url)
             }))
         }
-        items.append(MenuItem(icon: "", label: "Assign color", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, isColorAssign: true, action: {}))
-        let currentColors = tagManager.colorsForFile(url)
-        if !currentColors.isEmpty {
-            items.append(MenuItem(icon: "xmark.circle", label: "Remove All Labels", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
-                tagManager.untagFile(url)
-            }))
+        if isLocal {
+            items.append(MenuItem(icon: "", label: "Assign color", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, isColorAssign: true, action: {}))
+            let currentColors = tagManager.colorsForFile(url)
+            if !currentColors.isEmpty {
+                items.append(MenuItem(icon: "xmark.circle", label: "Remove All Labels", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act {
+                    tagManager.untagFile(url)
+                }))
+            }
         }
         return items
     }

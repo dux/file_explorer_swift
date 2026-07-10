@@ -4,7 +4,6 @@ import AppKit
 enum MainPaneType: Equatable {
     case browser
     case selection
-    case iphone
     case colorTag(TagColor)
 }
 
@@ -31,9 +30,19 @@ struct CachedFileInfo: Identifiable, Equatable {
     let size: Int64
     let modDate: Date?
     let isHidden: Bool
+    let displayName: String?
+
+    init(url: URL, isDirectory: Bool, size: Int64, modDate: Date?, isHidden: Bool, displayName: String? = nil) {
+        self.url = url
+        self.isDirectory = isDirectory
+        self.size = size
+        self.modDate = modDate
+        self.isHidden = isHidden
+        self.displayName = displayName
+    }
 
     var id: String { url.absoluteString }
-    var name: String { url.lastPathComponent }
+    var name: String { displayName ?? url.lastPathComponent }
 }
 
 @MainActor
@@ -49,6 +58,7 @@ class FileExplorerManager: ObservableObject {
     @Published var duplicatingItem: URL? = nil
     @Published var duplicateText: String = ""
     @Published var currentPane: MainPaneType = .browser
+    @Published var isLoadingDirectory: Bool = false
     @Published var hiddenCount: Int = 0
     @Published var hasImages: Bool = false
     @Published var showItemDialog: Bool = false
@@ -105,10 +115,15 @@ class FileExplorerManager: ObservableObject {
     private var historyIndex: Int = -1
 
     // Directory monitor: detects external changes to current folder
-    private var directoryMonitorSource: DispatchSourceFileSystemObject?
+    private var directoryWatchToken: SourceWatchToken?
     private var monitorDebounceTask: Task<Void, Never>?
 
     let fileManager = FileManager.default
+
+    /// Backend serving the folder currently on screen, resolved by URL scheme.
+    var currentSource: FileSystemSource {
+        SourceRegistry.shared.source(for: currentPath)
+    }
 
     var allItems: [CachedFileInfo] {
         directories + files
@@ -117,6 +132,8 @@ class FileExplorerManager: ObservableObject {
     private static let lastFolderFile = AppSettings.configBase.appendingPathComponent("last-folder.txt")
 
     private func saveLastFolder(_ url: URL) {
+        // Only local folders round-trip through a plain path file
+        guard url.isFileURL else { return }
         try? url.path.write(to: Self.lastFolderFile, atomically: true, encoding: .utf8)
     }
 
@@ -205,44 +222,52 @@ class FileExplorerManager: ObservableObject {
         case failure(String)
     }
 
-    /// Directories with at most this many entries load synchronously so ordinary
-    /// navigation swaps atomically (no flash of the previous folder). It's a heuristic:
-    /// small folders never freeze the UI, and this many local `stat`s stays well under
-    /// a frame. Larger folders enumerate off the main thread instead.
-    private static let syncLoadThreshold = 1000
-
-    /// Loads the current directory. Small directories enumerate synchronously; large
-    /// ones do the read, per-file stat, and sort off the main thread and publish on
-    /// main. `completion` runs on main once results are in (used to restore or select
-    /// an item). A generation token discards stale async loads so rapid navigation
-    /// only ever shows the newest folder.
+    /// Loads the current directory through its FileSystemSource. Sources that can
+    /// list cheaply do it inline (local small folders swap atomically, no flash of
+    /// the previous folder); everything else lists async with filter + sort off the
+    /// main thread. `completion` runs on main once results are in (used to restore
+    /// or select an item). A generation token discards stale async loads so rapid
+    /// navigation only ever shows the newest folder.
     func loadContents(completion: (() -> Void)? = nil) {
         loadGeneration &+= 1
         let generation = loadGeneration
         let path = currentPath
         let mode = sortMode
+        let source = currentSource
         // For Trash folder, show all files including hidden
         let isTrash = path.lastPathComponent == ".Trash"
         let showAll = showHidden || isTrash
 
-        // Fast path: enumerating a small directory is instant, so do it inline - the
-        // listing swaps in the same update with no flicker of the previous folder.
-        // The name-only count is one cheap directory read (no per-file stats).
-        let entryCount = (try? fileManager.contentsOfDirectory(atPath: path.path).count) ?? 0
-        if entryCount <= Self.syncLoadThreshold {
-            applyLoadResult(Self.enumerateDirectory(at: path, showAll: showAll, isTrash: isTrash, sortMode: mode))
+        do {
+            if let entries = try source.listSyncIfCheap(path) {
+                isLoadingDirectory = false
+                applyLoadResult(.success(Self.buildListing(entries, showAll: showAll, sortMode: mode)))
+                completion?()
+                return
+            }
+        } catch {
+            isLoadingDirectory = false
+            applyLoadResult(.failure(error.localizedDescription))
             completion?()
             return
         }
 
-        // Slow path: large directories enumerate off the main thread. The outer Task
-        // inherits this method's main-actor isolation, so `completion` never crosses
-        // actors; only the enumeration hops off the main thread.
+        // Slow path: list async, then filter + sort off the main thread. The outer
+        // Task inherits this method's main-actor isolation, so `completion` never
+        // crosses actors.
+        isLoadingDirectory = true
         Task { [weak self] in
-            let outcome = await Task.detached(priority: .userInitiated) {
-                Self.enumerateDirectory(at: path, showAll: showAll, isTrash: isTrash, sortMode: mode)
-            }.value
+            let outcome: DirectoryLoadResult
+            do {
+                let entries = try await source.list(path)
+                outcome = await Task.detached(priority: .userInitiated) {
+                    DirectoryLoadResult.success(Self.buildListing(entries, showAll: showAll, sortMode: mode))
+                }.value
+            } catch {
+                outcome = .failure(error.localizedDescription)
+            }
             guard let self, self.loadGeneration == generation else { return }
+            self.isLoadingDirectory = false
             self.applyLoadResult(outcome)
             completion?()
         }
@@ -264,79 +289,42 @@ class FileExplorerManager: ObservableObject {
         }
     }
 
-    /// Directory read + per-file stat + sort. Runs off the main actor; returns a
-    /// message on failure so the result stays Sendable.
-    nonisolated private static func enumerateDirectory(at path: URL, showAll: Bool, isTrash: Bool, sortMode: SortMode) -> DirectoryLoadResult {
-        let fm = FileManager.default
-        let resourceKeys: Set<URLResourceKey> = [.isDirectoryKey, .contentModificationDateKey, .fileSizeKey, .isHiddenKey]
-        do {
-            var contents = try fm.contentsOfDirectory(at: path, includingPropertiesForKeys: Array(resourceKeys), options: [])
+    /// Hidden-file policy, dir/file split, and sort over raw source entries.
+    /// Pure and Sendable so the slow path can run it off the main actor.
+    nonisolated private static func buildListing(_ entries: [SourceEntry], showAll: Bool, sortMode: SortMode) -> DirectoryListing {
+        var dirs: [CachedFileInfo] = []
+        var fils: [CachedFileInfo] = []
+        var hiddenSkipped = 0
 
-            // Fallback for Trash: TCC may silently return empty, use /bin/ls
-            if isTrash && contents.isEmpty {
-                contents = listViaProcess(path)
+        for entry in entries {
+            if !showAll && entry.isHidden {
+                hiddenSkipped += 1
+                continue
             }
 
-            var dirs: [CachedFileInfo] = []
-            var fils: [CachedFileInfo] = []
-            var hiddenSkipped = 0
+            let info = CachedFileInfo(
+                url: entry.url,
+                isDirectory: entry.isDirectory,
+                size: entry.size,
+                modDate: entry.modDate,
+                isHidden: entry.isHidden,
+                displayName: entry.displayName
+            )
 
-            for url in contents {
-                let values = try? url.resourceValues(forKeys: resourceKeys)
-                let hidden = url.lastPathComponent.hasPrefix(".") || (values?.isHidden ?? false)
-                if !showAll && hidden {
-                    hiddenSkipped += 1
-                    continue
-                }
-
-                let isDir = values?.isDirectory ?? false
-                let size = Int64(values?.fileSize ?? 0)
-                let modDate = values?.contentModificationDate
-
-                let info = CachedFileInfo(url: url, isDirectory: isDir, size: size, modDate: modDate, isHidden: hidden)
-
-                if isDir {
-                    dirs.append(info)
-                } else {
-                    fils.append(info)
-                }
+            if entry.isDirectory {
+                dirs.append(info)
+            } else {
+                fils.append(info)
             }
-
-            let hasImages = fils.contains { FileExtensions.images.contains($0.url.pathExtension.lowercased()) }
-            return .success(DirectoryListing(
-                directories: sortItems(dirs, sortMode: sortMode),
-                files: sortItems(fils, sortMode: sortMode),
-                hiddenCount: hiddenSkipped,
-                hasImages: hasImages
-            ))
-        } catch {
-            return .failure(error.localizedDescription)
         }
-    }
 
-    /// Fallback directory listing using /bin/ls for TCC-protected folders
-    nonisolated private static func listViaProcess(_ dir: URL) -> [URL] {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/ls")
-        process.arguments = ["-1A", dir.path]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0,
-                  let output = String(data: data, encoding: .utf8) else { return [] }
-            return output.split(separator: "\n").compactMap { name in
-                let n = String(name)
-                guard !n.isEmpty else { return nil }
-                return dir.appendingPathComponent(n)
-            }
-        } catch {
-            return []
-        }
+        let hasImages = fils.contains { FileExtensions.images.contains($0.url.pathExtension.lowercased()) }
+        return DirectoryListing(
+            directories: sortItems(dirs, sortMode: sortMode),
+            files: sortItems(fils, sortMode: sortMode),
+            hiddenCount: hiddenSkipped,
+            hasImages: hasImages
+        )
     }
 
     nonisolated private static func sortItems(_ items: [CachedFileInfo], sortMode: SortMode) -> [CachedFileInfo] {
@@ -382,12 +370,12 @@ class FileExplorerManager: ObservableObject {
 
     private func saveSelection() {
         if let item = selectedItem {
-            selectionMemory[currentPath.path] = item
+            selectionMemory[currentPath.absoluteString] = item
         }
     }
 
     func restoreSelection() {
-        if let remembered = selectionMemory[currentPath.path],
+        if let remembered = selectionMemory[currentPath.absoluteString],
            let index = allItems.firstIndex(where: { $0.url == remembered }) {
             selectedIndex = index
             selectedItem = remembered
@@ -401,15 +389,18 @@ class FileExplorerManager: ObservableObject {
     /// when nil it restores the remembered selection. Callers that want a specific
     /// post-navigation selection pass their own closure instead of racing the load.
     func navigateTo(_ url: URL, onLoaded: (() -> Void)? = nil) {
-        let targetURL = url.standardizedFileURL
-        var isDirectory: ObjCBool = false
+        let source = SourceRegistry.shared.source(for: url)
+        let targetURL = source.canonicalize(url)
 
-        guard fileManager.fileExists(atPath: targetURL.path, isDirectory: &isDirectory) else {
+        // Sources that can't probe synchronously (remote) navigate optimistically;
+        // the async listing reports failures.
+        let existence = source.existsSync(targetURL)
+        if existence == .missing {
             print("Path does not exist: \(targetURL.path)")
             return
         }
 
-        if isDirectory.boolValue {
+        if existence != .file {
             if isSearching {
                 cancelSearch()
             }
@@ -448,11 +439,10 @@ class FileExplorerManager: ObservableObject {
     }
 
     func navigateUp() {
-        guard currentPath.path != "/" else { return }
+        guard let parent = currentSource.parent(of: currentPath) else { return }
         let child = currentPath
-        let parent = currentPath.deletingLastPathComponent()
         // Remember the folder we came from so it gets selected in the parent
-        selectionMemory[parent.path] = child
+        selectionMemory[parent.absoluteString] = child
         navigateTo(parent)
     }
 
@@ -492,18 +482,13 @@ class FileExplorerManager: ObservableObject {
     func sidebarActivate() {
         let items = sidebarItems
         guard sidebarIndex >= 0 && sidebarIndex < items.count else { return }
-        let url = items[sidebarIndex]
-        if currentPane == .iphone {
-            iPhoneManager.shared.currentDevice = nil
-            currentPane = .browser
-        }
-        navigateToFolder(url)
+        navigateToFolder(items[sidebarIndex])
     }
 
     func focusSidebar() {
         sidebarFocused = true
         let items = sidebarItems
-        if let idx = items.firstIndex(where: { $0.path == currentPath.path }) {
+        if currentPath.isFileURL, let idx = items.firstIndex(where: { $0.path == currentPath.path }) {
             sidebarIndex = idx
         } else if sidebarIndex < 0 || sidebarIndex >= items.count {
             sidebarIndex = min(sidebarIndex, max(items.count - 1, 0))
@@ -574,39 +559,22 @@ class FileExplorerManager: ObservableObject {
     func startMonitoringDirectory() {
         stopMonitoringDirectory()
 
-        let path = currentPath.path
-        let fd = open(path, O_EVTONLY)
-        guard fd >= 0 else { return }
-
-        let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fd,
-            eventMask: [.delete, .rename, .write],
-            queue: .main
-        )
-
-        source.setEventHandler { [weak self] in
-            guard let self else { return }
-            let flags = source.data
+        directoryWatchToken = currentSource.watch(currentPath) { [weak self] event in
             Task { @MainActor in
-                if flags.contains(.delete) || flags.contains(.rename) {
+                guard let self else { return }
+                switch event {
+                case .directoryGone:
                     self.handleCurrentDirectoryDeleted()
-                } else if flags.contains(.write) {
+                case .contentsChanged:
                     self.debounceReloadContents()
                 }
             }
         }
-
-        source.setCancelHandler {
-            close(fd)
-        }
-
-        directoryMonitorSource = source
-        source.resume()
     }
 
     private func stopMonitoringDirectory() {
-        directoryMonitorSource?.cancel()
-        directoryMonitorSource = nil
+        directoryWatchToken?.cancel()
+        directoryWatchToken = nil
         monitorDebounceTask?.cancel()
         monitorDebounceTask = nil
     }
@@ -614,9 +582,10 @@ class FileExplorerManager: ObservableObject {
     private func handleCurrentDirectoryDeleted() {
         stopMonitoringDirectory()
         // Walk up to the nearest existing ancestor
-        var parent = currentPath.deletingLastPathComponent()
-        while !fileManager.fileExists(atPath: parent.path) && parent.path != "/" {
-            parent = parent.deletingLastPathComponent()
+        let source = currentSource
+        var parent = source.parent(of: currentPath) ?? currentPath
+        while source.existsSync(parent) == .missing, let next = source.parent(of: parent) {
+            parent = next
         }
         navigateToFolder(parent)
     }
@@ -671,23 +640,51 @@ class FileExplorerManager: ObservableObject {
 
     private static let archiveExtensions = FileExtensions.archives
 
-    func openItem(_ item: URL) {
-        var isDirectory: ObjCBool = false
-        fileManager.fileExists(atPath: item.path, isDirectory: &isDirectory)
+    /// Listing row for a URL in the current folder, if present.
+    func cachedInfo(for url: URL) -> CachedFileInfo? {
+        allItems.first { $0.url == url }
+    }
 
-        if isDirectory.boolValue {
+    func openItem(_ item: URL) {
+        let source = SourceRegistry.shared.source(for: item)
+        let isDirectory = cachedInfo(for: item)?.isDirectory
+            ?? (source.existsSync(item) == .directory)
+
+        if isDirectory {
             navigateTo(item)
-        } else {
+        } else if source.capabilities.contains(.localURLs) {
             let ext = item.pathExtension.lowercased()
             if Self.archiveExtensions.contains(ext) {
                 extractArchive(item)
             } else {
                 openFileWithPreferredApp(item)
             }
+        } else {
+            openRemoteFile(item)
+        }
+    }
+
+    /// Download a remote file to the source's cache, then open the local copy
+    /// with the preferred app.
+    func openRemoteFile(_ url: URL) {
+        let source = SourceRegistry.shared.source(for: url)
+        ToastManager.shared.show("Downloading \(url.lastPathComponent)...")
+        Task { [weak self] in
+            do {
+                let localURL = try await source.materialize(url)
+                self?.openFileWithPreferredApp(localURL)
+            } catch {
+                ToastManager.shared.showError(error.localizedDescription)
+            }
         }
     }
 
     func openFileWithPreferredApp(_ url: URL) {
+        // Remote files download to cache first, then reenter with the local copy
+        guard url.isFileURL else {
+            openRemoteFile(url)
+            return
+        }
         let ext = url.pathExtension.lowercased()
         let fileType = ext.isEmpty ? "__empty__" : ext
         let apps = AppSettings.shared.getPreferredApps(for: fileType)
@@ -813,14 +810,26 @@ class FileExplorerManager: ObservableObject {
         loadContents()
     }
 
+    /// FileItem for a URL: from the current listing when present, else a
+    /// local disk stat for file URLs (covers items outside the listing).
+    private func fileItem(for url: URL) -> FileItem? {
+        if let info = cachedInfo(for: url) {
+            return FileItem.from(info: info)
+        }
+        guard url.scheme == nil || url.scheme == "file" else { return nil }
+        return FileItem.fromLocal(url)
+    }
+
     // Add a file to global selection
     func addFileToSelection(_ url: URL) {
-        selection.addLocal(url)
+        if let item = fileItem(for: url) {
+            selection.add(item)
+        }
     }
 
     // Toggle a file in global selection
     func toggleFileSelection(_ url: URL) {
-        if let item = FileItem.fromLocal(url) {
+        if let item = fileItem(for: url) {
             selection.toggle(item)
         }
     }
@@ -829,8 +838,10 @@ class FileExplorerManager: ObservableObject {
     func selectRange(to index: Int) {
         guard let target = allItems[safe: index] else { return }
         let anchor = (selectedIndex >= 0 && selectedIndex < allItems.count) ? selectedIndex : index
-        let urls = (min(anchor, index)...max(anchor, index)).compactMap { allItems[safe: $0]?.url }
-        let added = selection.addLocals(urls)
+        let items = (min(anchor, index)...max(anchor, index))
+            .compactMap { allItems[safe: $0] }
+            .compactMap { FileItem.from(info: $0) }
+        let added = selection.addItems(items)
         if added > 0 {
             ToastManager.shared.show("Added to selection (\(selection.count) item\(selection.count == 1 ? "" : "s"))")
         }
@@ -839,9 +850,7 @@ class FileExplorerManager: ObservableObject {
 
     // Select all files in current folder
     func selectAllFiles() {
-        for file in files {
-            selection.addLocal(file.url)
-        }
+        _ = selection.addItems(files.compactMap { FileItem.from(info: $0) })
     }
 
     // Add current selection to global selection
@@ -853,14 +862,14 @@ class FileExplorerManager: ObservableObject {
 
     // Remove from global selection
     func removeFromGlobalSelection(_ url: URL) {
-        if let item = FileItem.fromLocal(url) {
+        if let item = fileItem(for: url) {
             selection.remove(item)
         }
     }
 
     // Toggle current selection in global selection
     func toggleGlobalSelection() {
-        if let item = selectedItem, let fileItem = FileItem.fromLocal(item) {
+        if let item = selectedItem, let fileItem = fileItem(for: item) {
             selection.toggle(fileItem)
         }
     }
@@ -872,7 +881,16 @@ class FileExplorerManager: ObservableObject {
 
     // Check if URL is in selection
     func isInSelection(_ url: URL) -> Bool {
-        selection.containsLocal(url)
+        switch url.scheme {
+        case nil, "file":
+            return selection.containsLocal(url)
+        case "iphone":
+            guard let udid = url.host,
+                  let (bundleId, afcPath) = iPhoneFileSource.afcContext(for: url) else { return false }
+            return selection.containsIPhone(path: afcPath, deviceId: udid, appId: bundleId)
+        default:
+            return false
+        }
     }
 
 }

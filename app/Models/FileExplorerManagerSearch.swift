@@ -6,12 +6,6 @@ extension FileExplorerManager {
     private static let maxVisibleSearchResults = 1_000
     private static let searchBatchSize = 1_000
     private static let emptyExtensionKey = "__no_extension__"
-    private static let searchResourceKeys: Set<URLResourceKey> = [
-        .isDirectoryKey,
-        .contentModificationDateKey,
-        .fileSizeKey,
-        .isHiddenKey
-    ]
     private static let defaultSearchSkipDirectories: Set<String> = [
         ".build", ".bundle", ".cache", ".git", ".gradle", ".hg", ".idea",
         ".next", ".nuxt", ".parcel-cache", ".sass-cache", ".svn", ".turbo",
@@ -130,56 +124,40 @@ extension FileExplorerManager {
         let root = currentPath
         let showHiddenFiles = showHidden
         let skipDirectories = Self.defaultSearchSkipDirectories.union(AppSettings.shared.copySkipFolders)
-        let resourceKeys = Self.searchResourceKeys
         let batchSize = Self.searchBatchSize
 
         isSearchRunning = true
 
+        // Sources without a recursive walk (remote backends) have nothing to index.
+        guard let stream = currentSource.recursiveEntries(at: root, includeHidden: showHiddenFiles, skipDirectories: skipDirectories) else {
+            isSearchRunning = false
+            return
+        }
+
         searchIndexTask = Task.detached(priority: .userInitiated) { [weak self] in
-            let options: FileManager.DirectoryEnumerationOptions = showHiddenFiles
-                ? [.skipsPackageDescendants]
-                : [.skipsHiddenFiles, .skipsPackageDescendants]
-            let fileManager = FileManager.default
-
-            guard let enumerator = fileManager.enumerator(
-                at: root,
-                includingPropertiesForKeys: Array(resourceKeys),
-                options: options,
-                errorHandler: { _, _ in true }
-            ) else {
-                await self?.finishSearchIndexScan(token: token, root: root)
-                return
-            }
-
             var batch: [CachedFileInfo] = []
 
-            while let url = enumerator.nextObject() as? URL {
-                guard !Task.isCancelled else { return }
+            do {
+                for try await entry in stream {
+                    guard !Task.isCancelled else { return }
+                    if entry.isDirectory { continue }
 
-                let values = try? url.resourceValues(forKeys: resourceKeys)
-                let isDirectory = values?.isDirectory ?? false
+                    batch.append(CachedFileInfo(
+                        url: entry.url,
+                        isDirectory: false,
+                        size: entry.size,
+                        modDate: entry.modDate,
+                        isHidden: entry.isHidden,
+                        displayName: entry.displayName
+                    ))
 
-                if isDirectory {
-                    if skipDirectories.contains(url.lastPathComponent) {
-                        enumerator.skipDescendants()
+                    if batch.count >= batchSize {
+                        await self?.appendSearchBatch(batch, token: token, root: root)
+                        batch.removeAll(keepingCapacity: true)
                     }
-                    continue
                 }
-
-                let hidden = url.lastPathComponent.hasPrefix(".") || (values?.isHidden ?? false)
-                let info = CachedFileInfo(
-                    url: url,
-                    isDirectory: false,
-                    size: Int64(values?.fileSize ?? 0),
-                    modDate: values?.contentModificationDate,
-                    isHidden: hidden
-                )
-                batch.append(info)
-
-                if batch.count >= batchSize {
-                    await self?.appendSearchBatch(batch, token: token, root: root)
-                    batch.removeAll(keepingCapacity: true)
-                }
+            } catch {
+                // Walk aborted mid-scan; index whatever was collected
             }
 
             if !batch.isEmpty {

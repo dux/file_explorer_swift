@@ -29,14 +29,21 @@ struct ActionsPane: View {
         manager.selectedItem ?? manager.currentPath
     }
 
+    private var isLocalTarget: Bool {
+        targetURL.isFileURL
+    }
+
     private var isDirectory: Bool {
+        if let info = manager.cachedInfo(for: targetURL) { return info.isDirectory }
+        if targetURL.path == manager.currentPath.path { return true }
+        guard isLocalTarget else { return false }
         var isDir: ObjCBool = false
         FileManager.default.fileExists(atPath: targetURL.path, isDirectory: &isDir)
         return isDir.boolValue
     }
 
     private var targetName: String {
-        targetURL.lastPathComponent
+        manager.cachedInfo(for: targetURL)?.name ?? targetURL.lastPathComponent
     }
 
     private var fileType: String {
@@ -48,23 +55,60 @@ struct ActionsPane: View {
     }
 
     private var isImageFile: Bool {
-        FileExtensions.images.contains(targetURL.pathExtension.lowercased())
+        isLocalTarget && FileExtensions.images.contains(targetURL.pathExtension.lowercased())
     }
 
     private var isOfficeFile: Bool {
-        FileExtensions.office.contains(targetURL.pathExtension.lowercased())
+        isLocalTarget && FileExtensions.office.contains(targetURL.pathExtension.lowercased())
     }
 
     private var isAppBundle: Bool {
-        targetURL.pathExtension.lowercased() == "app" && isDirectory
+        isLocalTarget && targetURL.pathExtension.lowercased() == "app" && isDirectory
     }
 
     private var isExecutableFile: Bool {
-        !isDirectory && FileManager.default.isExecutableFile(atPath: targetURL.path)
+        isLocalTarget && !isDirectory && FileManager.default.isExecutableFile(atPath: targetURL.path)
+    }
+
+    private var isRemoteFile: Bool {
+        !isLocalTarget && !isDirectory
     }
 
     private var hasActionButtons: Bool {
-        isAppBundle || isImageFile || isOfficeFile || isExecutableFile || gitRepo.gitRepoInfo != nil || npmPackage.npmPackageInfo != nil
+        isAppBundle || isImageFile || isOfficeFile || isExecutableFile || isRemoteFile || gitRepo.gitRepoInfo != nil || npmPackage.npmPackageInfo != nil
+    }
+
+    /// Open the target with a specific app; remote targets download to the
+    /// source cache first.
+    private func openTarget(withApplicationAt appURL: URL) {
+        if isLocalTarget {
+            openInApp(targetURL, withApplicationAt: appURL)
+            return
+        }
+        let source = SourceRegistry.shared.source(for: targetURL)
+        let remote = targetURL
+        Task {
+            do {
+                let local = try await source.materialize(remote)
+                openInApp(local, withApplicationAt: appURL)
+            } catch {
+                ToastManager.shared.showError(error.localizedDescription)
+            }
+        }
+    }
+
+    private func downloadTarget() {
+        let downloads = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
+        let source = SourceRegistry.shared.source(for: targetURL)
+        let remote = targetURL
+        Task {
+            do {
+                try await source.download(remote, toDirectory: downloads)
+                ToastManager.shared.show("Downloaded to Downloads")
+            } catch {
+                ToastManager.shared.showError(error.localizedDescription)
+            }
+        }
     }
 
     @ViewBuilder
@@ -121,6 +165,13 @@ struct ActionsPane: View {
                         showExecuteSheet = true
                     }
                 }
+                if isRemoteFile {
+                    let downloadIdx = paneItems.firstIndex(where: { $0.id == "download" }) ?? -1
+                    ActionButton(icon: "arrow.down.circle", title: "Download to Downloads", color: .blue,
+                                 flatIndex: downloadIdx, manager: manager) {
+                        downloadTarget()
+                    }
+                }
                 if let gitInfo = gitRepo.gitRepoInfo {
                     let gitIdx = paneItems.firstIndex(where: { $0.id == "git" }) ?? -1
                     ActionButton(icon: "arrow.up.right.square", title: gitInfo.displayLabel, color: .secondary,
@@ -173,7 +224,6 @@ struct ActionsPane: View {
 
     private func buildRightPaneItems() -> [RightPaneItem] {
         var items: [RightPaneItem] = []
-        let url = targetURL
 
         if isAppBundle {
             items.append(RightPaneItem(id: "runapp", title: "Run") {
@@ -208,6 +258,11 @@ struct ActionsPane: View {
                 self.showExecuteSheet = true
             })
         }
+        if isRemoteFile {
+            items.append(RightPaneItem(id: "download", title: "Download to Downloads") {
+                self.downloadTarget()
+            })
+        }
         if let gitInfo = gitRepo.gitRepoInfo {
             let webURL = gitInfo.webURL
             items.append(RightPaneItem(id: "git", title: gitInfo.displayLabel) {
@@ -225,8 +280,8 @@ struct ActionsPane: View {
         })
         for app in preferredApps {
             let appURL = app.url
-            items.append(RightPaneItem(id: "app-\(app.url.path)", title: app.name) { [url] in
-                openInApp(url, withApplicationAt: appURL)
+            items.append(RightPaneItem(id: "app-\(app.url.path)", title: app.name) {
+                self.openTarget(withApplicationAt: appURL)
             })
         }
         return items
@@ -326,7 +381,7 @@ struct ActionsPane: View {
                             index: idx,
                             isDefault: idx == 0,
                             onOpen: {
-                                openInApp(targetURL, withApplicationAt: app.url)
+                                openTarget(withApplicationAt: app.url)
                             },
                             onRemove: {
                                 settings.removePreferredApp(for: fileType, appPath: app.url.path)
@@ -400,7 +455,7 @@ struct ActionsPane: View {
                                         appURL: app.url
                                     ) {
                                         settings.addPreferredApp(for: fileType, appPath: app.url.path)
-                                        openInApp(targetURL, withApplicationAt: app.url)
+                                        openTarget(withApplicationAt: app.url)
                                     }
                                 }
                             }
@@ -416,12 +471,16 @@ struct ActionsPane: View {
         .onChange(of: targetURL) { newURL in
             resetSuggestedApps()
             manager.rightPaneItems = buildRightPaneItems()
-            gitRepo.update(for: newURL)
-            npmPackage.update(for: newURL)
+            if newURL.isFileURL {
+                gitRepo.update(for: newURL)
+                npmPackage.update(for: newURL)
+            }
         }
         .onChange(of: manager.currentPath) { newPath in
-            gitRepo.update(for: newPath)
-            npmPackage.update(for: newPath)
+            if newPath.isFileURL {
+                gitRepo.update(for: newPath)
+                npmPackage.update(for: newPath)
+            }
         }
         .onChange(of: manager.rightPaneFocused) { _ in
             manager.rightPaneItems = buildRightPaneItems()

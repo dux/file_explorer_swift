@@ -1,0 +1,146 @@
+import Foundation
+
+/// One entry of a directory listing, backend-neutral. `displayName` overrides
+/// `url.lastPathComponent` for virtual folders (e.g. iPhone apps shown by name
+/// while the path component is the bundle id).
+struct SourceEntry: Sendable {
+    let url: URL
+    let displayName: String?
+    let isDirectory: Bool
+    let size: Int64
+    let modDate: Date?
+    let isHidden: Bool
+
+    init(url: URL, displayName: String? = nil, isDirectory: Bool, size: Int64, modDate: Date?, isHidden: Bool) {
+        self.url = url
+        self.displayName = displayName
+        self.isDirectory = isDirectory
+        self.size = size
+        self.modDate = modDate
+        self.isHidden = isHidden
+    }
+}
+
+/// What a backend can do. Views and the manager gate operations on these
+/// instead of assuming local-disk semantics.
+struct SourceCapabilities: OptionSet, Sendable {
+    let rawValue: Int
+
+    static let write           = SourceCapabilities(rawValue: 1 << 0)  // mkdir / createFile / upload
+    static let rename          = SourceCapabilities(rawValue: 1 << 1)
+    static let delete          = SourceCapabilities(rawValue: 1 << 2)
+    static let trash           = SourceCapabilities(rawValue: 1 << 3)  // delete moves to trash (vs permanent)
+    static let serverSideCopy  = SourceCapabilities(rawValue: 1 << 4)
+    static let watch           = SourceCapabilities(rawValue: 1 << 5)  // change stream for auto-reload
+    static let recursiveSearch = SourceCapabilities(rawValue: 1 << 6)  // deep index scan
+    static let hiddenToggle    = SourceCapabilities(rawValue: 1 << 7)
+    static let openWith        = SourceCapabilities(rawValue: 1 << 8)  // NSWorkspace / archive tools
+    static let localURLs       = SourceCapabilities(rawValue: 1 << 9)  // entries are real file:// URLs
+}
+
+/// Sync existence probe result. Sources that cannot answer without a round
+/// trip return nil from `existsSync` and navigation proceeds optimistically.
+enum SourceExistence: Sendable {
+    case directory
+    case file
+    case missing
+}
+
+enum SourceWatchEvent: Sendable {
+    case contentsChanged
+    case directoryGone
+}
+
+/// Handle for an active directory watch. Cancelling releases the underlying
+/// resource (kqueue fd locally); safe to cancel more than once.
+final class SourceWatchToken: Sendable {
+    private let onCancel: @Sendable () -> Void
+
+    init(onCancel: @escaping @Sendable () -> Void) {
+        self.onCancel = onCancel
+    }
+
+    func cancel() {
+        onCancel()
+    }
+}
+
+/// Contract every browsable backend implements (local disk, iPhone/AFC, later
+/// ssh/ftp). URLs are the currency; the scheme identifies the backend so
+/// history and selection survive across sources. Listing is async-first; the
+/// two `*Sync` hooks exist so the local backend keeps its no-flicker inline
+/// load and its synchronous navigation gate.
+protocol FileSystemSource: AnyObject, Sendable {
+    var scheme: String { get }
+    var displayName: String { get }
+    var rootURL: URL { get }
+    var capabilities: SourceCapabilities { get }
+    func capabilities(at url: URL) -> SourceCapabilities
+
+    // Path algebra (pure, no I/O)
+    func canonicalize(_ url: URL) -> URL
+    func parent(of url: URL) -> URL?
+    func breadcrumb(for url: URL) -> [(name: String, url: URL)]
+
+    // Listing. Entries come back unfiltered and unsorted; hidden-file policy
+    // and sorting live in the manager so they behave identically everywhere.
+    func list(_ url: URL) async throws -> [SourceEntry]
+    func listSyncIfCheap(_ url: URL) throws -> [SourceEntry]?
+    func existsSync(_ url: URL) -> SourceExistence?
+    func stat(_ url: URL) async throws -> SourceEntry?
+
+    // Content transfer. `materialize` returns a readable file:// URL for
+    // previews/open-with: local returns the url itself, remote downloads to a
+    // cache. `download`/`upload` copy into a directory keeping the leaf name.
+    func materialize(_ url: URL) async throws -> URL
+    func download(_ url: URL, toDirectory dest: URL) async throws
+    func upload(localURL: URL, toDirectory dest: URL) async throws
+
+    // Mutations
+    func makeDirectory(at url: URL) async throws
+    func createFile(at url: URL) async throws
+    func move(_ url: URL, to dest: URL) async throws
+    func delete(_ url: URL) async throws
+    func setHidden(_ url: URL, hidden: Bool) async throws
+
+    // Optional capabilities (nil when unsupported)
+    func watch(_ url: URL, onEvent: @escaping @Sendable (SourceWatchEvent) -> Void) -> SourceWatchToken?
+    func recursiveEntries(at url: URL, includeHidden: Bool, skipDirectories: Set<String>) -> AsyncThrowingStream<SourceEntry, Error>?
+}
+
+extension FileSystemSource {
+    func capabilities(at url: URL) -> SourceCapabilities { capabilities }
+    func listSyncIfCheap(_ url: URL) throws -> [SourceEntry]? { nil }
+    func existsSync(_ url: URL) -> SourceExistence? { nil }
+    func watch(_ url: URL, onEvent: @escaping @Sendable (SourceWatchEvent) -> Void) -> SourceWatchToken? { nil }
+    func recursiveEntries(at url: URL, includeHidden: Bool, skipDirectories: Set<String>) -> AsyncThrowingStream<SourceEntry, Error>? { nil }
+}
+
+/// Resolves the backend for a URL by scheme. URLs are self-describing, so
+/// back/forward history and cross-source selections need no extra state.
+@MainActor
+final class SourceRegistry {
+    static let shared = SourceRegistry()
+
+    let local = LocalFileSource()
+    private var iphoneSources: [String: iPhoneFileSource] = [:]
+
+    func source(for url: URL) -> FileSystemSource {
+        switch url.scheme {
+        case nil, "file":
+            return local
+        case "iphone":
+            let udid = url.host ?? ""
+            if let existing = iphoneSources[udid] {
+                return existing
+            }
+            let name = iPhoneManager.shared.devices.first(where: { $0.id == udid })?.name ?? "iPhone"
+            let source = iPhoneFileSource(udid: udid, deviceName: name)
+            iphoneSources[udid] = source
+            return source
+        default:
+            // ssh:// / ftp:// adapters register here in later phases
+            return local
+        }
+    }
+}

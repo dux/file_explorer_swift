@@ -31,8 +31,15 @@ ZStack (bottom-aligned) {
 
 ## Models
 
+### FileSystemSource (`Models/Sources/FileSystemSource.swift`)
+The **generic backend contract** every browsable source implements: path algebra (canonicalize/parent/breadcrumb), listing (async `list` plus sync escape hatches `listSyncIfCheap`/`existsSync` for the local no-flicker path), content transfer (`materialize`/`download`/`upload`), mutations (mkdir/createFile/move/delete/setHidden), and optional capabilities (`watch` change stream, `recursiveEntries` search walk).
+`SourceCapabilities` gates UI actions per backend; `SourceRegistry` resolves the backend from the URL scheme (`file`, `iphone`, later `ssh`/`ftp`), so URLs are self-describing and history works across sources.
+
+- **LocalFileSource** (`Models/Sources/LocalFileSource.swift`) -- FileManager enumeration (with the Trash TCC `/bin/ls` fallback), kqueue directory watching, recursive search walk, breadcrumb roots (home, /Volumes), and local mutation primitives.
+- **iPhoneFileSource** (`Models/Sources/iPhoneFileSource.swift`) -- one instance per device over libimobiledevice. Virtual hierarchy: `iphone://<udid>/` lists file-sharing apps as folders (bundle id = path component, app name = displayName), deeper paths map to AFC `/Documents/...`. Context-explicit sync cores (list apps/dir, stat, download) are shared with iPhoneManager's transfer ops. Capabilities: write/rename/delete inside app Documents, read-only at the app level; `materialize` caches downloads keyed by size+mtime.
+
 ### FileExplorerManager (`Models/FileExplorerManager.swift`)
-The **central @MainActor ObservableObject**. Owns all navigation, file listing, search, and selection state.
+The **central @MainActor ObservableObject**. Owns all navigation, file listing, search, and selection state for ALL backends -- the same pane, keyboard nav, and selection work on local and iPhone (and future ssh/ftp) sources.
 
 **Key published state:**
 - `currentPath: URL` -- current directory
@@ -40,7 +47,7 @@ The **central @MainActor ObservableObject**. Owns all navigation, file listing, 
 - `allItems: [CachedFileInfo]` -- computed `directories + files`
 - `selectedItem: URL?`, `selectedIndex: Int` -- single item cursor
 - `sortMode: SortMode` (.type, .name, .modified) -- triggers `loadContents()` on change
-- `currentPane: MainPaneType` -- `.browser`, `.selection`, `.iphone`, `.colorTag(TagColor)`
+- `currentPane: MainPaneType` -- `.browser`, `.selection`, `.colorTag(TagColor)`
 - `browserViewMode: BrowserViewMode` -- `.files`, `.selected`
 - `showHidden`, `hiddenCount`, `hasImages`
 - `isSearching`, `searchQuery`, `searchResults`, `isSearchRunning`, `listCursorIndex`
@@ -49,8 +56,8 @@ The **central @MainActor ObservableObject**. Owns all navigation, file listing, 
 - `renamingItem`, `renameText`, `showAppSelectorForURL`
 
 **Key methods:**
-- `loadContents()` -- reads current directory via FileManager, splits into dirs/files, sorts, detects images/hidden count
-- `navigateTo(_ url)` -- validates path, pushes history, sets sort default for Downloads/Desktop, loads contents, restores selection memory
+- `loadContents()` -- lists the current directory through its `FileSystemSource` (sync fast path for cheap local listings, async otherwise), splits into dirs/files, sorts, detects images/hidden count
+- `navigateTo(_ url)` -- resolves the backend by URL scheme, validates (or navigates optimistically for remote sources), pushes history, sets sort default for Downloads/Desktop, loads contents, restores selection memory
 - `navigateUp()` -- remembers current folder in parent's selection memory, then navigates
 - `goBack()` / `goForward()` -- history-based navigation
 - `openItem(_ item)` -- directories: navigate; archives: extract; files: open with preferred app
@@ -89,7 +96,7 @@ All `@MainActor`:
 - **NpmPackageManager** -- detects `package.json`, provides npm link
 - **MovieManager** -- OMDB movie metadata + poster
 - **VolumesManager** -- monitors mounted volumes via NSWorkspace notifications
-- **iPhoneManager** -- iOS device detection, app listing, file browsing (`iPhoneManager.swift`), file operations (`iPhoneManagerFileOps.swift`)
+- **iPhoneManager** -- iOS device detection/scanning; context-explicit AFC transfer ops used by SelectionManager and iPhoneFileSource (`iPhoneManagerFileOps.swift`). Browsing itself goes through iPhoneFileSource + the main browser pane
 - **AppSearcher** -- finds apps that can open a file type
 - **AppUninstaller** -- finds leftover app data for cleanup
 - **FolderSizeCache** -- cached folder size calculations (own serial queue)
@@ -111,22 +118,22 @@ ContentView
   |
   +-- MainContentView
         +-- MainPane (switches on currentPane)
-        |     +-- .browser -> FileBrowserPane
+        |     +-- .browser -> FileBrowserPane (local AND remote sources, e.g. iphone://)
         |     |     +-- SelectionBar (green, when items selected)
         |     |     +-- ActionButtonBar (hidden toggle, search, sort, new)
         |     |     +-- SearchBar + SearchResultsView (when isSearching)
         |     |     +-- FileTreeView (primary file listing)
         |     |
         |     +-- .selection -> SelectionPane
-        |     +-- .iphone -> iPhoneBrowserPane
         |     +-- .colorTag(color) -> ColorTagView
         |
         +-- <draggable vertical divider>
         |
         +-- Right pane:
-              +-- ActionsPane (or iPhoneActionsPane)
+              +-- ActionsPane (actions capability-gated per source)
               +-- Preview area (when showPreviewPane):
                     MoviePreviewView / FolderGalleryPreview / PreviewPane
+                    (remote files preview via materialize-to-cache, <= 20 MB)
 ```
 
 ## Navigation System
@@ -186,6 +193,10 @@ app/
   FileExplorerApp.swift              -- @main entry, AppDelegate
   ContentView.swift                  -- Root layout, WindowAccessor
   Models/
+    Sources/
+      FileSystemSource.swift         -- Backend contract, capabilities, SourceRegistry
+      LocalFileSource.swift          -- Local disk backend (FileManager, kqueue watch)
+      iPhoneFileSource.swift         -- iPhone backend (libimobiledevice, virtual app tree)
     FileExplorerManager.swift        -- Central state manager
     FileExplorerManagerFileOps.swift  -- File operations extension
     FileExplorerManagerSearch.swift   -- Search & list cursor extension
@@ -199,8 +210,8 @@ app/
     NpmPackageManager.swift          -- npm package detection
     MovieManager.swift               -- OMDB movie info
     VolumesManager.swift             -- Mounted volumes
-    iPhoneManager.swift              -- iOS device detection, browsing
-    iPhoneManagerFileOps.swift       -- iPhone file download/upload/delete
+    iPhoneManager.swift              -- iOS device detection/scanning
+    iPhoneManagerFileOps.swift       -- Context-explicit iPhone transfer ops
     AppSearcher.swift                -- App discovery for "Open with"
     AppUninstaller.swift             -- App cleanup/uninstall
     FolderSizeCache.swift            -- Cached folder size calc
@@ -209,8 +220,7 @@ app/
     MainContentView.swift            -- Main layout, toolbar, dialogs
     KeyboardHandler.swift            -- KeyEventHandlingView, KeyCaptureView
     ShortcutsView.swift              -- Left sidebar
-    ActionsPane.swift                -- Right pane actions
-    iPhoneActionsPane.swift          -- iPhone-specific actions
+    ActionsPane.swift                -- Right pane actions (capability-gated)
     FileTreeView.swift               -- Tree/flat file listing (primary)
     FileTableView.swift              -- Table file listing (secondary)
     CustomContextMenu.swift          -- Right-click context menu system
@@ -232,7 +242,6 @@ app/
       MainPane.swift                 -- Pane switcher
       FileBrowserPane.swift          -- File browser with search
       SelectionPane.swift            -- Global selection view
-      iPhoneBrowserPane.swift        -- iPhone file browser
     Preview/
       PreviewPane.swift              -- Preview type detection & dispatch
       TextPreviewView.swift          -- Plain text

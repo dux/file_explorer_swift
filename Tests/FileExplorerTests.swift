@@ -54,10 +54,7 @@ struct EnumTests {
     func mainPaneTypeEquality() {
         let browser1 = MainPaneType.browser
         let browser2 = MainPaneType.browser
-        let iphone1 = MainPaneType.iphone
-        let iphone2 = MainPaneType.iphone
         #expect(browser1 == browser2)
-        #expect(iphone1 == iphone2)
         let tagRed1 = MainPaneType.colorTag(.red)
         let tagRed2 = MainPaneType.colorTag(.red)
         #expect(tagRed1 == tagRed2)

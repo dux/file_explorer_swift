@@ -14,70 +14,77 @@ extension FileExplorerManager {
         showNewFileDialog = true
     }
 
+    /// Run a source mutation, then reload and select `target` if it landed in
+    /// the folder on screen. Local sources complete without suspension, so the
+    /// op -> reload -> select ordering matches the old synchronous flow.
+    private func performMutation(
+        via source: FileSystemSource,
+        errorLabel: String,
+        selecting target: URL,
+        in destination: URL,
+        op: @escaping () async throws -> Void
+    ) {
+        Task { [weak self] in
+            do {
+                try await op()
+                self?.loadContents { [weak self] in
+                    guard let self else { return }
+                    if destination.path == self.currentPath.path {
+                        self.selectedItem = target
+                        if let index = self.allItems.firstIndex(where: { $0.url == target }) {
+                            self.selectedIndex = index
+                        }
+                    }
+                }
+            } catch {
+                ToastManager.shared.showError("\(errorLabel): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// First free name in `destination`; sources without a sync exists probe
+    /// (remote) use the name as-is and surface collisions as op errors.
+    private func uniqueName(_ makeName: (Int) -> String, in destination: URL, via source: FileSystemSource) -> URL {
+        var counter = 0
+        var url = destination.appendingPathComponent(makeName(counter))
+        while let existence = source.existsSync(url), existence != .missing {
+            counter += 1
+            url = destination.appendingPathComponent(makeName(counter))
+        }
+        return url
+    }
+
     func createNewFolder(named name: String? = nil) {
         let destination = newFolderTargetURL ?? currentPath
         newFolderTargetURL = nil
-        var folderName = name ?? "New Folder"
-        var counter = 1
-        var newFolderURL = destination.appendingPathComponent(folderName)
+        let source = SourceRegistry.shared.source(for: destination)
+        let base = name ?? "New Folder"
+        let newFolderURL = uniqueName({ $0 == 0 ? base : "\(base) \($0)" }, in: destination, via: source)
 
-        // Find unique name if exists
-        while fileManager.fileExists(atPath: newFolderURL.path) {
-            folderName = "\(name ?? "New Folder") \(counter)"
-            newFolderURL = destination.appendingPathComponent(folderName)
-            counter += 1
-        }
-
-        do {
-            try fileManager.createDirectory(at: newFolderURL, withIntermediateDirectories: false)
-            loadContents { [weak self] in
-                guard let self else { return }
-                // Select the new folder only if it lives in the current path
-                if destination.path == self.currentPath.path {
-                    self.selectedItem = newFolderURL
-                    if let index = self.allItems.firstIndex(where: { $0.url == newFolderURL }) {
-                        self.selectedIndex = index
-                    }
-                }
-            }
-        } catch {
-            ToastManager.shared.showError("Error creating folder: \(error.localizedDescription)")
+        performMutation(via: source, errorLabel: "Error creating folder", selecting: newFolderURL, in: destination) {
+            try await source.makeDirectory(at: newFolderURL)
         }
     }
 
     func createNewFile(named name: String? = nil) {
         let destination = newFileTargetURL ?? currentPath
         newFileTargetURL = nil
-        var fileName = name ?? "untitled.txt"
-        var counter = 1
-        var newFileURL = destination.appendingPathComponent(fileName)
-
-        // Find unique name if exists
+        let source = SourceRegistry.shared.source(for: destination)
+        let fileName = name ?? "untitled.txt"
         let baseName = (fileName as NSString).deletingPathExtension
         let ext = (fileName as NSString).pathExtension
-        while fileManager.fileExists(atPath: newFileURL.path) {
-            fileName = ext.isEmpty ? "\(baseName) \(counter)" : "\(baseName) \(counter).\(ext)"
-            newFileURL = destination.appendingPathComponent(fileName)
-            counter += 1
-        }
+        let newFileURL = uniqueName({ counter in
+            if counter == 0 { return fileName }
+            return ext.isEmpty ? "\(baseName) \(counter)" : "\(baseName) \(counter).\(ext)"
+        }, in: destination, via: source)
 
-        do {
-            try "".write(to: newFileURL, atomically: true, encoding: .utf8)
-            loadContents { [weak self] in
-                guard let self else { return }
-                if destination.path == self.currentPath.path {
-                    self.selectedItem = newFileURL
-                    if let index = self.allItems.firstIndex(where: { $0.url == newFileURL }) {
-                        self.selectedIndex = index
-                    }
-                }
-            }
-        } catch {
-            ToastManager.shared.showError("Error creating file: \(error.localizedDescription)")
+        performMutation(via: source, errorLabel: "Error creating file", selecting: newFileURL, in: destination) {
+            try await source.createFile(at: newFileURL)
         }
     }
 
     func duplicateFile(_ url: URL) {
+        guard url.isFileURL else { return }
         let baseName = url.deletingPathExtension().lastPathComponent
         let ext = url.pathExtension
         var newName = ext.isEmpty ? "\(baseName) copy" : "\(baseName) copy.\(ext)"
@@ -161,6 +168,7 @@ extension FileExplorerManager {
     }
 
     func addToZip(_ url: URL) {
+        guard url.isFileURL else { return }
         let values = try? url.resourceValues(forKeys: [.isDirectoryKey])
         let isDirectory = values?.isDirectory == true
         let baseName = isDirectory ? url.lastPathComponent : url.deletingPathExtension().lastPathComponent
@@ -305,6 +313,12 @@ extension FileExplorerManager {
     }
 
     func moveToTrash(_ url: URL) {
+        let source = SourceRegistry.shared.source(for: url)
+        guard source.capabilities.contains(.trash) else {
+            deletePermanently(url, via: source)
+            return
+        }
+
         // Check if we're deleting the current directory or an ancestor of it
         let isCurrentOrAncestor = currentPath.path == url.path ||
             currentPath.path.hasPrefix(url.path + "/")
@@ -312,7 +326,7 @@ extension FileExplorerManager {
         Task {
             let ok = await OperationManager.shared.run(title: "Moving to Trash") { () -> Bool in
                 do {
-                    try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                    try LocalFileSource.trashSync(url)
                     return true
                 } catch {
                     let msg = error.localizedDescription
@@ -333,6 +347,59 @@ extension FileExplorerManager {
                 loadContents()
             }
             ToastManager.shared.show("Moved to Trash")
+        }
+    }
+
+    /// Upload local files into a remote folder with transfer progress,
+    /// then refresh. Used by drag-drop and the context menu.
+    func uploadItems(_ localURLs: [URL], to destination: URL) {
+        let source = SourceRegistry.shared.source(for: destination)
+        guard source.capabilities(at: destination).contains(.write) else { return }
+
+        Task { [weak self] in
+            let progress = iPhoneTransferProgressManager.shared
+            progress.start(direction: .upload, total: localURLs.count)
+            var uploaded = 0
+            for url in localURLs {
+                if progress.isCancelled { break }
+                progress.update(file: url.lastPathComponent, completed: uploaded)
+                do {
+                    try await source.upload(localURL: url, toDirectory: destination)
+                    uploaded += 1
+                } catch {
+                    ToastManager.shared.showError("Failed to upload \(url.lastPathComponent)")
+                }
+            }
+            progress.finish()
+            if uploaded > 0 {
+                ToastManager.shared.show("Uploaded \(uploaded) item(s)")
+                self?.loadContents()
+            }
+        }
+    }
+
+    /// Delete on sources without a trash (remote backends). Permanent.
+    private func deletePermanently(_ url: URL, via source: FileSystemSource) {
+        guard source.capabilities(at: url).contains(.delete) else { return }
+        let selectedFileItem = cachedInfo(for: url).flatMap { FileItem.from(info: $0) }
+        let isCurrentOrAncestor = currentPath.path == url.path ||
+            currentPath.path.hasPrefix(url.path + "/")
+
+        Task { [weak self] in
+            do {
+                try await source.delete(url)
+                if let selectedFileItem, SelectionManager.shared.contains(selectedFileItem) {
+                    SelectionManager.shared.remove(selectedFileItem)
+                }
+                if isCurrentOrAncestor {
+                    self?.navigateToFolder(url.deletingLastPathComponent())
+                } else {
+                    self?.loadContents()
+                }
+                ToastManager.shared.show("Deleted")
+            } catch {
+                ToastManager.shared.showError(error.localizedDescription)
+            }
         }
     }
 
@@ -375,33 +442,34 @@ extension FileExplorerManager {
             return
         }
 
-        do {
-            try fileManager.moveItem(at: item, to: newURL)
-            // Update path in selection if it was selected
-            SelectionManager.shared.updateLocalPath(from: item.path, to: newURL.path)
-            cancelRename()
-            // Select the renamed item once the refreshed listing is in
-            loadContents { [weak self] in
-                guard let self else { return }
-                self.selectedItem = newURL
-                if let index = self.allItems.firstIndex(where: { $0.url == newURL }) {
-                    self.selectedIndex = index
+        let source = SourceRegistry.shared.source(for: item)
+        cancelRename()
+        Task { [weak self] in
+            do {
+                try await source.move(item, to: newURL)
+                // Update path in selection if it was selected
+                if item.isFileURL {
+                    SelectionManager.shared.updateLocalPath(from: item.path, to: newURL.path)
                 }
+                // Select the renamed item once the refreshed listing is in
+                self?.loadContents { [weak self] in
+                    guard let self else { return }
+                    self.selectedItem = newURL
+                    if let index = self.allItems.firstIndex(where: { $0.url == newURL }) {
+                        self.selectedIndex = index
+                    }
+                }
+            } catch {
+                ToastManager.shared.showError("Error renaming: \(error.localizedDescription)")
             }
-        } catch {
-            ToastManager.shared.showError("Error renaming: \(error.localizedDescription)")
-            cancelRename()
         }
     }
 
     func toggleHidden(_ url: URL) {
+        guard SourceRegistry.shared.source(for: url).capabilities.contains(.hiddenToggle) else { return }
         do {
-            let resourceValues = try url.resourceValues(forKeys: [.isHiddenKey])
-            let isCurrentlyHidden = resourceValues.isHidden ?? url.lastPathComponent.hasPrefix(".")
-            var newValues = URLResourceValues()
-            newValues.isHidden = !isCurrentlyHidden
-            var mutableURL = url
-            try mutableURL.setResourceValues(newValues)
+            let isCurrentlyHidden = LocalFileSource.isHiddenSync(url)
+            try LocalFileSource.setHiddenSync(url, hidden: !isCurrentlyHidden)
             loadContents { [weak self] in
                 guard let self else { return }
                 self.selectedItem = url

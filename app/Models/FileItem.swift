@@ -60,6 +60,31 @@ struct FileItem: Identifiable, Hashable {
         )
     }
 
+    /// Build from a browser listing row, dispatching on the URL scheme.
+    /// Local falls back to a disk stat (fromLocal); iPhone reconstructs the
+    /// AFC context from the virtual URL.
+    @MainActor
+    static func from(info: CachedFileInfo) -> Self? {
+        switch info.url.scheme {
+        case nil, "file":
+            return fromLocal(info.url)
+        case "iphone":
+            guard let udid = info.url.host,
+                  let (bundleId, afcPath) = iPhoneFileSource.afcContext(for: info.url) else { return nil }
+            let source = SourceRegistry.shared.source(for: info.url) as? iPhoneFileSource
+            let file = iPhoneFile(
+                name: info.name,
+                path: afcPath,
+                isDirectory: info.isDirectory,
+                size: info.size,
+                modifiedDate: info.modDate
+            )
+            return fromIPhone(file, deviceId: udid, appId: bundleId, appName: source?.appName(for: bundleId) ?? bundleId)
+        default:
+            return nil
+        }
+    }
+
     // Create from iPhone file
     static func fromIPhone(_ file: iPhoneFile, deviceId: String, appId: String, appName: String) -> Self {
         return Self(
@@ -140,6 +165,18 @@ class SelectionManager: ObservableObject {
     func addIPhone(_ file: iPhoneFile, deviceId: String, appId: String, appName: String) {
         let item = FileItem.fromIPhone(file, deviceId: deviceId, appId: appId, appName: appName)
         add(item)
+    }
+
+    /// Batch add without per-item toasts. Returns count of newly added items.
+    func addItems(_ newItems: [FileItem]) -> Int {
+        var added = 0
+        for item in newItems where items.insert(item).inserted {
+            added += 1
+        }
+        if added > 0 {
+            version += 1
+        }
+        return added
     }
 
     func remove(_ item: FileItem) {

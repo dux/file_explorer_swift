@@ -291,29 +291,39 @@ struct SelectionBar: View {
 
                     Spacer()
 
+                    let destIsLocal = manager.currentPath.isFileURL
                     if !localItems.isEmpty {
-                        SelectionBarButton(title: "Copy to", icon: "doc.on.doc", color: .blue) {
-                            let items = selection.localItems.compactMap { item in
-                                item.localURL.map { (name: item.name, url: $0) }
+                        if destIsLocal {
+                            SelectionBarButton(title: "Copy to", icon: "doc.on.doc", color: .blue) {
+                                let items = selection.localItems.compactMap { item in
+                                    item.localURL.map { (name: item.name, url: $0) }
+                                }
+                                let dest = manager.currentPath
+                                selection.clear()
+                                Task {
+                                    let count = await CopyProgressManager.shared.copyItems(items, to: dest)
+                                    ToastManager.shared.show("Copied \(count) item(s)")
+                                    manager.refresh()
+                                }
                             }
-                            let dest = manager.currentPath
-                            selection.clear()
-                            Task {
-                                let count = await CopyProgressManager.shared.copyItems(items, to: dest)
-                                ToastManager.shared.show("Copied \(count) item(s)")
-                                manager.refresh()
+                            SelectionBarButton(title: "Move to", icon: "folder", color: .orange) {
+                                let items = selection.localItems.compactMap { item in
+                                    item.localURL.map { (name: item.name, url: $0) }
+                                }
+                                let dest = manager.currentPath
+                                selection.clear()
+                                Task {
+                                    let count = await selection.moveItems(items, to: dest)
+                                    ToastManager.shared.show("Moved \(count) file(s)")
+                                    manager.refresh()
+                                }
                             }
-                        }
-                        SelectionBarButton(title: "Move to", icon: "folder", color: .orange) {
-                            let items = selection.localItems.compactMap { item in
-                                item.localURL.map { (name: item.name, url: $0) }
-                            }
-                            let dest = manager.currentPath
-                            selection.clear()
-                            Task {
-                                let count = await selection.moveItems(items, to: dest)
-                                ToastManager.shared.show("Moved \(count) file(s)")
-                                manager.refresh()
+                        } else if manager.currentSource.capabilities(at: manager.currentPath).contains(.write) {
+                            SelectionBarButton(title: "Upload", icon: "square.and.arrow.up", color: .blue) {
+                                let urls = selection.localItems.compactMap { $0.localURL }
+                                let dest = manager.currentPath
+                                selection.clear()
+                                manager.uploadItems(urls, to: dest)
                             }
                         }
                         SelectionBarButton(title: "Trash", icon: "trash", color: .red) {
@@ -327,7 +337,7 @@ struct SelectionBar: View {
                         }
                     }
 
-                    if !iPhoneItems.isEmpty {
+                    if !iPhoneItems.isEmpty && destIsLocal {
                         SelectionBarButton(title: "Download", icon: "arrow.down.doc", color: .pink) {
                             Task {
                                 let count = await selection.downloadIPhoneItems(to: manager.currentPath, move: false)
@@ -498,16 +508,19 @@ struct SelectedFilesView: View {
             } else {
                 // Action buttons
                 VStack(spacing: 8) {
+                    let destIsLocal = manager.currentPath.isFileURL
                     if !localItems.isEmpty {
                         HStack(spacing: 8) {
                             Text("Local (\(localItems.count)):")
                                 .textStyle(.small)
                                 .foregroundColor(.secondary)
-                            SelectionActionButton(title: "Copy to", icon: "doc.on.doc", color: .blue) {
-                                copyLocalFilesHere()
-                            }
-                            SelectionActionButton(title: "Move to", icon: "folder", color: .orange) {
-                                moveLocalFilesHere()
+                            if destIsLocal {
+                                SelectionActionButton(title: "Copy to", icon: "doc.on.doc", color: .blue) {
+                                    copyLocalFilesHere()
+                                }
+                                SelectionActionButton(title: "Move to", icon: "folder", color: .orange) {
+                                    moveLocalFilesHere()
+                                }
                             }
                             SelectionActionButton(title: "Trash", icon: "trash", color: .red) {
                                 isPermanentDelete = false
@@ -522,8 +535,10 @@ struct SelectedFilesView: View {
                             Text("iPhone (\(iPhoneItems.count)):")
                                 .textStyle(.small)
                                 .foregroundColor(.pink)
-                            SelectionActionButton(title: "Download here", icon: "arrow.down.doc", color: .blue) {
-                                Task { await downloadiPhoneFilesHere() }
+                            if destIsLocal {
+                                SelectionActionButton(title: "Download here", icon: "arrow.down.doc", color: .blue) {
+                                    Task { await downloadiPhoneFilesHere() }
+                                }
                             }
                             SelectionActionButton(title: "Delete", icon: "trash", color: .red) {
                                 Task { await deleteiPhoneFiles() }

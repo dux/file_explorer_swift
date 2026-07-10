@@ -167,9 +167,9 @@ class KeyCaptureView: NSView {
         }
 
         if let item = manager.selectedItem {
-            var isDirectory: ObjCBool = false
-            FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory)
-            if isDirectory.boolValue {
+            let isDirectory = manager.cachedInfo(for: item)?.isDirectory
+                ?? (SourceRegistry.shared.source(for: item).existsSync(item) == .directory)
+            if isDirectory {
                 manager.navigateTo(item)
             } else {
                 manager.openFileWithPreferredApp(item)
@@ -323,9 +323,7 @@ class KeyCaptureView: NSView {
             manager.toggleGlobalSelection()
             return true
         case 36:
-            if manager.currentPane == .iphone {
-                iPhoneManager.shared.startRename()
-            } else if manager.selectedItem != nil {
+            if manager.selectedItem != nil {
                 manager.startRename()
             }
             return true
@@ -401,9 +399,9 @@ class KeyCaptureView: NSView {
     private func navigateIntoSelectedDirectoryIfNeeded(_ manager: FileExplorerManager) {
         guard let item = manager.selectedItem else { return }
 
-        var isDirectory: ObjCBool = false
-        FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory)
-        guard isDirectory.boolValue else { return }
+        let isDirectory = manager.cachedInfo(for: item)?.isDirectory
+            ?? (SourceRegistry.shared.source(for: item).existsSync(item) == .directory)
+        guard isDirectory else { return }
 
         manager.navigateTo(item) {
             manager.restoreSelection()

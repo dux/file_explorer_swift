@@ -230,10 +230,7 @@ struct ShortcutRow: View {
             if isApplicationsRow && (isSelected || isShowingLocalApps) {
                 Button(action: {
                     let localApps = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")
-                    if manager.currentPane == .iphone {
-                        iPhoneManager.shared.currentDevice = nil
-                        manager.currentPane = .browser
-                    }
+                    manager.currentPane = .browser
                     manager.navigateToFolder(localApps)
                 }) {
                     Text("local")
@@ -273,9 +270,6 @@ struct ShortcutRow: View {
         .onTapGesture {
             // Switch to browser if in non-browser mode
             if manager.currentPane != .browser {
-                if manager.currentPane == .iphone {
-                    iPhoneManager.shared.currentDevice = nil
-                }
                 manager.currentPane = .browser
             }
             manager.navigateToFolder(item.url)
@@ -387,9 +381,6 @@ struct DraggableShortcutRow: View {
         }
         .onTapGesture {
             if manager.currentPane != .browser {
-                if manager.currentPane == .iphone {
-                    iPhoneManager.shared.currentDevice = nil
-                }
                 manager.currentPane = .browser
             }
             manager.navigateToFolder(item.url)
@@ -436,7 +427,7 @@ struct iPhoneRow: View {
     @State private var isLoading = false
 
     private var isSelected: Bool {
-        deviceManager.currentDevice?.id == device.id
+        manager.currentPath.scheme == "iphone" && manager.currentPath.host == device.id
     }
 
     var body: some View {
@@ -453,7 +444,7 @@ struct iPhoneRow: View {
 
             Spacer()
 
-            if isLoading || deviceManager.isLoadingFiles && isSelected {
+            if isLoading || manager.isLoadingDirectory && isSelected {
                 ProgressView()
                     .scaleEffect(0.5)
                     .frame(width: 16, height: 16)
@@ -470,12 +461,9 @@ struct iPhoneRow: View {
             isHovered = hovering
         }
         .onTapGesture {
-            Task {
-                isLoading = true
-                await deviceManager.selectDevice(device)
-                manager.currentPane = .iphone
-                isLoading = false
-            }
+            // Browse the device through the shared browser pane
+            guard let url = URL(string: "iphone://\(device.id)/") else { return }
+            manager.navigateToFolder(url)
         }
     }
 }
@@ -488,7 +476,7 @@ struct VolumeRow: View {
     @State private var isHovered = false
 
     private var isSelected: Bool {
-        manager.currentPath.path.hasPrefix(volume.url.path)
+        manager.currentPath.isFileURL && manager.currentPath.path.hasPrefix(volume.url.path)
     }
 
     private var isFocused: Bool {
@@ -538,9 +526,6 @@ struct VolumeRow: View {
         }
         .onTapGesture {
             if manager.currentPane != .browser {
-                if manager.currentPane == .iphone {
-                    iPhoneManager.shared.currentDevice = nil
-                }
                 manager.currentPane = .browser
             }
             manager.navigateToFolder(volume.url)

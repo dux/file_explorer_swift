@@ -52,29 +52,8 @@ struct FileTreeView: View {
 
     private let rowHeight: CGFloat = 32   // icon 22 + vertical padding 10
 
-    private static let home = FileManager.default.homeDirectoryForCurrentUser
-
     private var ancestors: [(name: String, url: URL)] {
-        var components: [(String, URL)] = []
-        var current = manager.currentPath
-
-        while current.path != "/" && !current.path.isEmpty {
-            if current.path == Self.home.path {
-                components.insert((current.lastPathComponent, current), at: 0)
-                return components
-            }
-            // Stop at volume mount points (e.g. /Volumes/KINGSTON)
-            let parent = current.deletingLastPathComponent()
-            if parent.path == "/Volumes" {
-                components.insert((current.lastPathComponent, current), at: 0)
-                return components
-            }
-            components.insert((current.lastPathComponent, current), at: 0)
-            current = parent
-        }
-        components.insert(("Root", URL(fileURLWithPath: "/")), at: 0)
-
-        return components
+        manager.currentSource.breadcrumb(for: manager.currentPath)
     }
 
     // Indent per level in points
@@ -210,6 +189,16 @@ struct FileTreeView: View {
 
     private func handleDrop(providers: [NSItemProvider]) {
         let currentPath = manager.currentPath
+
+        // Remote folder on screen: dropped local files upload to the source
+        guard currentPath.isFileURL else {
+            collectDropURLs(from: providers) { uniqueURLs in
+                let localURLs = uniqueURLs.filter { $0.isFileURL }
+                guard !localURLs.isEmpty else { return }
+                manager.uploadItems(localURLs, to: currentPath)
+            }
+            return
+        }
 
         if ArchiveDragSession.shared.handleDrop(to: currentPath, onComplete: { manager.refresh() }) {
             return
@@ -386,7 +375,7 @@ struct AncestorRow: View {
 
     private var isInSelection: Bool {
         let _ = selection.version
-        return selection.items.contains { $0.localURL == url }
+        return manager.isInSelection(url)
     }
 
     private var isPinned: Bool {
@@ -479,7 +468,7 @@ struct FileTreeRow: View {
 
     private var isInSelection: Bool {
         let _ = selection.version
-        return selection.items.contains { $0.localURL == url }
+        return manager.isInSelection(url)
     }
 
     private var isHidden: Bool { fileInfo.isHidden }
@@ -489,6 +478,7 @@ struct FileTreeRow: View {
     }
 
     private var fileColors: [TagColor] {
+        guard url.isFileURL else { return [] }
         let _ = tagManager.version
         return tagManager.colorsForFile(url)
     }
@@ -546,7 +536,7 @@ struct FileTreeRow: View {
                     .frame(width: 22, height: 22)
             }
 
-            Text(url.lastPathComponent)
+            Text(fileInfo.name)
                 .textStyle(.default)
                 .lineLimit(1)
                 .foregroundColor(.primary)
@@ -592,13 +582,14 @@ struct FileTreeRow: View {
         .customContextMenu(url: url)
     }
 
-    // Dragging a row that is part of the green selection drags the whole selection
+    // Dragging a row that is part of the green selection drags the whole
+    // selection. Remote rows have no file URL to promise, so they don't drag.
     private var dragURLs: [URL] {
         if isInSelection {
             let urls = selection.sortedItems.compactMap { $0.localURL }
             if !urls.isEmpty { return urls }
         }
-        return [url]
+        return url.isFileURL ? [url] : []
     }
 
     private func handleClick(at point: CGPoint, clickCount: Int, modifiers: NSEvent.ModifierFlags) {

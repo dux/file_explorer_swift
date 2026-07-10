@@ -147,6 +147,61 @@ struct PreviewPane: View {
     var manager: FileExplorerManager?
 
     var body: some View {
+        if url.isFileURL {
+            LocalPreviewContent(url: url, manager: manager)
+        } else {
+            RemotePreviewPane(url: url, manager: manager)
+        }
+    }
+}
+
+/// Downloads a remote file to the source cache, then previews the local copy
+/// with the unchanged preview machinery. Skips files over the size cap.
+struct RemotePreviewPane: View {
+    let url: URL
+    var manager: FileExplorerManager?
+    @State private var localURL: URL?
+    @State private var failed = false
+
+    private static let maxPreviewBytes: Int64 = 20 * 1024 * 1024
+
+    var body: some View {
+        Group {
+            if let localURL {
+                LocalPreviewContent(url: localURL, manager: manager)
+            } else if failed {
+                NoPreviewView(url: url)
+            } else {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Downloading preview...")
+                        .textStyle(.buttons)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task(id: url) {
+            localURL = nil
+            failed = false
+            if let size = manager?.cachedInfo(for: url)?.size, size > Self.maxPreviewBytes {
+                failed = true
+                return
+            }
+            do {
+                localURL = try await SourceRegistry.shared.source(for: url).materialize(url)
+            } catch {
+                failed = true
+            }
+        }
+    }
+}
+
+private struct LocalPreviewContent: View {
+    let url: URL
+    var manager: FileExplorerManager?
+
+    var body: some View {
         let previewType = PreviewType.detect(for: url)
 
         switch previewType {

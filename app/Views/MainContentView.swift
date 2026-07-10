@@ -62,7 +62,14 @@ enum PreviewKind: Equatable {
 
 private let previewImageExtensions = FileExtensions.images
 
-func detectPreviewKind(for url: URL) -> PreviewKind {
+func detectPreviewKind(for url: URL, isDirectoryHint: Bool? = nil) -> PreviewKind {
+    guard url.isFileURL else {
+        // Remote: no folder previews; files preview via a downloaded local copy
+        if isDirectoryHint == true { return .none }
+        if MovieManager.videoExtensions.contains(url.pathExtension.lowercased()) { return .none }
+        return .standard
+    }
+
     var isDir: ObjCBool = false
     guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else { return .none }
 
@@ -137,13 +144,9 @@ struct MainContentView: View {
                     )
 
                 VStack(spacing: 0) {
-                    if manager.currentPane == .iphone {
-                        iPhoneActionsPane(manager: manager)
-                    } else {
-                        ActionsPane(manager: manager)
-                    }
+                    ActionsPane(manager: manager)
 
-                    if settings.showPreviewPane && manager.currentPane != .iphone {
+                    if settings.showPreviewPane {
                         if let selected = manager.selectedItem {
                             switch previewKind {
                             case .movie:
@@ -187,8 +190,9 @@ struct MainContentView: View {
                         return
                     }
                     let u = url
+                    let dirHint = manager.cachedInfo(for: url)?.isDirectory
                     let kind = await Task.detached(priority: .userInitiated) {
-                        detectPreviewKind(for: u)
+                        detectPreviewKind(for: u, isDirectoryHint: dirHint)
                     }.value
                     if !Task.isCancelled {
                         previewKind = kind
@@ -217,6 +221,7 @@ struct RenameDialog: View {
 
     private var isDirectory: Bool {
         guard let item = manager.renamingItem else { return false }
+        if let info = manager.cachedInfo(for: item) { return info.isDirectory }
         var isDir: ObjCBool = false
         FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir)
         return isDir.boolValue
