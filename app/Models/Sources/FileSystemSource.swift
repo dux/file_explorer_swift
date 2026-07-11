@@ -124,10 +124,11 @@ final class SourceRegistry {
 
     let local = LocalFileSource()
     private var iphoneSources: [String: iPhoneFileSource] = [:]
+    private var sshSources: [String: SSHFileSource] = [:]
 
     func source(for url: URL) -> FileSystemSource {
         switch url.scheme {
-        case nil, "file":
+        case nil, "file", "smb":
             return local
         case "iphone":
             let udid = url.host ?? ""
@@ -138,8 +139,16 @@ final class SourceRegistry {
             let source = iPhoneFileSource(udid: udid, deviceName: name)
             iphoneSources[udid] = source
             return source
+        case "ssh", "sftp":
+            let spec = SSHConnection.Spec(url: url)
+            if let existing = sshSources[spec.cacheKey] {
+                return existing
+            }
+            let source = SSHFileSource(spec: spec)
+            sshSources[spec.cacheKey] = source
+            return source
         default:
-            // ssh:// / ftp:// adapters register here in later phases
+            // ftp:// adapter registers here in a later phase
             return local
         }
     }
