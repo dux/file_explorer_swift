@@ -21,9 +21,17 @@ let package = Package(
                 .brew(["libimobiledevice"])
             ]
         ),
+        .systemLibrary(
+            name: "CLibssh2",
+            path: "CLibssh2",
+            pkgConfig: "libssh2",
+            providers: [
+                .brew(["libssh2"])
+            ]
+        ),
         .executableTarget(
             name: "FileExplorer",
-            dependencies: ["CiMobileDevice"],
+            dependencies: ["CiMobileDevice", "CLibssh2"],
             path: "app",
             exclude: ["Info.plist"],
             resources: [
@@ -32,6 +40,9 @@ let package = Package(
                 .copy("Resources/AppIcon.svg"),
                 .copy("Resources/build-commit.txt"),
                 .copy("Resources/marked.min.js")
+            ],
+            linkerSettings: [
+                .linkedFramework("NetFS")
             ]
         ),
         .testTarget(

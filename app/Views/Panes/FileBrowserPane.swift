@@ -418,6 +418,8 @@ struct SelectionBarItem: View {
             return item.isDirectory ? "folder.fill" : "doc.fill"
         case .iPhone:
             return "iphone"
+        case .remote:
+            return item.isDirectory ? "folder.fill" : "network"
         }
     }
 
@@ -427,6 +429,8 @@ struct SelectionBarItem: View {
             return item.isDirectory ? .blue : .secondary
         case .iPhone:
             return .pink
+        case .remote:
+            return .purple
         }
     }
 
@@ -690,6 +694,8 @@ struct SelectedItemRow: View {
             return item.isDirectory ? "folder.fill" : "doc.fill"
         case .iPhone:
             return "iphone"
+        case .remote:
+            return item.isDirectory ? "folder.fill" : "network"
         }
     }
 
@@ -699,6 +705,8 @@ struct SelectedItemRow: View {
             return item.isDirectory ? .blue : .secondary
         case .iPhone:
             return .pink
+        case .remote:
+            return .purple
         }
     }
 

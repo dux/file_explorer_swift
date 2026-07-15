@@ -1,8 +1,6 @@
 import Foundation
 
-/// One entry of a directory listing, backend-neutral. `displayName` overrides
-/// `url.lastPathComponent` for virtual folders (e.g. iPhone apps shown by name
-/// while the path component is the bundle id).
+// SourceEntry + FileSystemSource protocol + registry
 struct SourceEntry: Sendable {
     let url: URL
     let displayName: String?
@@ -128,7 +126,7 @@ final class SourceRegistry {
 
     func source(for url: URL) -> FileSystemSource {
         switch url.scheme {
-        case nil, "file", "smb":
+        case nil, "file", "smb", "ftp":
             return local
         case "iphone":
             let udid = url.host ?? ""
@@ -148,7 +146,6 @@ final class SourceRegistry {
             sshSources[spec.cacheKey] = source
             return source
         default:
-            // ftp:// adapter registers here in a later phase
             return local
         }
     }

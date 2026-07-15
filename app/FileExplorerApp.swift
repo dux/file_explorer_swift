@@ -36,6 +36,13 @@ struct FileExplorerApp: App {
     }
 
     static func resolvePathArgument(_ path: String) {
+        // Remote source URLs (e.g. ssh://root@host/var/log) navigate directly
+        if path.contains("://"), let url = URL(string: path), url.scheme == "ssh" || url.scheme == "sftp" {
+            Self.initialPath = url
+            Self.initialFile = nil
+            return
+        }
+
         var isDirectory: ObjCBool = false
         let resolvedPath: String
 

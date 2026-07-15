@@ -9,6 +9,7 @@ struct VolumeInfo: Identifiable, Equatable {
     let isEjectable: Bool
     let totalCapacity: Int64
     let availableCapacity: Int64
+    let remoteURL: URL?
 
     var id: String { url.path }
 
@@ -99,7 +100,8 @@ class VolumesManager: ObservableObject {
                 isNetwork: isNetwork,
                 isEjectable: isEjectable,
                 totalCapacity: total,
-                availableCapacity: available
+                availableCapacity: available,
+                remoteURL: remountURL
             ))
         }
 

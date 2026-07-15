@@ -30,9 +30,10 @@ task :test do
 end
 
 task :build do
-  desc 'Lint, build, assemble .app bundle and install to /Applications'
+  desc 'Lint, test, build, assemble .app bundle and install to /Applications'
   proc do
     hammer :lint
+    hammer :test
     say "building #{APP_NAME}", :cyan
     sh 'git rev-parse HEAD > app/Resources/build-commit.txt'
     sh 'swift build'

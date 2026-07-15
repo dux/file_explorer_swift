@@ -427,6 +427,8 @@ struct SelectionFileRow: View {
             return parent
         case .iPhone(_, _, let appName):
             return "iPhone: \(appName)"
+        case .remote(let url):
+            return url.host ?? url.scheme ?? "Remote"
         }
     }
 
@@ -441,10 +443,15 @@ struct SelectionFileRow: View {
                         .interpolation(.high)
                         .frame(width: 16, height: 16)
                 }
-            } else {
+            } else if case .iPhone = item.source {
                 Image(systemName: "iphone")
                     .font(.system(size: 12))
                     .foregroundColor(.pink)
+                    .frame(width: 16, height: 16)
+            } else {
+                Image(systemName: item.isDirectory ? "folder.fill" : "network")
+                    .font(.system(size: 12))
+                    .foregroundColor(.purple)
                     .frame(width: 16, height: 16)
             }
 

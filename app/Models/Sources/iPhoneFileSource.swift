@@ -2,16 +2,7 @@ import Foundation
 import os
 import CiMobileDevice
 
-/// iPhone backend over libimobiledevice. One instance per connected device.
-///
-/// Virtual hierarchy so the shared browser renders everything:
-///   iphone://<udid>/                    -> file-sharing apps as folders
-///   iphone://<udid>/<bundleId>/         -> that app's /Documents root
-///   iphone://<udid>/<bundleId>/a/b.txt  -> AFC path /Documents/a/b.txt
-///
-/// Bundle ids are the path components; app display names travel as
-/// SourceEntry.displayName. Connections are per-call (house_arrest +
-/// AFC), same as the *FromContext ops in iPhoneManagerFileOps.
+// iPhone AFC backend (libimobiledevice)
 final class iPhoneFileSource: FileSystemSource {
     let scheme = "iphone"
     let udid: String

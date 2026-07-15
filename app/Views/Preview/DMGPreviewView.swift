@@ -47,6 +47,11 @@ struct DMGPreviewView: View {
     @State private var dmgInfo: DMGInfo?
     @State private var installingApp: String?
     @State private var installedApps: Set<String> = []
+    @State private var appPendingUninstall: DMGEntry?
+    @State private var mountedURL: URL?
+    @State private var loadID = UUID()
+    @State private var isVisible = false
+    @State private var reloadAfterOperation = false
 
     struct DMGInfo {
         let format: String
@@ -127,6 +132,12 @@ struct DMGPreviewView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(appName)
                                             .textStyle(.default, weight: .semibold)
+                                        Text("/Applications/\(app.name)")
+                                            .textStyle(.small)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                            .textSelection(.enabled)
                                         Text(app.displaySize)
                                             .textStyle(.small)
                                             .foregroundColor(.secondary)
@@ -139,7 +150,7 @@ struct DMGPreviewView: View {
 
                                 if isInstalled {
                                     Button(action: {
-                                        uninstallApp(app)
+                                        appPendingUninstall = app
                                     }) {
                                         HStack(spacing: 6) {
                                             Image(systemName: "trash")
@@ -154,6 +165,7 @@ struct DMGPreviewView: View {
                                         .cornerRadius(8)
                                     }
                                     .buttonStyle(.plain)
+                                    .disabled(installingApp != nil)
                                     .padding(.horizontal, 12)
                                     .padding(.bottom, 12)
                                 } else {
@@ -179,7 +191,7 @@ struct DMGPreviewView: View {
                                         .cornerRadius(8)
                                     }
                                     .buttonStyle(.plain)
-                                    .disabled(isInstalling)
+                                    .disabled(installingApp != nil)
                                     .padding(.horizontal, 12)
                                     .padding(.bottom, 12)
                                 }
@@ -227,20 +239,42 @@ struct DMGPreviewView: View {
             }
         }
         .onAppear {
-            checkAlreadyInstalled()
+            isVisible = true
             mountAndLoad()
         }
         .onChange(of: url) { _ in
             installedApps = []
-            installingApp = nil
-            checkAlreadyInstalled()
-            mountAndLoad()
+            if installingApp == nil {
+                unmount()
+                mountAndLoad()
+            } else {
+                loadID = UUID()
+                reloadAfterOperation = true
+                isLoading = true
+                entries = []
+            }
         }
-        .onDisappear { unmount() }
-    }
-
-    private func checkAlreadyInstalled() {
-        // Will be checked again after mount when we have entries
+        .onDisappear {
+            isVisible = false
+            if installingApp == nil {
+                unmount()
+            }
+        }
+        .alert("Move app to Trash?", isPresented: Binding(
+            get: { appPendingUninstall != nil },
+            set: { if !$0 { appPendingUninstall = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                appPendingUninstall = nil
+            }
+            Button("Move to Trash", role: .destructive) {
+                guard let app = appPendingUninstall else { return }
+                appPendingUninstall = nil
+                uninstallApp(app)
+            }
+        } message: {
+            Text("The installed app will be moved from Applications to Trash.")
+        }
     }
 
     private func installApp(_ app: DMGEntry) {
@@ -252,34 +286,47 @@ struct DMGPreviewView: View {
 
         Task.detached {
             let fm = FileManager.default
+            let stagingURL = destURL.deletingLastPathComponent()
+                .appendingPathComponent(".\(appName).install-\(UUID().uuidString)")
+            let backupURL = destURL.deletingLastPathComponent()
+                .appendingPathComponent(".\(appName).backup-\(UUID().uuidString)")
 
             do {
-                // Remove existing version if present
-                if fm.fileExists(atPath: destURL.path) {
-                    try fm.removeItem(at: destURL)
+                try fm.copyItem(at: srcURL, to: stagingURL)
+
+                let hadExistingApp = fm.fileExists(atPath: destURL.path)
+                if hadExistingApp {
+                    try fm.moveItem(at: destURL, to: backupURL)
                 }
 
-                // Copy app to /Applications
-                try fm.copyItem(at: srcURL, to: destURL)
+                do {
+                    try fm.moveItem(at: stagingURL, to: destURL)
+                } catch {
+                    if hadExistingApp, !fm.fileExists(atPath: destURL.path) {
+                        try? fm.moveItem(at: backupURL, to: destURL)
+                    }
+                    throw error
+                }
 
-                // Remove quarantine flag so macOS doesn't nag about "from internet"
-                let xattr = Process()
-                xattr.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
-                xattr.arguments = ["-dr", "com.apple.quarantine", destURL.path]
-                xattr.standardOutput = FileHandle.nullDevice
-                xattr.standardError = FileHandle.nullDevice
-                try xattr.run()
-                xattr.waitUntilExit()
+                if hadExistingApp {
+                    try? fm.removeItem(at: backupURL)
+                }
 
                 await MainActor.run {
                     installingApp = nil
                     installedApps.insert(appName)
                     ToastManager.shared.show("Installed \(appName.replacingOccurrences(of: ".app", with: "")) to Applications")
+                    finishOperation()
                 }
             } catch {
+                try? fm.removeItem(at: stagingURL)
+                if fm.fileExists(atPath: backupURL.path), !fm.fileExists(atPath: destURL.path) {
+                    try? fm.moveItem(at: backupURL, to: destURL)
+                }
                 await MainActor.run {
                     installingApp = nil
                     ToastManager.shared.showError("Install failed: \(error.localizedDescription)")
+                    finishOperation()
                 }
             }
         }
@@ -288,20 +335,25 @@ struct DMGPreviewView: View {
     private func uninstallApp(_ app: DMGEntry) {
         let appName = app.name
         let destURL = URL(fileURLWithPath: "/Applications/\(appName)")
+        installingApp = appName
 
         Task.detached {
             let fm = FileManager.default
             do {
                 if fm.fileExists(atPath: destURL.path) {
-                    try fm.removeItem(at: destURL)
+                    try fm.trashItem(at: destURL, resultingItemURL: nil)
                 }
                 await MainActor.run {
+                    installingApp = nil
                     installedApps.remove(appName)
-                    ToastManager.shared.show("Uninstalled \(appName.replacingOccurrences(of: ".app", with: "")) from Applications")
+                    ToastManager.shared.show("Moved \(appName.replacingOccurrences(of: ".app", with: "")) to Trash")
+                    finishOperation()
                 }
             } catch {
                 await MainActor.run {
+                    installingApp = nil
                     ToastManager.shared.showError("Uninstall failed: \(error.localizedDescription)")
+                    finishOperation()
                 }
             }
         }
@@ -314,10 +366,27 @@ struct DMGPreviewView: View {
         volumeName = nil
 
         let dmgURL = url
+        let currentLoadID = UUID()
+        loadID = currentLoadID
         Task.detached {
             let info = Self.getDMGInfo(for: dmgURL)
-            await MainActor.run { self.dmgInfo = info }
-            await self.mountDMG()
+            await MainActor.run {
+                guard loadID == currentLoadID, url == dmgURL else { return }
+                dmgInfo = info
+            }
+            await self.mountDMG(dmgURL: dmgURL, loadID: currentLoadID)
+        }
+    }
+
+    private func finishOperation() {
+        if reloadAfterOperation {
+            reloadAfterOperation = false
+            unmount()
+            if isVisible {
+                mountAndLoad()
+            }
+        } else if !isVisible {
+            unmount()
         }
     }
 
@@ -353,8 +422,7 @@ struct DMGPreviewView: View {
         return nil
     }
 
-    private func mountDMG() async {
-        let dmgURL = url
+    private func mountDMG(dmgURL: URL, loadID currentLoadID: UUID) async {
         guard let pathData = dmgURL.path.data(using: .utf8) else { return }
         let mountId = pathData.base64EncodedString()
             .replacingOccurrences(of: "/", with: "_")
@@ -366,7 +434,9 @@ struct DMGPreviewView: View {
         if let existingMount = DMGMountManager.shared.getMountPath(for: dmgURL),
            FileManager.default.fileExists(atPath: existingMount) {
             await MainActor.run {
+                guard loadID == currentLoadID, url == dmgURL else { return }
                 self.mountPath = existingMount
+                self.mountedURL = dmgURL
                 loadContents(from: existingMount)
             }
             return
@@ -403,6 +473,13 @@ struct DMGPreviewView: View {
             }
         }.value
 
+        guard loadID == currentLoadID, url == dmgURL else {
+            if result.status == 0 {
+                Self.detachMount(at: result.mountPoint)
+            }
+            return
+        }
+
         if result.status == 0 {
             var volName: String?
             if let plist = try? PropertyListSerialization.propertyList(from: result.data, format: nil) as? [String: Any],
@@ -416,6 +493,7 @@ struct DMGPreviewView: View {
             }
 
             self.mountPath = result.mountPoint
+            self.mountedURL = dmgURL
             self.volumeName = volName ?? dmgURL.deletingPathExtension().lastPathComponent
             DMGMountManager.shared.setMountPath(result.mountPoint, for: dmgURL)
             loadContents(from: result.mountPoint)
@@ -516,24 +594,27 @@ struct DMGPreviewView: View {
     }
 
     private func unmount() {
-        guard let path = mountPath else { return }
+        guard installingApp == nil, let path = mountPath, let mountedURL else { return }
 
-        DMGMountManager.shared.removeMountPath(for: url)
+        mountPath = nil
+        self.mountedURL = nil
+        DMGMountManager.shared.removeMountPath(for: mountedURL)
 
-        // Unmount in background
         DispatchQueue.global(qos: .utility).async {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
-            process.arguments = ["detach", path, "-quiet"]
-            process.standardOutput = FileHandle.nullDevice
-            process.standardError = FileHandle.nullDevice
-
-            try? process.run()
-            process.waitUntilExit()
-
-            // Clean up mount point directory
-            try? FileManager.default.removeItem(atPath: path)
+            Self.detachMount(at: path)
         }
+    }
+
+    nonisolated private static func detachMount(at path: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+        process.arguments = ["detach", path, "-quiet"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+
+        try? process.run()
+        process.waitUntilExit()
+        try? FileManager.default.removeItem(atPath: path)
     }
 }
 

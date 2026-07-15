@@ -1,12 +1,13 @@
 import Foundation
 
-/// Represents a file from any source (local filesystem or iPhone)
+/// Identifies the backend-specific location of a selected item.
 enum FileSource: Hashable {
     case local
     case iPhone(deviceId: String, appId: String, appName: String)
+    case remote(URL)
 }
 
-/// Unified file item that can represent local or iPhone files
+/// Unified representation of a selected file or folder from any backend.
 struct FileItem: Identifiable, Hashable {
     let id: String
     let name: String
@@ -22,6 +23,11 @@ struct FileItem: Identifiable, Hashable {
         return URL(fileURLWithPath: path)
     }
 
+    var remoteURL: URL? {
+        guard case .remote(let url) = source else { return nil }
+        return url
+    }
+
     // Display path
     var displayPath: String {
         switch source {
@@ -33,6 +39,8 @@ struct FileItem: Identifiable, Hashable {
             return path
         case .iPhone(_, _, let appName):
             return "iPhone: \(appName)\(path)"
+        case .remote(let url):
+            return url.absoluteString.removingPercentEncoding ?? url.absoluteString
         }
     }
 
@@ -81,8 +89,32 @@ struct FileItem: Identifiable, Hashable {
             )
             return fromIPhone(file, deviceId: udid, appId: bundleId, appName: source?.appName(for: bundleId) ?? bundleId)
         default:
-            return nil
+            return fromRemote(info)
         }
+    }
+
+    static func fromRemote(_ info: CachedFileInfo) -> Self {
+        Self(
+            id: info.url.absoluteString,
+            name: info.name,
+            path: info.url.path,
+            isDirectory: info.isDirectory,
+            size: info.size,
+            modifiedDate: info.modDate,
+            source: .remote(info.url)
+        )
+    }
+
+    static func fromRemoteFolder(_ url: URL) -> Self {
+        Self(
+            id: url.absoluteString,
+            name: url.lastPathComponent.isEmpty ? (url.host ?? url.absoluteString) : url.lastPathComponent,
+            path: url.path,
+            isDirectory: true,
+            size: 0,
+            modifiedDate: nil,
+            source: .remote(url)
+        )
     }
 
     // Create from iPhone file
@@ -130,6 +162,10 @@ class SelectionManager: ObservableObject {
 
     var iPhoneItems: [FileItem] {
         items.filter { if case .iPhone = $0.source { return true } else { return false } }
+    }
+
+    var remoteItems: [FileItem] {
+        items.filter { if case .remote = $0.source { return true } else { return false } }
     }
 
     func add(_ item: FileItem) {
@@ -201,6 +237,10 @@ class SelectionManager: ObservableObject {
         }
     }
 
+    func containsRemote(_ url: URL) -> Bool {
+        items.contains { $0.remoteURL == url }
+    }
+
     func toggle(_ item: FileItem) {
         if contains(item) {
             remove(item)
@@ -211,7 +251,7 @@ class SelectionManager: ObservableObject {
 
     func removeByPath(_ path: String) {
         let before = items.count
-        items = items.filter { $0.path != path }
+        items = items.filter { $0.path != path || $0.source != .local }
         if items.count != before {
             version += 1
         }

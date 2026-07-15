@@ -24,7 +24,7 @@ struct ComicPreviewView: View {
             } else if let error {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 32))
+                        .textStyle(.title)
                         .foregroundColor(.secondary)
                     Text(error)
                         .textStyle(.buttons)

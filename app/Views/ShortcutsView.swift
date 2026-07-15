@@ -5,9 +5,11 @@ struct ShortcutsView: View {
     @ObservedObject var shortcutsManager = ShortcutsManager.shared
     @ObservedObject var deviceManager = iPhoneManager.shared
     @ObservedObject var volumesManager = VolumesManager.shared
+    @ObservedObject var mountsManager = MountsManager.shared
     @ObservedObject var tagManager = ColorTagManager.shared
     @ObservedObject var folderIconManager = FolderIconManager.shared
     @ObservedObject var manager: FileExplorerManager
+    @State private var showConnectDialog = false
 
     var body: some View {
         let builtIn = shortcutsManager.allShortcuts.filter { $0.isBuiltIn }
@@ -60,12 +62,14 @@ struct ShortcutsView: View {
                         }
                     }
 
-                    if !volumesManager.volumes.isEmpty {
-                        SidebarSectionTitle(title: "Volumes")
+                    VolumesSectionTitle(showConnectDialog: $showConnectDialog)
 
-                        ForEach(Array(volumesManager.volumes.enumerated()), id: \.element.id) { idx, volume in
-                            VolumeRow(volume: volume, manager: manager, volumesManager: volumesManager, flatIndex: builtInCount + pinnedCount + idx)
-                        }
+                    ForEach(Array(volumesManager.volumes.enumerated()), id: \.element.id) { idx, volume in
+                        VolumeRow(volume: volume, manager: manager, volumesManager: volumesManager, flatIndex: builtInCount + pinnedCount + idx)
+                    }
+
+                    ForEach(mountsManager.disconnectedFavorites(mounted: volumesManager.volumes)) { favorite in
+                        FavoriteMountRow(favorite: favorite, manager: manager, mountsManager: mountsManager)
                     }
                 }
                 .padding(.horizontal, 8)
@@ -73,6 +77,9 @@ struct ShortcutsView: View {
             }
         }
         .background(Color(red: 0xfa / 255.0, green: 0xf9 / 255.0, blue: 0xf5 / 255.0))
+        .sheet(isPresented: $showConnectDialog) {
+            ConnectServerDialog(isPresented: $showConnectDialog, manager: manager)
+        }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers: providers)
             return true
@@ -472,8 +479,13 @@ struct VolumeRow: View {
     let volume: VolumeInfo
     @ObservedObject var manager: FileExplorerManager
     let volumesManager: VolumesManager
+    @ObservedObject var mountsManager = MountsManager.shared
     var flatIndex: Int = -1
     @State private var isHovered = false
+
+    private var isFavorite: Bool {
+        mountsManager.favorite(for: volume) != nil
+    }
 
     private var isSelected: Bool {
         manager.currentPath.isFileURL && manager.currentPath.path.hasPrefix(volume.url.path)
@@ -504,6 +516,16 @@ struct VolumeRow: View {
                     .lineLimit(1)
             }
 
+            if isHovered && volume.remoteURL != nil {
+                Button(action: { mountsManager.toggleFavorite(for: volume) }) {
+                    Image(systemName: isFavorite ? "pin.fill" : "pin")
+                        .font(.system(size: 10))
+                        .foregroundColor(isFavorite ? .orange : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help(isFavorite ? "Remove from favorites" : "Add to favorites")
+            }
+
             if isHovered && volume.isEjectable {
                 Button(action: { volumesManager.eject(volume) }) {
                     Image(systemName: "eject.fill")
@@ -529,6 +551,227 @@ struct VolumeRow: View {
                 manager.currentPane = .browser
             }
             manager.navigateToFolder(volume.url)
+        }
+    }
+}
+
+struct VolumesSectionTitle: View {
+    @Binding var showConnectDialog: Bool
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack {
+            Text("Volumes")
+                .textStyle(.title)
+
+            Spacer()
+
+            Button(action: { showConnectDialog = true }) {
+                Text("connect")
+                    .textStyle(.small, weight: .medium)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(isHovered ? Color.gray.opacity(0.15) : Color.gray.opacity(0.08))
+                    )
+            }
+            .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
+            .help("Connect to server (smb, afp, webdav)")
+        }
+        .padding(.leading, 38)
+        .padding(.trailing, 3)
+        .padding(.top, 22)
+        .padding(.bottom, 6)
+    }
+}
+
+struct FavoriteMountRow: View {
+    let favorite: FavoriteMount
+    @ObservedObject var manager: FileExplorerManager
+    @ObservedObject var mountsManager: MountsManager
+    @State private var isHovered = false
+
+    private var isConnecting: Bool {
+        mountsManager.connectingURLs.contains(favorite.urlString)
+    }
+
+    private var isSSH: Bool {
+        favorite.url?.scheme == "ssh"
+    }
+
+    private var isSelected: Bool {
+        isSSH && manager.currentPath.scheme == "ssh" && manager.currentPath.host == favorite.url?.host
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: isSSH ? "terminal" : "network")
+                .font(.system(size: 14))
+                .foregroundColor(isSelected ? Color.accentColor : .secondary)
+                .frame(width: 22, height: 22)
+
+            Text(favorite.name)
+                .textStyle(.default, weight: .semibold)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Spacer()
+
+            if isConnecting {
+                ProgressView()
+                    .scaleEffect(0.5)
+                    .frame(width: 16, height: 16)
+            } else if isHovered {
+                Text("connect")
+                    .textStyle(.small, weight: .medium)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.gray.opacity(0.12)))
+
+                Button(action: { mountsManager.removeFavorite(favorite) }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Remove from favorites")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 3)
+        .rowHighlight(isSelected: isSelected, isHovered: isHovered)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .onTapGesture {
+            connect()
+        }
+    }
+
+    private func connect() {
+        guard !isConnecting else { return }
+        Task {
+            guard let mountPoint = await mountsManager.connect(favorite.urlString) else { return }
+            if manager.currentPane != .browser {
+                manager.currentPane = .browser
+            }
+            manager.navigateToFolder(mountPoint)
+        }
+    }
+}
+
+struct ConnectServerDialog: View {
+    static let exampleURLs = [
+        "smb://host/share",
+        "ssh://user@host",
+        "http://host:3000/webdav",
+        "afp://host/share",
+        "ftp://host",
+        "nfs://host/export"
+    ]
+
+    @Binding var isPresented: Bool
+    @ObservedObject var manager: FileExplorerManager
+    @ObservedObject var mountsManager = MountsManager.shared
+    @State private var urlString = ""
+    @State private var addToFavorites = true
+    @State private var isConnecting = false
+    @FocusState private var urlFieldFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Image(systemName: "network")
+                    .font(.system(size: 24))
+                    .foregroundColor(.blue)
+                Text("Connect to Server")
+                    .textStyle(.default, weight: .semibold)
+                Spacer()
+            }
+
+            TextField("smb://host/share or ssh://user@host", text: $urlString)
+                .styledInput()
+                .focused($urlFieldFocused)
+                .onSubmit { connect() }
+
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(Self.exampleURLs, id: \.self) { example in
+                    Button(action: { urlString = example }) {
+                        Text(example)
+                            .textStyle(.small)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Toggle(isOn: $addToFavorites) {
+                Text("Add to favorites")
+                    .textStyle(.default)
+            }
+            .toggleStyle(.checkbox)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack {
+                Button("Cancel") {
+                    isPresented = false
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                if isConnecting {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 16, height: 16)
+                }
+
+                Button("Connect") {
+                    connect()
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(urlString.trimmingCharacters(in: .whitespaces).isEmpty || isConnecting)
+            }
+        }
+        .padding(20)
+        .frame(width: 340)
+        .onAppear {
+            DispatchQueue.main.async {
+                urlFieldFocused = true
+            }
+        }
+        .onExitCommand {
+            isPresented = false
+        }
+    }
+
+    private func connect() {
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !isConnecting else { return }
+        isConnecting = true
+        Task {
+            let resolved = MountsManager.resolveServerURLString(trimmed)
+            if let mountPoint = await mountsManager.connect(resolved) {
+                if addToFavorites {
+                    // ssh favorites are named by host; mounts by their volume folder
+                    let name = mountPoint.isFileURL ? mountPoint.lastPathComponent : (mountPoint.host ?? "server")
+                    mountsManager.addFavorite(name: name, urlString: resolved)
+                }
+                isPresented = false
+                if manager.currentPane != .browser {
+                    manager.currentPane = .browser
+                }
+                manager.navigateToFolder(mountPoint)
+            }
+            isConnecting = false
         }
     }
 }

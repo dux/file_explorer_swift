@@ -234,6 +234,7 @@ class FileExplorerManager: ObservableObject {
         let path = currentPath
         let mode = sortMode
         let source = currentSource
+        feTrace("loadContents path=\(path.absoluteString) source=\(type(of: source))")
         // For Trash folder, show all files including hidden
         let isTrash = path.lastPathComponent == ".Trash"
         let showAll = showHidden || isTrash
@@ -816,11 +817,14 @@ class FileExplorerManager: ObservableObject {
         if let info = cachedInfo(for: url) {
             return FileItem.from(info: info)
         }
+        if url == currentPath, !url.isFileURL {
+            return FileItem.fromRemoteFolder(url)
+        }
         guard url.scheme == nil || url.scheme == "file" else { return nil }
         return FileItem.fromLocal(url)
     }
 
-    // Add a file to global selection
+    // Add a listed file or folder URL to the global selection
     func addFileToSelection(_ url: URL) {
         if let item = fileItem(for: url) {
             selection.add(item)
@@ -889,7 +893,7 @@ class FileExplorerManager: ObservableObject {
                   let (bundleId, afcPath) = iPhoneFileSource.afcContext(for: url) else { return false }
             return selection.containsIPhone(path: afcPath, deviceId: udid, appId: bundleId)
         default:
-            return false
+            return selection.containsRemote(url)
         }
     }
 

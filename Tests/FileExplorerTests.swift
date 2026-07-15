@@ -187,6 +187,43 @@ struct FileItemTests {
         let item = makeIPhoneItem("f.txt", path: "/Documents/f.txt")
         #expect(item.displayPath == "iPhone: App/Documents/f.txt")
     }
+
+    @Test("remote folder preserves its URL and directory metadata")
+    @MainActor func remoteFolder() throws {
+        let url = try #require(URL(string: "ssh://user@example.com/var/log"))
+        let info = CachedFileInfo(
+            url: url,
+            isDirectory: true,
+            size: 0,
+            modDate: nil,
+            isHidden: false
+        )
+        let item = FileItem.from(info: info)
+
+        #expect(item?.remoteURL == url)
+        #expect(item?.isDirectory == true)
+        #expect(item?.id == url.absoluteString)
+    }
+
+    @Test("remote file preserves its URL and file metadata")
+    @MainActor func remoteFile() throws {
+        let url = try #require(URL(string: "ssh://user@example.com/var/log/app.log"))
+        let modifiedDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let info = CachedFileInfo(
+            url: url,
+            isDirectory: false,
+            size: 512,
+            modDate: modifiedDate,
+            isHidden: false
+        )
+        let item = FileItem.from(info: info)
+
+        #expect(item?.remoteURL == url)
+        #expect(item?.isDirectory == false)
+        #expect(item?.size == 512)
+        #expect(item?.modifiedDate == modifiedDate)
+        #expect(item?.id == url.absoluteString)
+    }
 }
 
 // MARK: - SelectionManager Tests
@@ -256,6 +293,87 @@ struct SelectionManagerTests {
         sel.add(makeLocalItem("x", path: "/tmp/x"))
         sel.removeByPath("/tmp/x")
         #expect(sel.isEmpty)
+    }
+
+    @Test("manager toggles listed remote files and folders in global selection")
+    @MainActor func toggleListedRemoteItems() throws {
+        let sel = SelectionManager.shared
+        sel.clear()
+        defer { sel.clear() }
+
+        let manager = FileExplorerManager()
+        let folderURL = try #require(URL(string: "ssh://user@example.com/var/log"))
+        let fileURL = try #require(URL(string: "ssh://user@example.com/var/log/app.log"))
+        manager.directories = [CachedFileInfo(
+            url: folderURL,
+            isDirectory: true,
+            size: 0,
+            modDate: nil,
+            isHidden: false
+        )]
+        manager.files = [CachedFileInfo(
+            url: fileURL,
+            isDirectory: false,
+            size: 512,
+            modDate: nil,
+            isHidden: false
+        )]
+
+        manager.toggleFileSelection(folderURL)
+        manager.toggleFileSelection(fileURL)
+
+        #expect(manager.isInSelection(folderURL))
+        #expect(manager.isInSelection(fileURL))
+        #expect(sel.remoteItems.count == 2)
+
+        manager.toggleFileSelection(fileURL)
+
+        #expect(manager.isInSelection(folderURL))
+        #expect(!manager.isInSelection(fileURL))
+    }
+
+    @Test("Space selection toggles the current remote folder")
+    @MainActor func toggleCurrentRemoteFolder() throws {
+        let sel = SelectionManager.shared
+        sel.clear()
+        defer { sel.clear() }
+
+        let manager = FileExplorerManager()
+        let url = try #require(URL(string: "ssh://user@example.com/var/log"))
+        manager.currentPath = url
+        manager.selectedItem = url
+
+        manager.toggleGlobalSelection()
+        #expect(manager.isInSelection(url))
+
+        manager.toggleGlobalSelection()
+        #expect(!manager.isInSelection(url))
+    }
+
+    @Test("removing a local path preserves a remote item with the same path")
+    @MainActor func removeLocalPathPreservesRemoteItem() throws {
+        let sel = SelectionManager.shared
+        sel.clear()
+        defer { sel.clear() }
+
+        let path = "/tmp/shared-name"
+        let remoteURL = try #require(URL(string: "ssh://user@example.com(path)"))
+        let remoteItem = FileItem.fromRemote(CachedFileInfo(
+            url: remoteURL,
+            isDirectory: false,
+            size: 0,
+            modDate: nil,
+            isHidden: false
+        ))
+        _ = sel.addItems([
+            makeLocalItem("shared-name", path: path),
+            remoteItem
+        ])
+
+        sel.removeByPath(path)
+
+        #expect(!sel.containsLocal(URL(fileURLWithPath: path)))
+        #expect(sel.containsRemote(remoteURL))
     }
 }
 

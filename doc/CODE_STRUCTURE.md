@@ -77,8 +77,10 @@ File operation methods: `createNewFolder()`, `createNewFile()`, `duplicateFile()
 Search methods: `startSearch()`, `cancelSearch()`, `performSearch()`, `executeSearch()`, `findFd()`. List cursor navigation: `listSelectNext()`, `listSelectPrevious()`, `listActivateItem()`.
 
 ### FileItem & SelectionManager (`Models/FileItem.swift`)
-- `FileItem` -- unified file representation with `id`, `name`, `path`, `isDirectory`, `size`, `modifiedDate`, `source` (`.local` or `.iPhone`).
-- `SelectionManager` -- **singleton** managing a `Set<FileItem>`. Tracks `version: Int` for change detection. Supports add/remove/toggle/clear, move/copy/delete, iPhone download/upload.
+* `FileItem` is a unified file representation with `id`, `name`, `path`, `isDirectory`, `size`, `modifiedDate`, and a local, iPhone, or generic remote source.
+* `SelectionManager` is a **singleton** managing a `Set<FileItem>`.
+  It tracks `version: Int` for change detection.
+  It supports add/remove/toggle/clear, move/copy/delete, and iPhone download/upload.
 
 ### CachedFileInfo (in FileExplorerManager.swift)
 Lightweight struct: `url`, `isDirectory`, `size`, `modDate`, `isHidden`. Display model for directory listings.
