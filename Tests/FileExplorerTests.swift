@@ -1293,6 +1293,38 @@ struct SearchDebounceTests {
         #expect(manager.searchResults.map(\.name) == ["design.psd", "design.jpg"])
         #expect(manager.selectedSearchExtension == nil)
     }
+
+    @Test("folders and apps are searchable and appear before files")
+    @MainActor func foldersAndAppsAppearBeforeFiles() async throws {
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory
+            .appendingPathComponent("search-items-\(UUID().uuidString)")
+        let folder = root.appendingPathComponent("Matching Folder")
+        let app = root.appendingPathComponent("Matching App.app")
+        let file = root.appendingPathComponent("Matching File.txt")
+
+        try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: app, withIntermediateDirectories: true)
+        try "match".write(to: file, atomically: true, encoding: .utf8)
+        defer { try? fileManager.removeItem(at: root) }
+
+        let manager = FileExplorerManager()
+        manager.currentPath = root
+        manager.startSearch(withQuery: "matching")
+
+        for _ in 0..<200 {
+            if !manager.isSearchRunning { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(!manager.isSearchRunning)
+        let names = manager.searchResults.map(\.name)
+        let folderIndex = try #require(names.firstIndex(of: folder.lastPathComponent))
+        let appIndex = try #require(names.firstIndex(of: app.lastPathComponent))
+        let fileIndex = try #require(names.firstIndex(of: file.lastPathComponent))
+        #expect(folderIndex < fileIndex)
+        #expect(appIndex < fileIndex)
+    }
 }
 
 // MARK: - ShortcutsManager Pin/Unpin Tests

@@ -192,11 +192,11 @@ struct SearchResultsView: View {
                     .font(.system(size: 32))
                     .foregroundColor(.secondary)
                 if manager.isSearchRunning {
-                    Text("Indexing files...")
+                    Text("Indexing items...")
                         .textStyle(.buttons)
                         .foregroundColor(.secondary)
                 } else if manager.searchQuery.isEmpty {
-                    Text("No files found")
+                    Text("No items found")
                         .textStyle(.buttons)
                         .foregroundColor(.secondary)
                 } else {
@@ -259,6 +259,7 @@ struct SearchResultRow: View {
                 lastClickTime = now
             }
         }
+        .customContextMenu(url: item.url)
     }
 }
 

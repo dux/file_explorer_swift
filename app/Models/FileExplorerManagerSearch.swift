@@ -98,7 +98,9 @@ extension FileExplorerManager {
     }
 
     func listActivateItem(url: URL, isDirectory: Bool) {
-        if isDirectory {
+        if isDirectory && url.isFileURL && url.pathExtension.lowercased() == "app" {
+            runApp(url)
+        } else if isDirectory {
             if isSearching { cancelSearch() }
             currentPane = .browser
             navigateTo(url)
@@ -140,11 +142,10 @@ extension FileExplorerManager {
             do {
                 for try await entry in stream {
                     guard !Task.isCancelled else { return }
-                    if entry.isDirectory { continue }
 
                     batch.append(CachedFileInfo(
                         url: entry.url,
-                        isDirectory: false,
+                        isDirectory: entry.isDirectory,
                         size: entry.size,
                         modDate: entry.modDate,
                         isHidden: entry.isHidden,
@@ -192,8 +193,11 @@ extension FileExplorerManager {
     private func applySearchFilters() {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         let extensionKey = selectedSearchExtension
-        var filtered: [CachedFileInfo] = []
-        filtered.reserveCapacity(min(searchAllItems.count, Self.maxVisibleSearchResults))
+        var directoryMatches: [CachedFileInfo] = []
+        var fileMatches: [CachedFileInfo] = []
+        let resultCapacity = min(searchAllItems.count, Self.maxVisibleSearchResults)
+        directoryMatches.reserveCapacity(resultCapacity)
+        fileMatches.reserveCapacity(resultCapacity)
 
         for item in searchAllItems {
             if let extensionKey, searchExtensionKey(for: item) != extensionKey {
@@ -202,13 +206,20 @@ extension FileExplorerManager {
             if !query.isEmpty && !matchesSearchQuery(item, query: query) {
                 continue
             }
-            filtered.append(item)
-            if filtered.count >= Self.maxVisibleSearchResults {
+
+            if item.isDirectory {
+                directoryMatches.append(item)
+            } else if fileMatches.count < Self.maxVisibleSearchResults {
+                fileMatches.append(item)
+            }
+
+            if directoryMatches.count >= Self.maxVisibleSearchResults {
                 break
             }
         }
 
-        searchResults = filtered
+        let remainingFileCount = Self.maxVisibleSearchResults - directoryMatches.count
+        searchResults = directoryMatches + fileMatches.prefix(remainingFileCount)
     }
 
     private func matchesSearchQuery(_ item: CachedFileInfo, query: String) -> Bool {

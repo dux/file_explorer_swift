@@ -61,7 +61,7 @@ The **central @MainActor ObservableObject**. Owns all navigation, file listing, 
 - `navigateUp()` -- remembers current folder in parent's selection memory, then navigates
 - `goBack()` / `goForward()` -- history-based navigation
 - `openItem(_ item)` -- directories: navigate; archives: extract; files: open with preferred app
-- `startSearch()` -- begins a background recursive file scan, skipping heavy folders such as `.git`, `node_modules`, `tmp`, build/cache directories
+- `startSearch()` -- begins a background recursive item scan, skipping heavy folders such as `.git`, `node_modules`, `tmp`, build/cache directories and listing matching folders and apps before files
 - `performSearch(_ query)` -- filters the in-memory search index by name/path and selected extension, showing up to 1,000 results
 - `selectNext()`, `selectPrevious()`, `jumpToLetter()`, `selectFirst()`, `selectLast()` -- keyboard nav
 - `addFileToSelection()`, `toggleFileSelection()`, `selectAllFiles()` -- delegates to `SelectionManager.shared`
