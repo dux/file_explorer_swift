@@ -1,9 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="100%" stop-color="#E8E8ED"/>
-    </linearGradient>
     <linearGradient id="folderBack" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#F0A030"/>
       <stop offset="100%" stop-color="#D08820"/>
@@ -24,8 +20,6 @@
       <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#000" flood-opacity="0.18"/>
     </filter>
   </defs>
-  <!-- Squircle background -->
-  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
   <!-- Folder group - scaled up to fill -->
   <g filter="url(#folderShadow)">
     <!-- Dark outline/shadow layer -->
