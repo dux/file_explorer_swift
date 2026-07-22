@@ -39,6 +39,18 @@ struct ComicPreviewView: View {
         .task(id: url) {
             await extractPages()
         }
+        .onDisappear { cleanupExtraction() }
+    }
+
+    // Extractions land in tmp under ComicPreview/<uuid>; drop the previous one
+    // so re-previews don't pile up full comic extractions for the session
+    private func cleanupExtraction() {
+        guard let firstPage = pages.first else { return }
+        let root = firstPage.deletingLastPathComponent()
+        pages = []
+        Task.detached(priority: .background) {
+            try? FileManager.default.removeItem(at: root)
+        }
     }
 
     private static let css = """
@@ -57,9 +69,9 @@ struct ComicPreviewView: View {
     }
 
     private func extractPages() async {
+        cleanupExtraction()
         isLoading = true
         error = nil
-        pages = []
 
         let archiveURL = url
         let result = await Task.detached(priority: .userInitiated) {
@@ -109,10 +121,12 @@ enum ComicExtractor {
             try process.run()
             process.waitUntilExit()
         } catch {
+            try? FileManager.default.removeItem(at: tempDir)
             return .failure(error)
         }
 
         guard let contents = try? FileManager.default.contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil) else {
+            try? FileManager.default.removeItem(at: tempDir)
             return .success(([], 0))
         }
 
@@ -122,6 +136,9 @@ enum ComicExtractor {
             $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
         }
 
+        if imageURLs.isEmpty {
+            try? FileManager.default.removeItem(at: tempDir)
+        }
         return .success((imageURLs, imageURLs.count))
     }
 }

@@ -383,23 +383,6 @@ class SelectionManager: ObservableObject {
         return await OperationManager.shared.run(title: "Moving to Trash") { trashURLs(urls) }
     }
 
-    /// Find a unique destination URL, appending " 2", " 3", etc. if needed
-    private func uniqueDestination(for name: String, in destination: URL) -> URL {
-        let fm = FileManager.default
-        var destURL = destination.appendingPathComponent(name)
-        guard fm.fileExists(atPath: destURL.path) else { return destURL }
-
-        let baseName = (name as NSString).deletingPathExtension
-        let ext = (name as NSString).pathExtension
-        var counter = 2
-        repeat {
-            let newName = ext.isEmpty ? "\(baseName) \(counter)" : "\(baseName) \(counter).\(ext)"
-            destURL = destination.appendingPathComponent(newName)
-            counter += 1
-        } while fm.fileExists(atPath: destURL.path)
-        return destURL
-    }
-
     /// Move local items to a local destination on a background thread (with the
     /// running indicator). `items` is captured by the caller so the selection can be
     /// cleared immediately, mirroring `CopyProgressManager.copyItems`.
@@ -411,16 +394,8 @@ class SelectionManager: ObservableObject {
             for (name, url) in items {
                 if Task.isCancelled { break }
 
-                var destURL = destination.appendingPathComponent(name)
-                if fm.fileExists(atPath: destURL.path) {
-                    let baseName = (name as NSString).deletingPathExtension
-                    let ext = (name as NSString).pathExtension
-                    var counter = 2
-                    repeat {
-                        let newName = ext.isEmpty ? "\(baseName) \(counter)" : "\(baseName) \(counter).\(ext)"
-                        destURL = destination.appendingPathComponent(newName)
-                        counter += 1
-                    } while fm.fileExists(atPath: destURL.path)
+                let destURL = uniqueLocalDestination(in: destination) { attempt in
+                    numberedName(name, attempt: attempt)
                 }
 
                 do {
@@ -436,25 +411,28 @@ class SelectionManager: ObservableObject {
         }
     }
 
-    /// Copy local items to local destination
-    func copyLocalItems(to destination: URL) -> Int {
-        var count = 0
-        let fm = FileManager.default
+}
 
-        for item in localItems {
-            guard let url = item.localURL else { continue }
-            let destPath = uniqueDestination(for: item.name, in: destination)
-
-            do {
-                try fm.copyItem(at: url, to: destPath)
-                count += 1
-            } catch {
-                ToastManager.shared.showError("Failed to copy \(item.name): \(error.localizedDescription)")
-            }
-        }
-
-        return count
+/// First free URL in `directory`, trying `makeName(0)`, `makeName(1)`, ... in order.
+/// Callable off the main actor; each call site owns its naming format.
+func uniqueLocalDestination(in directory: URL, makeName: (Int) -> String) -> URL {
+    let fm = FileManager.default
+    var attempt = 0
+    var url = directory.appendingPathComponent(makeName(attempt))
+    while fm.fileExists(atPath: url.path) {
+        attempt += 1
+        url = directory.appendingPathComponent(makeName(attempt))
     }
+    return url
+}
+
+/// Finder-style collision name: "name.ext", then "name 2.ext", "name 3.ext", ...
+func numberedName(_ name: String, attempt: Int) -> String {
+    guard attempt > 0 else { return name }
+    let baseName = (name as NSString).deletingPathExtension
+    let ext = (name as NSString).pathExtension
+    let n = attempt + 1
+    return ext.isEmpty ? "\(baseName) \(n)" : "\(baseName) \(n).\(ext)"
 }
 
 /// Trashes the given URLs off the main actor, returning how many succeeded.

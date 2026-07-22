@@ -82,17 +82,11 @@ func collectWebURLs(from providers: [NSItemProvider], completion: @escaping ([UR
 /// choosing non-colliding names. Returns how many were written.
 @discardableResult
 func writeWeblocFiles(for urls: [URL], in directory: URL) -> Int {
-    let fm = FileManager.default
     var written = 0
     for url in urls {
         let base = weblocBaseName(for: url)
-        var name = "\(base).webloc"
-        var dest = directory.appendingPathComponent(name)
-        var counter = 2
-        while fm.fileExists(atPath: dest.path) {
-            name = "\(base) \(counter).webloc"
-            dest = directory.appendingPathComponent(name)
-            counter += 1
+        let dest = uniqueLocalDestination(in: directory) { attempt in
+            attempt == 0 ? "\(base).webloc" : "\(base) \(attempt + 1).webloc"
         }
         let plist: [String: Any] = ["URL": url.absoluteString]
         guard let data = try? PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0) else { continue }
@@ -507,77 +501,6 @@ struct FontSizeControls: View {
             .buttonStyle(.borderless)
         }
         .padding(.trailing, 8)
-    }
-}
-
-// MARK: - File Context Menu Items
-
-struct FileContextMenuItems: View {
-    let url: URL
-    let isDirectory: Bool
-    let manager: FileExplorerManager
-    let tagManager: ColorTagManager
-    @Binding var showingDetails: Bool
-
-    var body: some View {
-        Button(action: { showingDetails = true }) {
-            Label("View Details", systemImage: "info.circle")
-        }
-        Button(action: { manager.toggleFileSelection(url) }) {
-            Label(manager.isInSelection(url) ? "Remove from Selection" : "Add to Selection",
-                  systemImage: manager.isInSelection(url) ? "minus.circle" : "checkmark.circle")
-        }
-        Button(action: {
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(url.path, forType: .string)
-            ToastManager.shared.show("Path copied to clipboard")
-        }) {
-            Label("Copy Path", systemImage: "doc.on.clipboard")
-        }
-        Button(action: {
-            manager.selectedItem = url
-            manager.startRename()
-        }) {
-            Label("Rename", systemImage: "pencil")
-        }
-        Button(action: {
-            NSWorkspace.shared.activateFileViewerSelecting([url])
-        }) {
-            Label("Show in Finder", systemImage: "folder")
-        }
-        Divider()
-        Button(action: { manager.promptDuplicate(url) }) {
-            Label("Duplicate", systemImage: "doc.on.doc")
-        }
-        Button(action: { manager.addToZip(url) }) {
-            Label("Add to Zip", systemImage: "doc.zipper")
-        }
-        if ["zip", "tar", "tgz", "gz", "bz2", "xz", "rar", "7z"].contains(url.pathExtension.lowercased()) {
-            Button(action: { manager.extractArchive(url) }) {
-                Label("Extract to folder", systemImage: "arrow.down.doc")
-            }
-        }
-        if url.pathExtension.lowercased() == "app" && isDirectory {
-            Button(action: { manager.enableUnsafeApp(url) }) {
-                Label("Enable unsafe app", systemImage: "checkmark.shield")
-            }
-        }
-        if url.lastPathComponent.hasPrefix(".") {
-            Button(action: { manager.toggleHidden(url) }) {
-                Label("Make Visible", systemImage: "eye")
-            }
-        } else {
-            Button(action: { manager.toggleHidden(url) }) {
-                Label("Make Hidden", systemImage: "eye.slash")
-            }
-        }
-        Divider()
-        Button(role: .destructive, action: { manager.moveToTrash(url) }) {
-            Label("Move to Trash", systemImage: "trash")
-        }
-        Divider()
-        ColorTagMenuItems(url: url, tagManager: tagManager)
     }
 }
 

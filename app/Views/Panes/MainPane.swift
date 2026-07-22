@@ -18,8 +18,6 @@ struct MainPane: View {
             switch manager.currentPane {
             case .browser:
                 FileBrowserPane(manager: manager)
-            case .selection:
-                SelectionPane(manager: manager)
             case .colorTag(let color):
                 ColorTagView(color: color, manager: manager)
             }

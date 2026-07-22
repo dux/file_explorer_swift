@@ -42,6 +42,12 @@ class AppUpdater: ObservableObject {
         state = .checking
 
         do {
+            // Without a bundled commit there is nothing to compare against;
+            // don't report a perpetual "update available".
+            guard localCommit != "unknown" else {
+                state = .failed("Local build commit unknown; cannot compare")
+                return
+            }
             let remoteCommit = try await fetchRemoteCommit()
             if remoteCommit == localCommit {
                 state = .upToDate
@@ -81,12 +87,17 @@ class AppUpdater: ObservableObject {
                 return
             }
 
-            // Replace app
+            // Stage next to the install target, then swap so a failed copy
+            // can't leave /Applications without the app
             let installedApp = URL(fileURLWithPath: "\(installDir)/\(appName).app")
-
-            // Kill current instance, replace, relaunch
-            try FileManager.default.removeItem(at: installedApp)
-            try FileManager.default.copyItem(at: extractedApp, to: installedApp)
+            let stagedApp = URL(fileURLWithPath: "\(installDir)/.\(appName).app.update-\(UUID().uuidString)")
+            try FileManager.default.copyItem(at: extractedApp, to: stagedApp)
+            do {
+                _ = try FileManager.default.replaceItemAt(installedApp, withItemAt: stagedApp)
+            } catch {
+                try? FileManager.default.removeItem(at: stagedApp)
+                throw error
+            }
 
             state = .done
 

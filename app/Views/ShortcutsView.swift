@@ -227,7 +227,7 @@ struct ShortcutRow: View {
                 FolderIconView(url: item.url, size: 22)
             }
 
-            Text(formatPath(item.url.path, full: !item.isBuiltIn))
+            Text(item.isBuiltIn ? item.name : formatPath(item.url.path, full: true))
                 .textStyle(.default)
                 .lineLimit(1)
                 .truncationMode(.middle)

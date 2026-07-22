@@ -847,7 +847,7 @@ struct SelectionSection: View {
             // Action buttons row
             HStack(spacing: 5) {
                 if !localItems.isEmpty {
-                    SelectionBarButton(title: "Copy to", icon: "doc.on.doc", color: .blue, shortcut: "Copy here (Cmd+C)") {
+                    SelectionBarButton(title: "Copy to", icon: "doc.on.doc", color: .blue, shortcut: "Copy here (Cmd+Shift+C)") {
                         let items = selection.localItems.compactMap { item in
                             item.localURL.map { (name: item.name, url: $0) }
                         }
@@ -859,7 +859,7 @@ struct SelectionSection: View {
                             manager.refresh()
                         }
                     }
-                    SelectionBarButton(title: "Move to", icon: "folder", color: .orange, shortcut: "Move here (Cmd+M)") {
+                    SelectionBarButton(title: "Move to", icon: "folder", color: .orange, shortcut: "Move here (Cmd+Shift+V)") {
                         let items = selection.localItems.compactMap { item in
                             item.localURL.map { (name: item.name, url: $0) }
                         }
@@ -894,7 +894,7 @@ struct SelectionSection: View {
                 }
 
                 if localItems.count == 1, let url = localItems.first?.localURL {
-                    SelectionBarButton(title: "Duplicate", icon: "plus.square.on.square", color: .purple, shortcut: "Duplicate (Cmd+D)") {
+                    SelectionBarButton(title: "Duplicate", icon: "plus.square.on.square", color: .purple, shortcut: "Duplicate (Cmd+Shift+D)") {
                         manager.promptDuplicate(url)
                         selection.clear()
                     }

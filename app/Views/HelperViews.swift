@@ -162,8 +162,6 @@ struct FileDetailsView: View {
     }
 }
 
-// FileItemDialog in FileItemDialog.swift
-
 struct DetailRow: View {
     let label: String
     let value: String
@@ -192,23 +190,6 @@ struct EmptyFolderView: View {
                 .foregroundColor(.secondary)
 
             Text("This folder is empty")
-                .textStyle(.default)
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-struct EmptySearchResultsView: View {
-    let searchText: String
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 48))
-                .foregroundColor(.secondary)
-
-            Text("No results for \"\(searchText)\"")
                 .textStyle(.default)
                 .foregroundColor(.secondary)
         }

@@ -2,60 +2,6 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-struct ResizableSplitView<Top: View, Bottom: View>: View {
-    @ObservedObject private var settings = AppSettings.shared
-    @ViewBuilder let top: () -> Top
-    @ViewBuilder let bottom: () -> Bottom
-
-    @State private var isDragging = false
-    @State private var dragSplit: CGFloat? = nil
-
-    var body: some View {
-        GeometryReader { geometry in
-            let totalHeight = geometry.size.height
-            let activeSplit = dragSplit ?? settings.previewPaneSplit
-            let topHeight = totalHeight * activeSplit
-            let bottomHeight = totalHeight - topHeight - 8
-
-            VStack(spacing: 0) {
-                top()
-                    .frame(height: max(100, topHeight))
-
-                Rectangle()
-                    .fill(isDragging ? Color.accentColor : Color(NSColor.separatorColor))
-                    .frame(height: 8)
-                    .contentShape(Rectangle())
-                    .onHover { hovering in
-                        if hovering {
-                            NSCursor.resizeUpDown.push()
-                        } else {
-                            NSCursor.pop()
-                        }
-                    }
-                    .gesture(
-                        DragGesture(minimumDistance: 2)
-                            .onChanged { value in
-                                isDragging = true
-                                let newTopHeight = totalHeight * settings.previewPaneSplit + value.translation.height
-                                let newSplit = newTopHeight / totalHeight
-                                dragSplit = min(0.8, max(0.2, newSplit))
-                            }
-                            .onEnded { _ in
-                                if let s = dragSplit {
-                                    settings.previewPaneSplit = s
-                                }
-                                dragSplit = nil
-                                isDragging = false
-                            }
-                    )
-
-                bottom()
-                    .frame(height: max(100, bottomHeight))
-            }
-        }
-    }
-}
-
 enum PreviewKind: Equatable {
     case movie, imageGallery, standard, none
 }
@@ -347,135 +293,6 @@ struct DuplicateDialog: View {
 
 // KeyEventHandlingView, KeyCaptureView -> KeyboardHandler.swift
 
-struct ToolbarView: View {
-    @ObservedObject var manager: FileExplorerManager
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Button(action: { manager.goBack() }) {
-                Image(systemName: "chevron.left")
-            }
-            .buttonStyle(.borderless)
-            .disabled(!manager.canGoBack)
-
-            Button(action: { manager.goForward() }) {
-                Image(systemName: "chevron.right")
-            }
-            .buttonStyle(.borderless)
-            .disabled(!manager.canGoForward)
-
-            Spacer()
-
-            Text(manager.currentPath.lastPathComponent.isEmpty ? "Root" : manager.currentPath.lastPathComponent)
-                .textStyle(.default, weight: .semibold)
-                .lineLimit(1)
-
-            Spacer()
-
-            Button(action: { manager.navigateUp() }) {
-                Image(systemName: "arrow.up")
-            }
-            .buttonStyle(.borderless)
-            .disabled(manager.currentPath.path == "/")
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color(NSColor.windowBackgroundColor))
-    }
-}
-
-struct BreadcrumbView: View {
-    @ObservedObject var manager: FileExplorerManager
-    @ObservedObject var shortcutsManager = ShortcutsManager.shared
-    @ObservedObject var folderIconManager = FolderIconManager.shared
-    @State private var showEmojiPicker = false
-
-    private var pathComponents: [(name: String, url: URL)] {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        var components: [(String, URL)] = []
-        var current = manager.currentPath
-
-        while current.path != "/" && !current.path.isEmpty {
-            if current.path == home.path {
-                components.insert((current.lastPathComponent, current), at: 0)
-                return components
-            }
-            components.insert((current.lastPathComponent, current), at: 0)
-            current = current.deletingLastPathComponent()
-        }
-        components.insert(("Root", URL(fileURLWithPath: "/")), at: 0)
-
-        return components
-    }
-
-    private var isPinned: Bool {
-        shortcutsManager.customFolders.contains(where: { $0.path == manager.currentPath.path })
-    }
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(Array(pathComponents.enumerated()), id: \.offset) { index, component in
-                if index > 0 {
-                    Image(systemName: "chevron.right")
-                        .textStyle(.small)
-                        .foregroundColor(.secondary)
-                }
-
-                Button(action: { manager.navigateTo(component.url) }) {
-                    Text(component.name)
-                        .textStyle(.buttons)
-                        .foregroundColor(index == pathComponents.count - 1 ? .primary : .blue)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Spacer()
-
-            if isPinned {
-                Button(action: { showEmojiPicker = true }) {
-                    Image(systemName: "face.smiling")
-                        .textStyle(.small)
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Set folder icon")
-                .popover(isPresented: $showEmojiPicker, arrowEdge: .bottom) {
-                    EmojiPickerView(
-                        folderURL: manager.currentPath,
-                        onSelect: { emoji in
-                            folderIconManager.setEmoji(emoji, for: manager.currentPath)
-                        },
-                        onRemove: {
-                            folderIconManager.removeEmoji(for: manager.currentPath)
-                        },
-                        onDismiss: { showEmojiPicker = false },
-                        hasExisting: folderIconManager.emoji(for: manager.currentPath) != nil
-                    )
-                    .interactiveDismissDisabled()
-                }
-            }
-
-            Button(action: {
-                if isPinned {
-                    shortcutsManager.removeFolder(manager.currentPath)
-                } else {
-                    shortcutsManager.addFolder(manager.currentPath)
-                }
-            }) {
-                Image(systemName: isPinned ? "pin.fill" : "pin")
-                    .textStyle(.small)
-                    .foregroundColor(isPinned ? .orange : .secondary)
-            }
-            .buttonStyle(.plain)
-            .help(isPinned ? "Unpin folder" : "Pin folder")
-
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-    }
-}
-
 struct ActionButtonBar: View {
     @ObservedObject var manager: FileExplorerManager
     @ObservedObject private var settings = AppSettings.shared
@@ -488,7 +305,7 @@ struct ActionButtonBar: View {
                 HStack(spacing: 4) {
                     Image(systemName: manager.showHidden ? "eye" : "eye.slash")
                         .textStyle(.buttons)
-                    Text(manager.showHidden ? "showing" : "hiding")
+                    Text(manager.showHidden ? "hide hidden" : "show hidden")
                         .textStyle(.buttons)
                 }
             }
@@ -510,6 +327,8 @@ struct ActionButtonBar: View {
             }
             .buttonStyle(.bordered)
             .keyboardShortcut("f", modifiers: .command)
+            .disabled(!manager.canSearchCurrentSource)
+            .help(manager.canSearchCurrentSource ? "Search this folder" : "Search is not supported on this source")
 
             Divider()
                 .frame(height: 20)
@@ -525,7 +344,7 @@ struct ActionButtonBar: View {
                     Button(action: {
                         manager.sortMode = mode
                     }) {
-                        Text(mode.rawValue.prefix(3).lowercased())
+                        Text(mode.rawValue)
                             .textStyle(.buttons, weight: manager.sortMode == mode ? .semibold : .regular)
                             .lineLimit(1)
                             .fixedSize()
@@ -717,32 +536,6 @@ struct NewFileDialog: View {
         .onExitCommand {
             isPresented = false
         }
-    }
-}
-
-struct TableHeaderView: View {
-    var showModified: Bool = true
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Text("Name")
-                .frame(minWidth: 250, alignment: .leading)
-
-            Spacer()
-
-            if showModified {
-                Text("Modified ago")
-                    .frame(width: 180, alignment: .leading)
-            }
-
-            Text("Size")
-                .frame(width: 80, alignment: .trailing)
-        }
-        .textStyle(.small, weight: .medium)
-        .foregroundColor(.secondary)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
     }
 }
 

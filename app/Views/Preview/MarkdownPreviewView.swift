@@ -38,15 +38,23 @@ struct MarkdownWebView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let webView = WKWebView()
         webView.setValue(false, forKey: "drawsBackground")
-        render(webView)
+        render(webView, coordinator: context.coordinator)
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        render(webView)
+        render(webView, coordinator: context.coordinator)
     }
 
-    private func render(_ webView: WKWebView) {
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        var loadedHTML: String?
+    }
+
+    private func render(_ webView: WKWebView, coordinator: Coordinator) {
         let escapedMarkdown = markdown
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "`", with: "\\`")
@@ -126,6 +134,9 @@ struct MarkdownWebView: NSViewRepresentable {
         </html>
         """
 
+        // Reload only when the content actually changes, never on a plain resize
+        guard coordinator.loadedHTML != html else { return }
+        coordinator.loadedHTML = html
         webView.loadHTMLString(html, baseURL: nil)
     }
 }

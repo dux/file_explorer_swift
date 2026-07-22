@@ -36,9 +36,22 @@ struct EpubPreviewView: View {
         }
         .onAppear { extractEpub() }
         .onChange(of: url) { _ in extractEpub() }
+        .onDisappear { cleanupExtraction() }
+    }
+
+    // Extractions land in tmp under EpubPreview/<uuid>; drop the previous one
+    // so re-previews don't pile up full book extractions for the session
+    private func cleanupExtraction() {
+        guard let htmlPath else { return }
+        let root = htmlPath.deletingLastPathComponent()
+        self.htmlPath = nil
+        Task.detached(priority: .background) {
+            try? FileManager.default.removeItem(at: root)
+        }
     }
 
     private func extractEpub() {
+        cleanupExtraction()
         isLoading = true
         errorMessage = nil
         let epubURL = url
@@ -75,6 +88,10 @@ enum EpubExtractor {
         } catch {
             return .failure(EpubError(message: "Failed to create temp dir"))
         }
+
+        // Failed extractions must not leave the unzipped book behind
+        var keepTempDir = false
+        defer { if !keepTempDir { try? FileManager.default.removeItem(at: tempDir) } }
 
         // Extract epub (it's a zip)
         let process = Process()
@@ -140,6 +157,7 @@ enum EpubExtractor {
 
         do {
             try html.write(to: htmlFile, atomically: true, encoding: .utf8)
+            keepTempDir = true
             return .success(htmlFile)
         } catch {
             return .failure(EpubError(message: "Failed to create preview"))
@@ -273,11 +291,23 @@ struct EpubWebView: NSViewRepresentable {
         config.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.setValue(false, forKey: "drawsBackground")
+        context.coordinator.loadedURL = fileURL
         webView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
+        // Reload only when the file changes, never on a plain resize
+        guard context.coordinator.loadedURL != fileURL else { return }
+        context.coordinator.loadedURL = fileURL
         webView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        var loadedURL: URL?
     }
 }

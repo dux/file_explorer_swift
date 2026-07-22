@@ -6,19 +6,35 @@ struct SyntaxHighlightView: NSViewRepresentable {
     let language: String
     let fontSize: CGFloat
 
+    // highlight.js is bundled locally and inlined into the page, so previews
+    // render offline and never hit a CDN.
+    private static let highlightJS: String = {
+        guard let jsURL = Bundle.module.url(forResource: "highlight.min", withExtension: "js"),
+              let js = try? String(contentsOf: jsURL, encoding: .utf8) else { return "" }
+        return js
+    }()
+
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.setValue(false, forKey: "drawsBackground")
-        loadContent(webView)
+        loadContent(webView, coordinator: context.coordinator)
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        loadContent(webView)
+        loadContent(webView, coordinator: context.coordinator)
     }
 
-    private func loadContent(_ webView: WKWebView) {
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        var loadedHTML: String?
+    }
+
+    private func loadContent(_ webView: WKWebView, coordinator: Coordinator) {
         let escapedCode = code
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
@@ -30,7 +46,7 @@ struct SyntaxHighlightView: NSViewRepresentable {
         <html>
         <head>
             <meta charset="utf-8">
-            <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+            <script>\(Self.highlightJS)</script>
             <style>
                 :root { color-scheme: light dark; }
                 * {
@@ -99,6 +115,9 @@ struct SyntaxHighlightView: NSViewRepresentable {
         </html>
         """
 
+        // Reload only when the content actually changes, never on a plain resize
+        guard coordinator.loadedHTML != html else { return }
+        coordinator.loadedHTML = html
         webView.loadHTMLString(html, baseURL: nil)
     }
 

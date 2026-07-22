@@ -27,7 +27,17 @@ extension FileExplorerManager {
         key == Self.emptyExtensionKey ? "No ext" : key
     }
 
+    /// Search needs a recursive walk; remote backends without one get no
+    /// search UI instead of a silently empty one.
+    var canSearchCurrentSource: Bool {
+        currentSource.capabilities.contains(.recursiveSearch)
+    }
+
     func startSearch() {
+        guard canSearchCurrentSource else {
+            ToastManager.shared.show("Search is not supported on this source")
+            return
+        }
         isSearching = true
         searchQuery = ""
         selectedSearchExtension = nil
@@ -36,9 +46,18 @@ extension FileExplorerManager {
     }
 
     func startSearch(withQuery query: String) {
+        guard canSearchCurrentSource else { return }
         isSearching = true
         searchQuery = query
         selectedSearchExtension = nil
+        resetSearchState()
+        startSearchIndexScan()
+    }
+
+    /// Rebuild the index after file operations while a search is active,
+    /// keeping the query and extension filter but rescanning the tree.
+    func rescanSearchIndexIfActive() {
+        guard isSearching else { return }
         resetSearchState()
         startSearchIndexScan()
     }

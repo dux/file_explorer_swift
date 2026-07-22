@@ -53,6 +53,7 @@ class ShortcutsManager: ObservableObject {
         items.append(ShortcutItem(url: home.appendingPathComponent("Documents"), name: "Documents", isBuiltIn: true, icon: "doc.fill"))
         items.append(ShortcutItem(url: home.appendingPathComponent("Downloads"), name: "Downloads", isBuiltIn: true, icon: "arrow.down.circle.fill"))
         items.append(ShortcutItem(url: URL(fileURLWithPath: "/Applications"), name: "Applications", isBuiltIn: true, icon: "square.grid.2x2.fill"))
+        items.append(ShortcutItem(url: home.appendingPathComponent(".Trash"), name: "Trash", isBuiltIn: true, icon: "trash.fill"))
 
         for folder in customFolders where !Self.isDivider(folder) {
             let isProject = fileManager.fileExists(atPath: folder.appendingPathComponent("README.md").path)

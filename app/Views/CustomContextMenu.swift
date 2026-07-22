@@ -263,11 +263,15 @@ private struct CustomContextMenuContent: View {
                 manager.uploadItems(localURLs, to: url)
             }))
         }
-        items.append(MenuItem(icon: "info.circle", label: "View Details", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url, isDirectory] in
-            contextMenu.detailsURL = url
-            contextMenu.detailsIsDirectory = isDirectory
-            contextMenu.showDetails = true
-        }))
+        // FileDetailsView stats the path with the local FileManager, so remote
+        // URLs would show a bogus location and never finish "Calculating..."
+        if url.isFileURL {
+            items.append(MenuItem(icon: "info.circle", label: "View Details", isDestructive: false, isColor: false, tagColor: nil, isTagged: false, action: act { [url, isDirectory] in
+                contextMenu.detailsURL = url
+                contextMenu.detailsIsDirectory = isDirectory
+                contextMenu.showDetails = true
+            }))
+        }
         if !isCurrentFolder {
             items.append(MenuItem(
                 icon: manager.isInSelection(url) ? "minus.circle" : "checkmark.circle",

@@ -94,9 +94,16 @@ final class LocalFileSource: FileSystemSource {
     /// wraps it in a detached task for large folders.
     nonisolated static func enumerateRaw(at path: URL) throws -> [SourceEntry] {
         let fm = FileManager.default
-        var contents = try fm.contentsOfDirectory(at: path, includingPropertiesForKeys: Array(resourceKeys), options: [])
+        var contents: [URL]
+        do {
+            contents = try fm.contentsOfDirectory(at: path, includingPropertiesForKeys: Array(resourceKeys), options: [])
+        } catch {
+            // Trash TCC: without Full Disk Access the listing throws (or on
+            // some systems silently returns empty); /bin/ls still works
+            guard path.lastPathComponent == ".Trash" else { throw error }
+            contents = []
+        }
 
-        // Fallback for Trash: TCC may silently return empty, use /bin/ls
         if path.lastPathComponent == ".Trash" && contents.isEmpty {
             contents = listViaProcess(path)
         }

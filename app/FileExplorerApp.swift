@@ -7,6 +7,12 @@ extension Notification.Name {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // The UI is a hardcoded light (cream) theme; pin the appearance so
+        // webview previews don't render dark-mode CSS on light backgrounds.
+        NSApp.appearance = NSAppearance(named: .aqua)
+    }
+
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let url = urls.first else { return }
         NotificationCenter.default.post(name: .openPathRequest, object: url)

@@ -76,7 +76,6 @@ class CopyProgressManager: ObservableObject {
         await MainActor.run { start() }
 
         let task = Task.detached { [skipFolders, itemsCopy] () -> Int in
-            let fm = FileManager.default
             var copied = 0
             var fileCount = 0
             var lastUpdate = Date.distantPast
@@ -84,17 +83,8 @@ class CopyProgressManager: ObservableObject {
             for (name, url) in itemsCopy {
                 if Task.isCancelled { break }
 
-                // Compute unique destination
-                var destURL = destination.appendingPathComponent(name)
-                if fm.fileExists(atPath: destURL.path) {
-                    let baseName = (name as NSString).deletingPathExtension
-                    let ext = (name as NSString).pathExtension
-                    var counter = 2
-                    repeat {
-                        let newName = ext.isEmpty ? "\(baseName) \(counter)" : "\(baseName) \(counter).\(ext)"
-                        destURL = destination.appendingPathComponent(newName)
-                        counter += 1
-                    } while fm.fileExists(atPath: destURL.path)
+                let destURL = uniqueLocalDestination(in: destination) { attempt in
+                    numberedName(name, attempt: attempt)
                 }
 
                 do {

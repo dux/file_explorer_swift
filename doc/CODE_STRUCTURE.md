@@ -33,20 +33,21 @@ ZStack (bottom-aligned) {
 
 ### FileSystemSource (`Models/Sources/FileSystemSource.swift`)
 The **generic backend contract** every browsable source implements: path algebra (canonicalize/parent/breadcrumb), listing (async `list` plus sync escape hatches `listSyncIfCheap`/`existsSync` for the local no-flicker path), content transfer (`materialize`/`download`/`upload`), mutations (mkdir/createFile/move/delete/setHidden), and optional capabilities (`watch` change stream, `recursiveEntries` search walk).
-`SourceCapabilities` gates UI actions per backend; `SourceRegistry` resolves the backend from the URL scheme (`file`, `iphone`, later `ssh`/`ftp`), so URLs are self-describing and history works across sources.
+`SourceCapabilities` gates UI actions per backend; `SourceRegistry` resolves the backend from the URL scheme (`file`, `iphone`, `ssh`; `smb`/`ftp` mount to `file://` and route to the local backend), so URLs are self-describing and history works across sources.
 
 - **LocalFileSource** (`Models/Sources/LocalFileSource.swift`) -- FileManager enumeration (with the Trash TCC `/bin/ls` fallback), kqueue directory watching, recursive search walk, breadcrumb roots (home, /Volumes), and local mutation primitives.
 - **iPhoneFileSource** (`Models/Sources/iPhoneFileSource.swift`) -- one instance per device over libimobiledevice. Virtual hierarchy: `iphone://<udid>/` lists file-sharing apps as folders (bundle id = path component, app name = displayName), deeper paths map to AFC `/Documents/...`. Context-explicit sync cores (list apps/dir, stat, download) are shared with iPhoneManager's transfer ops. Capabilities: write/rename/delete inside app Documents, read-only at the app level; `materialize` caches downloads keyed by size+mtime.
+- **SSHFileSource** (`Models/Sources/SSHFileSource.swift`) -- SFTP browsing over libssh2 (`SSHConnection.swift` owns the socket/session/auth, known_hosts accept-new). `ssh://user@host/path` URLs; write/rename/delete but no recursive search or watch. `MountsManager` keeps SSH/SMB favorites and connects them.
 
 ### FileExplorerManager (`Models/FileExplorerManager.swift`)
-The **central @MainActor ObservableObject**. Owns all navigation, file listing, search, and selection state for ALL backends -- the same pane, keyboard nav, and selection work on local and iPhone (and future ssh/ftp) sources.
+The **central @MainActor ObservableObject**. Owns all navigation, file listing, search, and selection state for ALL backends -- the same pane, keyboard nav, and selection work on local, iPhone, and SSH sources.
 
 **Key published state:**
 - `currentPath: URL` -- current directory
 - `directories: [CachedFileInfo]`, `files: [CachedFileInfo]` -- cached contents of current dir
 - `allItems: [CachedFileInfo]` -- computed `directories + files`
 - `selectedItem: URL?`, `selectedIndex: Int` -- single item cursor
-- `sortMode: SortMode` (.type, .name, .modified) -- triggers `loadContents()` on change
+- `sortMode: SortMode` (.type, .name, .modified, .size) -- triggers `loadContents()` on change; in Size mode local folder sizes are filled in asynchronously via `FolderSizeCache`
 - `currentPane: MainPaneType` -- `.browser`, `.selection`, `.colorTag(TagColor)`
 - `browserViewMode: BrowserViewMode` -- `.files`, `.selected`
 - `showHidden`, `hiddenCount`, `hasImages`
@@ -74,7 +75,7 @@ The **central @MainActor ObservableObject**. Owns all navigation, file listing, 
 File operation methods: `createNewFolder()`, `createNewFile()`, `duplicateFile()`, `addToZip()`, `extractArchive()`, `enableUnsafeApp()`, `moveToTrash()`, `refresh()`, `startRename()`, `cancelRename()`, `confirmRename()`, `toggleHidden()`.
 
 ### FileExplorerManagerSearch (extension, `Models/FileExplorerManagerSearch.swift`)
-Search methods: `startSearch()`, `cancelSearch()`, `performSearch()`, `executeSearch()`, `findFd()`. List cursor navigation: `listSelectNext()`, `listSelectPrevious()`, `listActivateItem()`.
+Search methods: `startSearch()`, `startSearch(withQuery:)`, `cancelSearch()`, `performSearch()`, `toggleSearchExtension()`, `rescanSearchIndexIfActive()`. Entry points are gated on the source's `.recursiveSearch` capability (remote backends get a toast instead of an empty pane). List cursor navigation: `listSelectNext()`, `listSelectPrevious()`, `listActivateItem()`.
 
 ### FileItem & SelectionManager (`Models/FileItem.swift`)
 * `FileItem` is a unified file representation with `id`, `name`, `path`, `isDirectory`, `size`, `modifiedDate`, and a local, iPhone, or generic remote source.
@@ -83,7 +84,7 @@ Search methods: `startSearch()`, `cancelSearch()`, `performSearch()`, `executeSe
   It supports add/remove/toggle/clear, move/copy/delete, and iPhone download/upload.
 
 ### CachedFileInfo (in FileExplorerManager.swift)
-Lightweight struct: `url`, `isDirectory`, `size`, `modDate`, `isHidden`. Display model for directory listings.
+Lightweight struct: `url`, `isDirectory`, `size`, `modDate`, `isHidden`, `displayName`. Display model for directory listings.
 
 ### AppSettings (`Models/AppSettings.swift`)
 **Singleton** persisting to `~/.config/dux-file-explorer/settings.json`. Debounced save (300ms). Key settings: font sizes, pane widths, window frame, `preferredApps`, `recentlyUsedApps`, `flatFolders`, `omdbAPIKey`.
@@ -101,7 +102,9 @@ All `@MainActor`:
 - **iPhoneManager** -- iOS device detection/scanning; context-explicit AFC transfer ops used by SelectionManager and iPhoneFileSource (`iPhoneManagerFileOps.swift`). Browsing itself goes through iPhoneFileSource + the main browser pane
 - **AppSearcher** -- finds apps that can open a file type
 - **AppUninstaller** -- finds leftover app data for cleanup
-- **FolderSizeCache** -- cached folder size calculations (own serial queue)
+- **FolderSizeCache** -- mtime-validated folder size cache (own queue); feeds real directory sizes to the Size sort mode
+- **MountsManager** -- SSH/SMB favorites, connect dialog, server URL normalization
+- **OperationManager** -- cancellable background operation runner with the running indicator
 - **ToastManager** -- toast notification show/dismiss
 - **ContextMenuManager** -- right-click menu state
 
@@ -110,23 +113,21 @@ All `@MainActor`:
 ```
 ContentView
   +-- ShortcutsView (left sidebar)
-  |     +-- ShortcutRow (Home, Desktop, Downloads, Applications)
+  |     +-- ShortcutRow (Home, Desktop, Documents, Downloads, Applications, Trash)
   |     +-- ColorTagBoxes
   |     +-- iPhoneRow (per device)
   |     +-- DraggableShortcutRow (pinned folders, drag-reorder)
-  |     +-- VolumeRow (mounted volumes)
+  |     +-- VolumeRow (mounted volumes) + FavoriteMountRow (disconnected favorites)
   |
   +-- <draggable vertical divider>
   |
   +-- MainContentView
         +-- MainPane (switches on currentPane)
-        |     +-- .browser -> FileBrowserPane (local AND remote sources, e.g. iphone://)
-        |     |     +-- SelectionBar (green, when items selected)
+        |     +-- .browser -> FileBrowserPane (local AND remote sources, e.g. iphone://, ssh://)
         |     |     +-- ActionButtonBar (hidden toggle, search, sort, new)
         |     |     +-- SearchBar + SearchResultsView (when isSearching)
         |     |     +-- FileTreeView (primary file listing)
         |     |
-        |     +-- .selection -> SelectionPane
         |     +-- .colorTag(color) -> ColorTagView
         |
         +-- <draggable vertical divider>
@@ -170,7 +171,7 @@ Both views accept `.fileURL` drops -- copies files to current directory with nam
 `PreviewType.detect(for:)` classifies by extension/filename:
 - `.image`, `.pdf`, `.text`, `.json`, `.markdown`, `.fez`, `.audio`, `.video`, `.archive`, `.comic`, `.epub`, `.dmg`, `.makefile`, `.packageJson`, `.none`
 
-Preview views in `Views/Preview/`: TextPreviewView, SyntaxHighlightView, JSONPreviewView, MarkdownPreviewView, ImagePreviewView, PDFPreviewView, AudioPreviewView, VideoPreviewView, ArchivePreviewView, ComicPreviewView, EpubPreviewView, DMGPreviewView, MakefilePreviewView, PackageJsonPreviewView, MoviePreviewView, FolderGalleryPreview.
+Preview views in `Views/Preview/`: TextPreviewView, SyntaxHighlightView, HTMLPreviewView, JSONPreviewView, MarkdownPreviewView, ImagePreviewView, PDFPreviewView, AudioPreviewView, ArchivePreviewView, ComicPreviewView, EpubPreviewView, DMGPreviewView, MakefilePreviewView, PackageJsonPreviewView, MoviePreviewView, FolderGalleryPreview. (`.video` currently has no preview.)
 
 ## Key Patterns
 
@@ -180,7 +181,7 @@ Preview views in `Views/Preview/`: TextPreviewView, SyntaxHighlightView, JSONPre
 - Change tracking via `.version` counters (ColorTagManager, SelectionManager)
 
 ### Keyboard shortcuts (KeyCaptureView in KeyboardHandler.swift)
-`NSViewRepresentable` capturing all key events. Priority: context menu -> rename -> tab cycling -> sidebar -> right pane -> search -> normal mode. Normal mode: arrows (navigate/select), Space (toggle selection), Enter (rename), Backspace (go back), Cmd+Backspace (trash), letter (jump), Cmd+T (toggle tree/flat), Cmd+F (search), Ctrl+R (refresh).
+`NSViewRepresentable` capturing all key events. Priority: context menu -> rename -> tab cycling -> sidebar -> right pane -> search -> normal mode. Normal mode: arrows (navigate/select), Space (toggle selection), Enter (rename), Backspace (go back), Cmd+Backspace (trash), letter (type-to-search; jump-to-letter on sources without search), Cmd+T (toggle tree/flat), Cmd+F (search), Ctrl+R (refresh).
 
 ### Context menu
 Custom implementation via `ContextMenuManager` + `CustomContextMenuOverlay`. Not native macOS. Supports keyboard navigation.
@@ -192,48 +193,54 @@ Custom implementation via `ContextMenuManager` + `CustomContextMenuOverlay`. Not
 
 ```
 app/
-  FileExplorerApp.swift              -- @main entry, AppDelegate
+  FileExplorerApp.swift              -- @main entry, AppDelegate (pins light appearance)
   ContentView.swift                  -- Root layout, WindowAccessor
   Models/
     Sources/
       FileSystemSource.swift         -- Backend contract, capabilities, SourceRegistry
       LocalFileSource.swift          -- Local disk backend (FileManager, kqueue watch)
       iPhoneFileSource.swift         -- iPhone backend (libimobiledevice, virtual app tree)
+      SSHFileSource.swift            -- SFTP backend (ssh:// browsing)
+      SSHConnection.swift            -- libssh2 socket/session/auth, sync SFTP ops
     FileExplorerManager.swift        -- Central state manager
     FileExplorerManagerFileOps.swift  -- File operations extension
     FileExplorerManagerSearch.swift   -- Search & list cursor extension
-    FileItem.swift                   -- FileItem, SelectionManager
+    FileItem.swift                   -- FileItem, SelectionManager, uniqueLocalDestination helper
     AppSettings.swift                -- Persisted settings singleton
-    ShortcutsManager.swift           -- Sidebar pinned folders
+    ShortcutsManager.swift           -- Sidebar built-ins (incl. Trash) + pinned folders
     ColorTagManager.swift            -- Color label system
     FolderIconManager.swift          -- Custom emoji folder icons
     IconProvider.swift               -- Catppuccin SVG file icons
     GitRepoManager.swift             -- Git repo detection
     NpmPackageManager.swift          -- npm package detection
+    MountsManager.swift              -- SSH/SMB favorites and connection
     MovieManager.swift               -- OMDB movie info
+    OperationManager.swift           -- Cancellable background operations
+    ClipboardMonitor.swift           -- Clipboard link watcher (webloc drops)
+    ArchiveDragSession.swift         -- AppKit drag source for multi-file drags
     VolumesManager.swift             -- Mounted volumes
     iPhoneManager.swift              -- iOS device detection/scanning
     iPhoneManagerFileOps.swift       -- Context-explicit iPhone transfer ops
     AppSearcher.swift                -- App discovery for "Open with"
     AppUninstaller.swift             -- App cleanup/uninstall
-    FolderSizeCache.swift            -- Cached folder size calc
+    FolderSizeCache.swift            -- Cached folder sizes (feeds Size sort)
     AppUpdater.swift                 -- GitHub release update checker
   Views/
-    MainContentView.swift            -- Main layout, toolbar, dialogs
+    MainContentView.swift            -- Main layout, ActionButtonBar, dialogs
     KeyboardHandler.swift            -- KeyEventHandlingView, KeyCaptureView
     ShortcutsView.swift              -- Left sidebar
     ActionsPane.swift                -- Right pane actions (capability-gated)
     FileTreeView.swift               -- Tree/flat file listing (primary)
-    FileTableView.swift              -- Table file listing (secondary)
+    FileRowMouseArea.swift           -- AppKit mouse handling for rows
     CustomContextMenu.swift          -- Right-click context menu system
-    HelperViews.swift                -- FileListRow, FileDetailsView, EmptyFolderView, RenameTextField
-    FileItemDialog.swift             -- File item dialog (rename, actions, details)
-    SharedComponents.swift           -- Drop helpers, SheetHeader, EmptyStateView
+    HelperViews.swift                -- FileDetailsView, EmptyFolderView, rename field
+    SharedComponents.swift           -- Drop helpers, calculateFileSize, webloc writer
     TextStyles.swift                 -- .textStyle() modifier system
-    ToastView.swift                  -- Toast notification
+    ToastView.swift                  -- Toast notification, CopyProgressManager
     SettingsView.swift               -- Settings window
     ColorTagView.swift               -- Color tag file list
     EmojiPickerView.swift            -- Emoji picker for folder icons
+    ExecuteScriptSheet.swift         -- Run script on selection
     FolderGalleryPreview.swift       -- Image grid preview
     MetadataSheet.swift              -- EXIF/metadata viewer
     ImageResizeSheet.swift           -- Image resize/crop
@@ -243,18 +250,17 @@ app/
     Panes/
       MainPane.swift                 -- Pane switcher
       FileBrowserPane.swift          -- File browser with search
-      SelectionPane.swift            -- Global selection view
     Preview/
       PreviewPane.swift              -- Preview type detection & dispatch
       TextPreviewView.swift          -- Plain text
-      SyntaxHighlightView.swift      -- Syntax highlighting
+      SyntaxHighlightView.swift      -- Syntax highlighting (bundled highlight.js)
+      HTMLPreviewView.swift          -- Shared static-HTML webview
       JSONPreviewView.swift          -- JSON viewer
-      MarkdownPreviewView.swift      -- Markdown renderer
+      MarkdownPreviewView.swift      -- Markdown renderer (bundled marked.js)
       FezPreviewView.swift           -- Fez template
       ImagePreviewView.swift         -- Image viewer
       PDFPreviewView.swift           -- PDF viewer
       AudioPreviewView.swift         -- Audio player
-      VideoPreviewView.swift         -- Video player
       ArchivePreviewView.swift       -- Archive contents
       ComicPreviewView.swift         -- Comic reader
       EpubPreviewView.swift          -- EPUB reader

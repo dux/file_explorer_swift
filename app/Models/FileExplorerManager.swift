@@ -3,7 +3,6 @@ import AppKit
 
 enum MainPaneType: Equatable {
     case browser
-    case selection
     case colorTag(TagColor)
 }
 
@@ -62,7 +61,6 @@ class FileExplorerManager: ObservableObject {
     @Published var isLoadingDirectory: Bool = false
     @Published var hiddenCount: Int = 0
     @Published var hasImages: Bool = false
-    @Published var showItemDialog: Bool = false
     @Published var showNewFolderDialog: Bool = false
     @Published var newFolderName: String = "New Folder"
     @Published var newFolderTargetURL: URL? = nil
@@ -132,9 +130,19 @@ class FileExplorerManager: ObservableObject {
 
     private static let lastFolderFile = AppSettings.configBase.appendingPathComponent("last-folder.txt")
 
+    // Tests navigate managers around temp dirs; don't let them overwrite the
+    // user's real last-folder file. swift test runs via swiftpm-testing-helper
+    // (swift-testing) or an .xctest bundle (Xcode/XCTest).
+    nonisolated private static let isRunningTests: Bool = {
+        let arg0 = ProcessInfo.processInfo.arguments.first ?? ""
+        return arg0.contains("swiftpm-testing-helper") || arg0.contains("xctest")
+            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || NSClassFromString("XCTestCase") != nil
+    }()
+
     private func saveLastFolder(_ url: URL) {
         // Only local folders round-trip through a plain path file
-        guard url.isFileURL else { return }
+        guard url.isFileURL, !Self.isRunningTests else { return }
         try? url.path.write(to: Self.lastFolderFile, atomically: true, encoding: .utf8)
     }
 
@@ -175,7 +183,7 @@ class FileExplorerManager: ObservableObject {
         }
 
         // Listen for open requests (when app is already running)
-        NotificationCenter.default.addObserver(
+        openPathObserver = NotificationCenter.default.addObserver(
             forName: .openPathRequest,
             object: nil,
             queue: .main
@@ -184,6 +192,12 @@ class FileExplorerManager: ObservableObject {
             Task { @MainActor in
                 self.handleOpenRequest(url)
             }
+        }
+    }
+
+    deinit {
+        if let openPathObserver {
+            NotificationCenter.default.removeObserver(openPathObserver)
         }
     }
 
@@ -210,6 +224,9 @@ class FileExplorerManager: ObservableObject {
     }
 
     private var loadGeneration = 0
+    // nonisolated(unsafe): only written once in init, removed in deinit;
+    // NotificationCenter itself is thread-safe
+    nonisolated(unsafe) private var openPathObserver: NSObjectProtocol?
 
     struct DirectoryListing: Sendable {
         let directories: [CachedFileInfo]
@@ -275,6 +292,18 @@ class FileExplorerManager: ObservableObject {
         }
     }
 
+    /// Reload the current folder, then move the cursor to `target` once the
+    /// listing is in (left unchanged if the target isn't visible).
+    func loadContents(selecting target: URL) {
+        loadContents { [weak self] in
+            guard let self else { return }
+            self.selectedItem = target
+            if let index = self.allItems.firstIndex(where: { $0.url == target }) {
+                self.selectedIndex = index
+            }
+        }
+    }
+
     private func applyLoadResult(_ result: DirectoryLoadResult) {
         switch result {
         case .success(let listing):
@@ -282,8 +311,16 @@ class FileExplorerManager: ObservableObject {
             files = listing.files
             hiddenCount = listing.hiddenCount
             hasImages = listing.hasImages
-            selectedIndex = -1
-            selectedItem = nil
+            // Keep the cursor on the same item across refreshes (watcher reloads,
+            // sort/hidden toggles); reset only when it left the listing.
+            if let previous = selectedItem,
+               let index = allItems.firstIndex(where: { $0.url == previous }) {
+                selectedIndex = index
+            } else {
+                selectedIndex = -1
+                selectedItem = nil
+            }
+            refreshDirectorySizesIfSortingBySize()
         case .failure(let message):
             ToastManager.shared.showError("Error loading directory: \(message)")
             directories = []
@@ -364,6 +401,58 @@ class FileExplorerManager: ObservableObject {
                 return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
             }
         }
+    }
+
+    // MARK: - Folder sizes for Size sort
+
+    /// Listers report 0 for local directories, so Size mode fills in real
+    /// recursive sizes (through FolderSizeCache) off-main and re-sorts once
+    /// known. A stale generation only wastes the scan; the cache still fills.
+    private func refreshDirectorySizesIfSortingBySize() {
+        guard sortMode == .size, currentPath.isFileURL, !directories.isEmpty else { return }
+        let generation = loadGeneration
+        let dirURLs = directories.map(\.url)
+        Task.detached(priority: .utility) { [weak self] in
+            var sizes: [String: Int64] = [:]
+            for url in dirURLs {
+                let size: UInt64
+                if let cached = FolderSizeCache.shared.getCachedSize(for: url) {
+                    size = cached
+                } else {
+                    size = Self.recursiveFolderSize(at: url)
+                    FolderSizeCache.shared.setCachedSize(for: url, size: size)
+                }
+                sizes[url.path] = Int64(clamping: size)
+            }
+            let computed = sizes
+            await MainActor.run { self?.applyDirectorySizes(computed, generation: generation) }
+        }
+    }
+
+    private func applyDirectorySizes(_ sizes: [String: Int64], generation: Int) {
+        guard loadGeneration == generation, sortMode == .size else { return }
+        let previous = selectedItem
+        directories = Self.sortItems(directories.map { info in
+            guard let size = sizes[info.url.path], size != info.size else { return info }
+            return CachedFileInfo(url: info.url, isDirectory: info.isDirectory, size: size,
+                                  modDate: info.modDate, isHidden: info.isHidden, displayName: info.displayName)
+        }, sortMode: .size)
+        // Sorting can move the selected row
+        if let previous, let index = allItems.firstIndex(where: { $0.url == previous }) {
+            selectedIndex = index
+        }
+    }
+
+    nonisolated private static func recursiveFolderSize(at url: URL) -> UInt64 {
+        var total: UInt64 = 0
+        if let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey], options: []) {
+            for case let fileURL as URL in enumerator {
+                if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                    total += UInt64(size)
+                }
+            }
+        }
+        return total
     }
 
     private func defaultSortMode(for path: URL) -> SortMode {
@@ -601,10 +690,11 @@ class FileExplorerManager: ObservableObject {
 
     private func debounceReloadContents() {
         monitorDebounceTask?.cancel()
-        monitorDebounceTask = Task { @MainActor in
+        monitorDebounceTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 200_000_000) // 200ms
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, let self else { return }
             self.loadContents()
+            self.rescanSearchIndexIfActive()
         }
     }
 
@@ -710,21 +800,14 @@ class FileExplorerManager: ObservableObject {
     func extractArchive(_ url: URL) {
         let parentDir = url.deletingLastPathComponent()
         let baseName = url.deletingPathExtension().lastPathComponent
-        var destName = baseName
-        var counter = 1
-        var destURL = parentDir.appendingPathComponent(destName)
-
-        // Find unique folder name
-        while fileManager.fileExists(atPath: destURL.path) {
-            destName = "\(baseName)-\(counter)"
-            destURL = parentDir.appendingPathComponent(destName)
-            counter += 1
+        let destURL = uniqueLocalDestination(in: parentDir) { attempt in
+            attempt == 0 ? baseName : "\(baseName)-\(attempt)"
         }
 
         let ext = url.pathExtension.lowercased()
         let srcPath = url.path
         let destPath = destURL.path
-        let finalDestName = destName
+        let finalDestName = destURL.lastPathComponent
 
         ToastManager.shared.show("Extracting...")
 

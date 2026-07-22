@@ -255,12 +255,8 @@ struct ImageConvertSheet: View {
 
                 let dir = url.deletingLastPathComponent()
                 let baseName = url.deletingPathExtension().lastPathComponent
-                var outputURL = dir.appendingPathComponent("\(baseName).\(format.fileExtension)")
-
-                var counter = 1
-                while FileManager.default.fileExists(atPath: outputURL.path) {
-                    outputURL = dir.appendingPathComponent("\(baseName)-\(counter).\(format.fileExtension)")
-                    counter += 1
+                let outputURL = uniqueLocalDestination(in: dir) { attempt in
+                    attempt == 0 ? "\(baseName).\(format.fileExtension)" : "\(baseName)-\(attempt).\(format.fileExtension)"
                 }
 
                 guard let destination = CGImageDestinationCreateWithURL(

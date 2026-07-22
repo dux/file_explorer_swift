@@ -89,7 +89,7 @@ struct GeneralSettingsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Skip folders on copy")
                     TextEditor(text: $skipFoldersText)
-                        .font(.system(size: 12, design: .monospaced))
+                        .textStyle(.buttons, weight: .regular, mono: true)
                         .frame(height: 120)
                         .border(Color.gray.opacity(0.3), width: 1)
                         .onChange(of: skipFoldersText) { newValue in
@@ -343,10 +343,10 @@ struct HelpSettingsView: View {
     private func shortcutRow(_ keys: String, _ desc: String) -> some View {
         HStack(spacing: 0) {
             Text(keys)
-                .font(.system(size: 13, design: .monospaced))
+                .textStyle(.buttons, weight: .regular, mono: true)
                 .frame(width: 200, alignment: .leading)
             Text(desc)
-                .font(.system(size: 13))
+                .textStyle(.buttons, weight: .regular)
                 .foregroundColor(.secondary)
         }
         .padding(.vertical, 1)
@@ -354,13 +354,13 @@ struct HelpSettingsView: View {
 
     private func helpText(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 13))
+            .textStyle(.buttons, weight: .regular)
             .foregroundColor(.secondary)
     }
 
     private func helpCode(_ code: String) -> some View {
         Text(code)
-            .font(.system(size: 13, design: .monospaced))
+            .textStyle(.buttons, weight: .regular, mono: true)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(RoundedRectangle(cornerRadius: 4).fill(Color.gray.opacity(0.1)))

@@ -27,14 +27,11 @@ extension FileExplorerManager {
         Task { [weak self] in
             do {
                 try await op()
-                self?.loadContents { [weak self] in
-                    guard let self else { return }
-                    if destination.path == self.currentPath.path {
-                        self.selectedItem = target
-                        if let index = self.allItems.firstIndex(where: { $0.url == target }) {
-                            self.selectedIndex = index
-                        }
-                    }
+                guard let self else { return }
+                if destination.path == self.currentPath.path {
+                    self.loadContents(selecting: target)
+                } else {
+                    self.loadContents()
                 }
             } catch {
                 ToastManager.shared.showError("\(errorLabel): \(error.localizedDescription)")
@@ -87,28 +84,14 @@ extension FileExplorerManager {
         guard url.isFileURL else { return }
         let baseName = url.deletingPathExtension().lastPathComponent
         let ext = url.pathExtension
-        var newName = ext.isEmpty ? "\(baseName) copy" : "\(baseName) copy.\(ext)"
-        var counter = 2
-        var newURL = url.deletingLastPathComponent().appendingPathComponent(newName)
-
-        // Find unique name
-        while fileManager.fileExists(atPath: newURL.path) {
-            newName = ext.isEmpty ? "\(baseName) copy \(counter)" : "\(baseName) copy \(counter).\(ext)"
-            newURL = url.deletingLastPathComponent().appendingPathComponent(newName)
-            counter += 1
+        let dst = uniqueLocalDestination(in: url.deletingLastPathComponent()) { attempt in
+            let suffix = attempt == 0 ? "copy" : "copy \(attempt + 1)"
+            return ext.isEmpty ? "\(baseName) \(suffix)" : "\(baseName) \(suffix).\(ext)"
         }
-
-        let dst = newURL
         Task {
             guard await backgroundCopy(from: url, to: dst) else { return }
             // Select the duplicate once the refreshed listing is in
-            loadContents { [weak self] in
-                guard let self else { return }
-                self.selectedItem = dst
-                if let index = self.allItems.firstIndex(where: { $0.url == dst }) {
-                    self.selectedIndex = index
-                }
-            }
+            loadContents(selecting: dst)
         }
     }
 
@@ -157,13 +140,7 @@ extension FileExplorerManager {
         cancelDuplicate()
         Task {
             guard await backgroundCopy(from: source, to: dst) else { return }
-            loadContents { [weak self] in
-                guard let self else { return }
-                self.selectedItem = dst
-                if let index = self.allItems.firstIndex(where: { $0.url == dst }) {
-                    self.selectedIndex = index
-                }
-            }
+            loadContents(selecting: dst)
         }
     }
 
@@ -172,21 +149,12 @@ extension FileExplorerManager {
         let values = try? url.resourceValues(forKeys: [.isDirectoryKey])
         let isDirectory = values?.isDirectory == true
         let baseName = isDirectory ? url.lastPathComponent : url.deletingPathExtension().lastPathComponent
-        var zipName = "\(baseName).zip"
-        var counter = 1
         let parentURL = url.deletingLastPathComponent()
         let itemName = url.lastPathComponent
-        var zipURL = parentURL.appendingPathComponent(zipName)
-
-        // Find unique name
-        while fileManager.fileExists(atPath: zipURL.path) {
-            zipName = "\(baseName) \(counter).zip"
-            zipURL = url.deletingLastPathComponent().appendingPathComponent(zipName)
-            counter += 1
+        let finalZipURL = uniqueLocalDestination(in: parentURL) { attempt in
+            attempt == 0 ? "\(baseName).zip" : "\(baseName) \(attempt).zip"
         }
-
-        let finalZipName = zipName
-        let finalZipURL = zipURL
+        let finalZipName = finalZipURL.lastPathComponent
         let skipFolders = Self.defaultZipSkipFolders.union(AppSettings.shared.copySkipFolders)
         let excludePatterns = Self.zipExcludePatterns(for: itemName, skipFolders: skipFolders)
 
@@ -219,13 +187,7 @@ extension FileExplorerManager {
                 let status = process.terminationStatus
                 await MainActor.run {
                     if status == 0 {
-                        self.loadContents { [weak self] in
-                            guard let self else { return }
-                            self.selectedItem = finalZipURL
-                            if let index = self.allItems.firstIndex(where: { $0.url == finalZipURL }) {
-                                self.selectedIndex = index
-                            }
-                        }
+                        self.loadContents(selecting: finalZipURL)
                         ToastManager.shared.show("Created \(finalZipName)")
                     } else {
                         let output = String(data: outputData, encoding: .utf8)?
@@ -405,6 +367,7 @@ extension FileExplorerManager {
 
     func refresh() {
         loadContents()
+        rescanSearchIndexIfActive()
     }
 
     func clearSelection() {
@@ -452,13 +415,7 @@ extension FileExplorerManager {
                     SelectionManager.shared.updateLocalPath(from: item.path, to: newURL.path)
                 }
                 // Select the renamed item once the refreshed listing is in
-                self?.loadContents { [weak self] in
-                    guard let self else { return }
-                    self.selectedItem = newURL
-                    if let index = self.allItems.firstIndex(where: { $0.url == newURL }) {
-                        self.selectedIndex = index
-                    }
-                }
+                self?.loadContents(selecting: newURL)
             } catch {
                 ToastManager.shared.showError("Error renaming: \(error.localizedDescription)")
             }
@@ -470,13 +427,7 @@ extension FileExplorerManager {
         do {
             let isCurrentlyHidden = LocalFileSource.isHiddenSync(url)
             try LocalFileSource.setHiddenSync(url, hidden: !isCurrentlyHidden)
-            loadContents { [weak self] in
-                guard let self else { return }
-                self.selectedItem = url
-                if let index = self.allItems.firstIndex(where: { $0.url == url }) {
-                    self.selectedIndex = index
-                }
-            }
+            loadContents(selecting: url)
             ToastManager.shared.show(isCurrentlyHidden ? "Made visible" : "Made hidden")
         } catch {
             ToastManager.shared.showError("Error toggling hidden: \(error.localizedDescription)")

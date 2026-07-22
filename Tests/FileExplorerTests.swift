@@ -60,7 +60,7 @@ struct EnumTests {
         let tagRed2 = MainPaneType.colorTag(.red)
         #expect(tagRed1 == tagRed2)
         #expect(tagRed1 != MainPaneType.colorTag(.blue))
-        #expect(browser1 != MainPaneType.selection)
+        #expect(browser1 != MainPaneType.colorTag(.red))
     }
 
     @Test("TagColor has all four cases")
@@ -358,7 +358,7 @@ struct SelectionManagerTests {
         defer { sel.clear() }
 
         let path = "/tmp/shared-name"
-        let remoteURL = try #require(URL(string: "ssh://user@example.com(path)"))
+        let remoteURL = try #require(URL(string: "ssh://user@example.com\(path)"))
         let remoteItem = FileItem.fromRemote(CachedFileInfo(
             url: remoteURL,
             isDirectory: false,
@@ -585,103 +585,53 @@ struct NavigateToSortModeTests {
     }
 }
 
-// MARK: - UniqueDestination (via copyLocalItems) Tests
+// MARK: - UniqueDestination Tests
 
 @Suite("UniqueDestination")
 struct UniqueDestinationTests {
-    @Test("copyLocalItems creates numbered copy when name conflicts")
-    @MainActor func copyWithConflict() throws {
+    @Test("numbered name is chosen when the original conflicts")
+    func numberedOnConflict() throws {
         let fm = FileManager.default
-        let tmpDir = fm.temporaryDirectory.appendingPathComponent("unique-dest-\(UUID().uuidString)")
-        try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
-        defer { try? fm.removeItem(at: tmpDir) }
-
-        // Create source file
-        let srcDir = tmpDir.appendingPathComponent("src")
-        try fm.createDirectory(at: srcDir, withIntermediateDirectories: true)
-        let srcFile = srcDir.appendingPathComponent("file.txt")
-        try "original".write(to: srcFile, atomically: true, encoding: .utf8)
-
-        // Create conflicting file in destination
-        let destDir = tmpDir.appendingPathComponent("dest")
+        let destDir = fm.temporaryDirectory.appendingPathComponent("unique-dest-\(UUID().uuidString)")
         try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
-        let conflicting = destDir.appendingPathComponent("file.txt")
-        try "existing".write(to: conflicting, atomically: true, encoding: .utf8)
+        defer { try? fm.removeItem(at: destDir) }
 
-        // Add source file to selection and copy
-        let sel = SelectionManager.shared
-        sel.clear()
-        sel.addLocal(srcFile)
-        let count = sel.copyLocalItems(to: destDir)
-        #expect(count == 1)
+        try "existing".write(to: destDir.appendingPathComponent("file.txt"), atomically: true, encoding: .utf8)
 
-        // The copy should be named "file 2.txt"
-        let copied = destDir.appendingPathComponent("file 2.txt")
-        #expect(fm.fileExists(atPath: copied.path))
-
-        // Original conflicting file should still be there
-        #expect(try String(contentsOf: conflicting, encoding: .utf8) == "existing")
-        #expect(try String(contentsOf: copied, encoding: .utf8) == "original")
-
-        sel.clear()
+        let dest = uniqueLocalDestination(in: destDir) { numberedName("file.txt", attempt: $0) }
+        #expect(dest.lastPathComponent == "file 2.txt")
     }
 
-    @Test("copyLocalItems uses original name when no conflict")
-    @MainActor func copyNoConflict() throws {
+    @Test("original name is used when there is no conflict")
+    func originalNameNoConflict() throws {
         let fm = FileManager.default
-        let tmpDir = fm.temporaryDirectory.appendingPathComponent("unique-dest-nc-\(UUID().uuidString)")
-        try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
-        defer { try? fm.removeItem(at: tmpDir) }
-
-        let srcDir = tmpDir.appendingPathComponent("src")
-        try fm.createDirectory(at: srcDir, withIntermediateDirectories: true)
-        let srcFile = srcDir.appendingPathComponent("noconflict.txt")
-        try "data".write(to: srcFile, atomically: true, encoding: .utf8)
-
-        let destDir = tmpDir.appendingPathComponent("dest")
+        let destDir = fm.temporaryDirectory.appendingPathComponent("unique-dest-nc-\(UUID().uuidString)")
         try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: destDir) }
 
-        let sel = SelectionManager.shared
-        sel.clear()
-        sel.addLocal(srcFile)
-        let count = sel.copyLocalItems(to: destDir)
-        #expect(count == 1)
-
-        let copied = destDir.appendingPathComponent("noconflict.txt")
-        #expect(fm.fileExists(atPath: copied.path))
-
-        sel.clear()
+        let dest = uniqueLocalDestination(in: destDir) { numberedName("noconflict.txt", attempt: $0) }
+        #expect(dest.lastPathComponent == "noconflict.txt")
     }
 
-    @Test("copyLocalItems handles multiple conflicts with incrementing numbers")
-    @MainActor func copyMultipleConflicts() throws {
+    @Test("multiple conflicts increment the number")
+    func multipleConflicts() throws {
         let fm = FileManager.default
-        let tmpDir = fm.temporaryDirectory.appendingPathComponent("unique-dest-mc-\(UUID().uuidString)")
-        try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
-        defer { try? fm.removeItem(at: tmpDir) }
-
-        let srcDir = tmpDir.appendingPathComponent("src")
-        try fm.createDirectory(at: srcDir, withIntermediateDirectories: true)
-        let srcFile = srcDir.appendingPathComponent("doc.pdf")
-        try "pdf-data".write(to: srcFile, atomically: true, encoding: .utf8)
-
-        let destDir = tmpDir.appendingPathComponent("dest")
+        let destDir = fm.temporaryDirectory.appendingPathComponent("unique-dest-mc-\(UUID().uuidString)")
         try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
-        // Create "doc.pdf" and "doc 2.pdf" already in dest
+        defer { try? fm.removeItem(at: destDir) }
+
         try "v1".write(to: destDir.appendingPathComponent("doc.pdf"), atomically: true, encoding: .utf8)
         try "v2".write(to: destDir.appendingPathComponent("doc 2.pdf"), atomically: true, encoding: .utf8)
 
-        let sel = SelectionManager.shared
-        sel.clear()
-        sel.addLocal(srcFile)
-        let count = sel.copyLocalItems(to: destDir)
-        #expect(count == 1)
+        let dest = uniqueLocalDestination(in: destDir) { numberedName("doc.pdf", attempt: $0) }
+        #expect(dest.lastPathComponent == "doc 3.pdf")
+    }
 
-        // Should get "doc 3.pdf"
-        let copied = destDir.appendingPathComponent("doc 3.pdf")
-        #expect(fm.fileExists(atPath: copied.path))
-
-        sel.clear()
+    @Test("extension-less names get a plain number suffix")
+    func extensionlessName() {
+        #expect(numberedName("folder", attempt: 0) == "folder")
+        #expect(numberedName("folder", attempt: 1) == "folder 2")
+        #expect(numberedName("archive.tar", attempt: 3) == "archive 4.tar")
     }
 }
 
@@ -939,7 +889,8 @@ struct SizeSortTests {
         try Data(repeating: 0, count: 100).write(to: directory.appendingPathComponent("large-a.txt"))
 
         let manager = FileExplorerManager()
-        manager.currentPath = directory
+        manager.navigateTo(directory)
+        // sortMode didSet reloads; small local dirs list synchronously
         manager.sortMode = .size
 
         #expect(manager.files.map(\.name) == ["large-a.txt", "large-z.txt", "small.txt"])
@@ -1163,7 +1114,9 @@ struct MovieDetectionTests {
     }
 }
 
-@Suite("MovieManager API")
+// Live OMDB integration tests; opt in with OMDB_LIVE=1 so the default
+// `swift test` run (a `hammer build` gate) never needs network.
+@Suite("MovieManager API", .enabled(if: ProcessInfo.processInfo.environment["OMDB_LIVE"] == "1"))
 struct MovieAPITests {
     @Test("fetches The Matrix folder and caches as imdb.txt")
     @MainActor func fetchMatrixFolder() async throws {

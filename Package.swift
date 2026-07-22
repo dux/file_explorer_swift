@@ -39,7 +39,8 @@ let package = Package(
                 .copy("Resources/AppIcon.icns"),
                 .copy("Resources/AppIcon.svg"),
                 .copy("Resources/build-commit.txt"),
-                .copy("Resources/marked.min.js")
+                .copy("Resources/marked.min.js"),
+                .copy("Resources/highlight.min.js")
             ],
             linkerSettings: [
                 .linkedFramework("NetFS")

@@ -16,7 +16,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
     func updateNSView(_ nsView: KeyCaptureView, context: Context) {
         nsView.manager = manager
         // Reclaim focus when no sheet/dialog is active and we don't have focus
-        if manager.renamingItem == nil && manager.duplicatingItem == nil && !manager.isSearching && !manager.showItemDialog && !manager.showNewFolderDialog && !manager.showNewFileDialog {
+        if manager.renamingItem == nil && manager.duplicatingItem == nil && !manager.isSearching && !manager.showNewFolderDialog && !manager.showNewFileDialog {
             if let window = nsView.window {
                 let responder = window.firstResponder
                 // Reclaim if focus is on the window itself (sheet just closed) or already on us
@@ -384,13 +384,21 @@ class KeyCaptureView: NSView {
                 return true
             }
         default:
-            if let chars = event.characters, chars.count == 1,
-               let c = chars.first, c.isLetter,
-               !event.modifierFlags.contains(.command),
-               !event.modifierFlags.contains(.control) {
+            break
+        }
+
+        // Type-to-search lives after the switch so letters whose keyCode matched
+        // a shortcut case above (a/c/d/m/r/v) still reach it when pressed bare.
+        if let chars = event.characters, chars.count == 1,
+           let c = chars.first, c.isLetter,
+           !event.modifierFlags.contains(.command),
+           !event.modifierFlags.contains(.control) {
+            if manager.canSearchCurrentSource {
                 manager.startSearch(withQuery: String(c))
-                return true
+            } else {
+                manager.jumpToLetter(c)
             }
+            return true
         }
 
         return false
