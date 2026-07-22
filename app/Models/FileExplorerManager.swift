@@ -16,6 +16,7 @@ enum SortMode: String, CaseIterable {
     case type = "Type"
     case name = "Name"
     case modified = "Modified"
+    case size = "Size"
 }
 
 struct RightPaneItem: Identifiable {
@@ -337,6 +338,13 @@ class FileExplorerManager: ObservableObject {
                 let d1 = a.modDate ?? Date.distantPast
                 let d2 = b.modDate ?? Date.distantPast
                 return d1 > d2
+            }
+        case .size:
+            return items.sorted { a, b in
+                if a.size != b.size {
+                    return a.size > b.size
+                }
+                return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
             }
         case .type:
             return items.sorted { a, b in

@@ -42,6 +42,7 @@ struct EnumTests {
         #expect(SortMode.name.rawValue == "Name")
         #expect(SortMode.modified.rawValue == "Modified")
         #expect(SortMode.type.rawValue == "Type")
+        #expect(SortMode.size.rawValue == "Size")
     }
 
     @Test("BrowserViewMode raw values")
@@ -921,6 +922,27 @@ struct ColorTagManagerTests {
 
         mgr.remove(URL(fileURLWithPath: "/tmp/v1"), color: .red)
         #expect(mgr.version == v0 + 2)
+    }
+}
+
+@Suite("Size Sort")
+struct SizeSortTests {
+    @Test("files sort largest first with name tie-breaker")
+    @MainActor func filesSortBySize() throws {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory.appendingPathComponent("size-sort-\(UUID().uuidString)")
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: directory) }
+
+        try Data(repeating: 0, count: 20).write(to: directory.appendingPathComponent("small.txt"))
+        try Data(repeating: 0, count: 100).write(to: directory.appendingPathComponent("large-z.txt"))
+        try Data(repeating: 0, count: 100).write(to: directory.appendingPathComponent("large-a.txt"))
+
+        let manager = FileExplorerManager()
+        manager.currentPath = directory
+        manager.sortMode = .size
+
+        #expect(manager.files.map(\.name) == ["large-a.txt", "large-z.txt", "small.txt"])
     }
 }
 
