@@ -485,8 +485,12 @@ struct ActionButtonBar: View {
             Button(action: {
                 manager.toggleShowHidden()
             }) {
-                Text(manager.showHidden ? "hide hidden" : "show hidden")
-                    .textStyle(.buttons)
+                HStack(spacing: 4) {
+                    Image(systemName: manager.showHidden ? "eye" : "eye.slash")
+                        .textStyle(.buttons)
+                    Text(manager.showHidden ? "showing" : "hiding")
+                        .textStyle(.buttons)
+                }
             }
             .buttonStyle(.bordered)
 
@@ -521,7 +525,7 @@ struct ActionButtonBar: View {
                     Button(action: {
                         manager.sortMode = mode
                     }) {
-                        Text(mode.rawValue)
+                        Text(mode.rawValue.prefix(3).lowercased())
                             .textStyle(.buttons, weight: manager.sortMode == mode ? .semibold : .regular)
                             .lineLimit(1)
                             .fixedSize()
