@@ -71,6 +71,9 @@ final class LocalFileSource: FileSystemSource {
     }
 
     func listSyncIfCheap(_ url: URL) throws -> [SourceEntry]? {
+        // Trash may need process fallbacks (ls / Finder Apple Events, which can
+        // show a consent prompt); keep it off the synchronous main-thread path.
+        guard url.lastPathComponent != ".Trash" else { return nil }
         // The name-only count is one cheap directory read (no per-file stats).
         let entryCount = (try? FileManager.default.contentsOfDirectory(atPath: url.path).count) ?? 0
         guard entryCount <= Self.syncLoadThreshold else { return nil }
@@ -94,18 +97,26 @@ final class LocalFileSource: FileSystemSource {
     /// wraps it in a detached task for large folders.
     nonisolated static func enumerateRaw(at path: URL) throws -> [SourceEntry] {
         let fm = FileManager.default
-        var contents: [URL]
+        let isTrash = path.lastPathComponent == ".Trash"
+        var denied: Error?
+        var contents: [URL] = []
         do {
             contents = try fm.contentsOfDirectory(at: path, includingPropertiesForKeys: Array(resourceKeys), options: [])
         } catch {
             // Trash TCC: without Full Disk Access the listing throws (or on
-            // some systems silently returns empty); /bin/ls still works
-            guard path.lastPathComponent == ".Trash" else { throw error }
-            contents = []
+            // some systems silently returns empty); fall through to /bin/ls,
+            // then Finder
+            guard isTrash else { throw error }
+            denied = error
         }
 
-        if path.lastPathComponent == ".Trash" && contents.isEmpty {
+        if isTrash && contents.isEmpty {
             contents = listViaProcess(path)
+            if contents.isEmpty {
+                let finderEntries = trashEntriesViaFinder()
+                if !finderEntries.isEmpty { return finderEntries }
+                if let denied { throw denied }
+            }
         }
 
         return contents.map { entry(for: $0) }
@@ -142,6 +153,51 @@ final class LocalFileSource: FileSystemSource {
                 let n = String(name)
                 guard !n.isEmpty else { return nil }
                 return dir.appendingPathComponent(n)
+            }
+        } catch {
+            return []
+        }
+    }
+
+    /// Last-resort Trash listing: ask Finder over Apple Events (one-time
+    /// Automation consent prompt). On current macOS neither FileManager nor a
+    /// spawned ls can read ~/.Trash without Full Disk Access, but Finder can,
+    /// and it also includes per-volume .Trashes like the Bin does. Children
+    /// can't be stat'ed either, so directory-ness comes from the URL's
+    /// trailing slash and size/date stay unknown.
+    nonisolated private static func trashEntriesViaFinder() -> [SourceEntry] {
+        let script = """
+        set out to ""
+        tell application "Finder"
+            repeat with i in (items of trash)
+                set out to out & (URL of i) & linefeed
+            end repeat
+        end tell
+        return out
+        """
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0,
+                  let output = String(data: data, encoding: .utf8) else { return [] }
+            return output.split(separator: "\n").compactMap { line in
+                guard let url = URL(string: String(line).trimmingCharacters(in: .whitespaces)),
+                      url.isFileURL else { return nil }
+                return SourceEntry(
+                    url: url.standardizedFileURL,
+                    isDirectory: url.hasDirectoryPath,
+                    size: 0,
+                    modDate: nil,
+                    isHidden: false
+                )
             }
         } catch {
             return []

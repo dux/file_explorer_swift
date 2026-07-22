@@ -35,7 +35,7 @@ ZStack (bottom-aligned) {
 The **generic backend contract** every browsable source implements: path algebra (canonicalize/parent/breadcrumb), listing (async `list` plus sync escape hatches `listSyncIfCheap`/`existsSync` for the local no-flicker path), content transfer (`materialize`/`download`/`upload`), mutations (mkdir/createFile/move/delete/setHidden), and optional capabilities (`watch` change stream, `recursiveEntries` search walk).
 `SourceCapabilities` gates UI actions per backend; `SourceRegistry` resolves the backend from the URL scheme (`file`, `iphone`, `ssh`; `smb`/`ftp` mount to `file://` and route to the local backend), so URLs are self-describing and history works across sources.
 
-- **LocalFileSource** (`Models/Sources/LocalFileSource.swift`) -- FileManager enumeration (with the Trash TCC `/bin/ls` fallback), kqueue directory watching, recursive search walk, breadcrumb roots (home, /Volumes), and local mutation primitives.
+- **LocalFileSource** (`Models/Sources/LocalFileSource.swift`) -- FileManager enumeration (with `/bin/ls` and Finder Apple Events fallbacks for the TCC-protected `.Trash`), kqueue directory watching, recursive search walk, breadcrumb roots (home, /Volumes), and local mutation primitives.
 - **iPhoneFileSource** (`Models/Sources/iPhoneFileSource.swift`) -- one instance per device over libimobiledevice. Virtual hierarchy: `iphone://<udid>/` lists file-sharing apps as folders (bundle id = path component, app name = displayName), deeper paths map to AFC `/Documents/...`. Context-explicit sync cores (list apps/dir, stat, download) are shared with iPhoneManager's transfer ops. Capabilities: write/rename/delete inside app Documents, read-only at the app level; `materialize` caches downloads keyed by size+mtime.
 - **SSHFileSource** (`Models/Sources/SSHFileSource.swift`) -- SFTP browsing over libssh2 (`SSHConnection.swift` owns the socket/session/auth, known_hosts accept-new). `ssh://user@host/path` URLs; write/rename/delete but no recursive search or watch. `MountsManager` keeps SSH/SMB favorites and connects them.
 
@@ -113,7 +113,7 @@ All `@MainActor`:
 ```
 ContentView
   +-- ShortcutsView (left sidebar)
-  |     +-- ShortcutRow (Home, Desktop, Documents, Downloads, Applications, Trash)
+  |     +-- ShortcutRow (Home, Desktop, Documents, Downloads, Applications)
   |     +-- ColorTagBoxes
   |     +-- iPhoneRow (per device)
   |     +-- DraggableShortcutRow (pinned folders, drag-reorder)
@@ -207,7 +207,7 @@ app/
     FileExplorerManagerSearch.swift   -- Search & list cursor extension
     FileItem.swift                   -- FileItem, SelectionManager, uniqueLocalDestination helper
     AppSettings.swift                -- Persisted settings singleton
-    ShortcutsManager.swift           -- Sidebar built-ins (incl. Trash) + pinned folders
+    ShortcutsManager.swift           -- Sidebar built-ins + pinned folders
     ColorTagManager.swift            -- Color label system
     FolderIconManager.swift          -- Custom emoji folder icons
     IconProvider.swift               -- Catppuccin SVG file icons

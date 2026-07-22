@@ -16,6 +16,8 @@
     <string>APPL</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Used to ask Finder for the Trash listing, which is not readable without Full Disk Access.</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>CFBundleIconFile</key>
