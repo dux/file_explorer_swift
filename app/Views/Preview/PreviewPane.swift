@@ -61,7 +61,7 @@ enum PreviewType {
             return .epub
         }
 
-        if ["zip", "tar", "tgz", "gz", "bz2", "xz", "rar", "7z"].contains(ext) {
+        if FileExtensions.archives.contains(ext) {
             return .archive
         }
 

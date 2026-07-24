@@ -135,22 +135,19 @@ struct ArchivePreviewView: View {
 
     nonisolated private static func listArchiveContents(url: URL) -> Result<[ArchiveEntry], Error> {
         let ext = url.pathExtension.lowercased()
+        let name = url.lastPathComponent.lowercased()
+        let isTarball = [".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst"].contains { name.hasSuffix($0) }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-
-        switch ext {
-        case "zip":
-            process.arguments = ["unzip", "-l", url.path]
-        case "tar", "tgz", "gz", "bz2", "xz":
-            process.arguments = ["tar", "-tvf", url.path]
-        case "rar":
-            process.arguments = ["unrar", "l", url.path]
-        case "7z":
-            process.arguments = ["7z", "l", url.path]
-        default:
-            process.arguments = ["unzip", "-l", url.path]
+        // Bare compressed file: exactly one inner file, nothing to list
+        if !isTarball, ["gz", "bz2", "xz", "zst"].contains(ext) {
+            let inner = url.deletingPathExtension().lastPathComponent
+            return .success([ArchiveEntry(path: inner, name: inner, size: 0, isDirectory: false, compressedSize: nil)])
         }
+
+        // bsdtar/libarchive lists every container format (zip, tar*, 7z, rar)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
+        process.arguments = ["-tvf", url.path]
 
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -166,7 +163,7 @@ struct ArchivePreviewView: View {
                 return .failure(NSError(domain: "Archive", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not read archive"]))
             }
 
-            let entries = parseArchiveOutput(output: output, type: ext).sorted { a, b in
+            let entries = parseArchiveOutput(output: output).sorted { a, b in
                 if a.isDirectory != b.isDirectory { return a.isDirectory }
                 return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
             }
@@ -176,48 +173,25 @@ struct ArchivePreviewView: View {
         }
     }
 
-    nonisolated private static func parseArchiveOutput(output: String, type: String) -> [ArchiveEntry] {
+    // bsdtar -tvf prints ls -l style rows:
+    //   -rw-r--r--  0 501  20  1234 Jul 24 08:13 dir/file.txt
+    // size is column 4, the path starts at column 8 (month day time/year in between).
+    nonisolated private static func parseArchiveOutput(output: String) -> [ArchiveEntry] {
         var entries: [ArchiveEntry] = []
-        let lines = output.components(separatedBy: .newlines)
 
-        switch type {
-        case "zip":
-            var inFileList = false
-            for line in lines {
-                if line.contains("--------") {
-                    inFileList.toggle()
-                    continue
-                }
-                if inFileList && !line.isEmpty {
-                    let parts = line.trimmingCharacters(in: .whitespaces).split(separator: " ", maxSplits: 3, omittingEmptySubsequences: true)
-                    if parts.count >= 4 {
-                        let size = UInt64(parts[0]) ?? 0
-                        let path = String(parts[3]).trimmingCharacters(in: .whitespaces)
-                        let name = URL(fileURLWithPath: path).lastPathComponent
-                        let isDir = path.hasSuffix("/")
-                        entries.append(ArchiveEntry(path: path, name: name, size: size, isDirectory: isDir, compressedSize: nil))
-                    }
-                }
+        for line in output.components(separatedBy: .newlines) {
+            let parts = line.split(separator: " ", omittingEmptySubsequences: true)
+            guard parts.count >= 9 else { continue }
+            let perms = String(parts[0])
+            let size = UInt64(parts[4]) ?? 0
+            var path = parts.dropFirst(8).joined(separator: " ")
+            if perms.hasPrefix("l"), let range = path.range(of: " -> ") {
+                path = String(path[..<range.lowerBound])
             }
-
-        case "tar", "tgz", "gz", "bz2", "xz":
-            for line in lines {
-                let parts = line.split(separator: " ", omittingEmptySubsequences: true)
-                if parts.count >= 6 {
-                    let perms = String(parts[0])
-                    let isDir = perms.hasPrefix("d")
-                    let size = UInt64(parts[2]) ?? 0
-                    let path = parts.dropFirst(5).joined(separator: " ")
-                    let name = URL(fileURLWithPath: path).lastPathComponent
-                    if !name.isEmpty {
-                        entries.append(ArchiveEntry(path: path, name: name, size: size, isDirectory: isDir, compressedSize: nil))
-                    }
-                }
-            }
-
-        default:
-            for line in lines where !line.isEmpty {
-                entries.append(ArchiveEntry(path: line, name: line, size: 0, isDirectory: false, compressedSize: nil))
+            let isDir = perms.hasPrefix("d") || path.hasSuffix("/")
+            let name = URL(fileURLWithPath: path).lastPathComponent
+            if !name.isEmpty {
+                entries.append(ArchiveEntry(path: path, name: name, size: size, isDirectory: isDir, compressedSize: nil))
             }
         }
 

@@ -111,7 +111,10 @@ enum FileExtensions {
     static let images: Set<String> = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif", "tiff", "tif", "svg", "avif"]
     static let audio: Set<String> = ["mp3", "m4a", "wav", "aac", "flac", "ogg", "wma", "aiff", "aif", "alac", "opus"]
     static let video: Set<String> = ["mp4", "mov", "m4v", "avi", "mkv", "webm", "wmv", "flv", "ogv", "3gp"]
-    static let archives: Set<String> = ["zip", "tar", "tgz", "gz", "bz2", "xz", "rar", "7z"]
+    static let archives: Set<String> = [
+        "zip", "tar", "tgz", "tbz", "tbz2", "txz", "tzst",
+        "gz", "bz2", "xz", "zst", "rar", "7z"
+    ]
     static let office: Set<String> = ["docx", "xlsx", "pptx", "doc", "xls", "ppt"]
     static let comicImages: Set<String> = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif"]
 

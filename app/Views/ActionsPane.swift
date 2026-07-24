@@ -70,12 +70,16 @@ struct ActionsPane: View {
         isLocalTarget && !isDirectory && FileManager.default.isExecutableFile(atPath: targetURL.path)
     }
 
+    private var isArchiveFile: Bool {
+        isLocalTarget && !isDirectory && FileExtensions.archives.contains(targetURL.pathExtension.lowercased())
+    }
+
     private var isRemoteFile: Bool {
         !isLocalTarget && !isDirectory
     }
 
     private var hasActionButtons: Bool {
-        isAppBundle || isImageFile || isOfficeFile || isExecutableFile || isRemoteFile || gitRepo.gitRepoInfo != nil || npmPackage.npmPackageInfo != nil
+        isAppBundle || isImageFile || isOfficeFile || isArchiveFile || isExecutableFile || isRemoteFile || gitRepo.gitRepoInfo != nil || npmPackage.npmPackageInfo != nil
     }
 
     /// Open the target with a specific app; remote targets download to the
@@ -156,6 +160,13 @@ struct ActionsPane: View {
                     ActionButton(icon: "doc.text.magnifyingglass", title: "Document Info", color: .indigo,
                                  flatIndex: officeIdx, manager: manager) {
                         showOfficeMetadataSheet = true
+                    }
+                }
+                if isArchiveFile {
+                    let extractIdx = paneItems.firstIndex(where: { $0.id == "extract" }) ?? -1
+                    ActionButton(icon: "arrow.down.doc", title: "Extract", color: .brown,
+                                 flatIndex: extractIdx, manager: manager) {
+                        manager.extractArchive(targetURL)
                     }
                 }
                 if isExecutableFile {
@@ -251,6 +262,11 @@ struct ActionsPane: View {
         if isOfficeFile {
             items.append(RightPaneItem(id: "office", title: "Document Info") {
                 self.showOfficeMetadataSheet = true
+            })
+        }
+        if isArchiveFile {
+            items.append(RightPaneItem(id: "extract", title: "Extract") {
+                self.manager.extractArchive(self.targetURL)
             })
         }
         if isExecutableFile {

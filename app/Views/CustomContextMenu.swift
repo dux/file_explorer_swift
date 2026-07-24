@@ -177,7 +177,7 @@ private struct CustomContextMenuContent: View {
     }
 
     private var isArchive: Bool {
-        ["zip", "tar", "tgz", "gz", "bz2", "xz", "rar", "7z"].contains(url.pathExtension.lowercased())
+        FileExtensions.archives.contains(url.pathExtension.lowercased())
     }
 
     private var isApp: Bool {

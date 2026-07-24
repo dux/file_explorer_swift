@@ -86,10 +86,9 @@ final class ArchiveDragSession {
             }
             arguments.append(contentsOf: [p.archive.path, p.entryPath, "-d", destination.path])
             process.arguments = arguments
-        case "tar", "tgz", "gz", "bz2", "xz":
-            process.arguments = ["tar", "-xf", p.archive.path, "-C", destination.path, p.entryPath]
         default:
-            return .unsupported
+            // bsdtar/libarchive extracts single entries from tar*, 7z and rar too
+            process.arguments = ["tar", "-xf", p.archive.path, "-C", destination.path, p.entryPath]
         }
 
         let pipe = Pipe()
